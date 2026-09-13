@@ -21,6 +21,11 @@ dependencies = [
     "uvicorn>=0.27",
     "httpx>=0.27",
     "PyYAML>=6.0",
+    # Declared on purpose: the tokenizer is used by topical relevance scoring and
+    # by the evaluation metrics. Leaving it optional made the measured baseline
+    # environment-dependent (clean env without jieba: 30/35 tasks; with jieba:
+    # 35/35 on identical code - verified A/B), so it is a hard dependency now.
+    "jieba>=0.42",
 ]
 
 [project.optional-dependencies]

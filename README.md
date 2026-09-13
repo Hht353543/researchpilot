@@ -277,9 +277,12 @@ python -m pip check                       # 依赖一致性
 `tests/integration/`（流水线、API、MCP 三种传输、**OpenAI 兼容 HTTP provider 全链路**）、
 `tests/evaluation/`（数据集完整性、评测器机制、全量冒烟）、`tests/fixtures/`（样例语料、mock 数据与本地 OpenAI 兼容端点）。
 
-前端是**零依赖 vanilla JS**（无 npm/构建步骤），因此没有 `npm test/build/lint`；取而代之的是
-`tests/unit/test_config_and_paths.py` 中的前端契约测试：前端调用的每个 URL 必须能在 OpenAPI 路由表中找到，
-且 Settings/面板元素必须存在并被读取。
+前端是**零依赖 vanilla JS**（无 npm/构建步骤、无 package.json），因此没有 `npm install`；
+但前端逻辑是**真被测的**：
+`tests/frontend/app.test.mjs`（`node --test`，零 npm 依赖）在 VM + DOM stub 中加载 `app.js`，覆盖 Markdown 渲染、
+Agent 时间线、指标卡片、知识库列表、来源与评测面板（含 HTML 转义/XSS 与空状态）；
+`tests/unit/test_config_and_paths.py` 额外做前端↔OpenAPI 契约测试（前端调用的每个 URL 必须存在于路由表，
+Settings/面板元素必须存在并被读取）。CI 中作为独立步骤执行 `node --test "tests/frontend/**/*.test.mjs"`。
 
 ---
 

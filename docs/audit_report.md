@@ -123,7 +123,7 @@ MCP Server 与 3 种传输；三层记忆；统一 Trace；35 条 Golden Dataset
 
 | 类别 | 条目 |
 | --- | --- |
-| **BUG**（功能存在但实现错误） | 长期记忆使用进程级默认路径而非注入的 `runs_path`（且写失败会让任务失败）；MCP HTTP 应用的 `/openapi.json` 因函数内导入 `JSONResponse` 抛 `PydanticUserError`； 缓存键截断导致错误命中；Planner 在向量库不可用时崩溃；reindex 残留已删除文档；UTC 时间被当本地时间（延迟虚高 8h）；MCP 工具在无 client 时仍注册；`/mcp` 的 `Request` 注解被当成查询参数；fastapi/starlette 不兼容；长期记忆忽略注入的 `runs_path` |
+| **BUG**（功能存在但实现错误） | 评测基线依赖**未声明**的可选分词依赖 `jieba`（同一份代码在干净环境中 30/35、在装有 jieba 的环境中 35/35，已用 A/B 实验证实）； 长期记忆使用进程级默认路径而非注入的 `runs_path`（且写失败会让任务失败）；MCP HTTP 应用的 `/openapi.json` 因函数内导入 `JSONResponse` 抛 `PydanticUserError`； 缓存键截断导致错误命中；Planner 在向量库不可用时崩溃；reindex 残留已删除文档；UTC 时间被当本地时间（延迟虚高 8h）；MCP 工具在无 client 时仍注册；`/mcp` 的 `Request` 注解被当成查询参数；fastapi/starlette 不兼容；长期记忆忽略注入的 `runs_path` |
 | **PARTIAL**（只实现一部分） | 工具缓存未启用；LLM 重排不可触发；KB 删除能力缺失（新增）；前端缺 `max_tokens`/评测面板 |
 | **MISSING**（需求明确但完全缺失） | 真实 HTTP provider 无任何端到端验证；无 `requirements.txt`；无依赖兼容性测试；无前端↔后端契约测试；无 SSRF 防护 |
 | **DEAD CODE** | `_by_doc`、`tracer_scope/current_tracer`、`JsonRpcRequest`、`PARSE_ERROR/INVALID_REQUEST`、`Trace.children`、`utils` 中 5 个未用函数、`VectorStore.remove_document/clear`（后两项改为接入真实功能） |
@@ -138,10 +138,10 @@ MCP Server 与 3 种传输；三层记忆；统一 Trace；35 条 Golden Dataset
 | --- | --- | --- |
 | P0 | 0 | 初始状态可运行 |
 | P1 | 2 | Planner 崩溃于向量库故障；真实 provider 链路未验证 |
-| P2 | 12 | 缓存键/缓存未启用、指标真空 1.0、cwd 依赖路径、Prompt 非 JSON、Agent 内 if/elif、故障注入未生效、无证据仍成功、LLM 重排不可达、reindex 残留、依赖不兼容、长期记忆路径错误 |
+| P2 | 13 | 缓存键/缓存未启用、指标真空 1.0、cwd 依赖路径、Prompt 非 JSON、Agent 内 if/elif、故障注入未生效、无证据仍成功、LLM 重排不可达、reindex 残留、依赖不兼容、长期记忆路径错误、**评测指标依赖未声明的 jieba** |
 | P3 | 11 | 记忆命中未落盘、死代码、`.env.example` 不同步、前端缺字段/面板、`latency_ms=0`、无 requirements、SSRF、注入检测漏检、MCP 回退不可见、MCP `/openapi.json` 崩溃、校验器可被自洽但未落地的句子骗过 |
-| P4 | 3 | docker 引擎不可用、无 npm 链、离线指标不代表模型质量（已如实标注） |
-| **合计** | **28**（修复 26 + 环境限制 2） | |
+| P4 | 3 | docker 引擎不可用（已穷尽 PATH/常见安装路径/podman/buildah/nerdctl/WSL 确认）、无 npm 构建链（已用零依赖 node 测试覆盖前端逻辑）、离线指标不代表模型质量（已如实标注） |
+| **合计** | **29**（修复 27 + 环境限制 2） | |
 
 ---
 
@@ -152,7 +152,8 @@ MCP Server 与 3 种传输；三层记忆；统一 Trace；35 条 Golden Dataset
 | 静态检查 | `ruff check .` / `ruff format --check .` / `mypy researchpilot` | 全部通过（0 error） |
 | 测试 | `python -m pytest -q` | **164 passed**（含 unit / integration / evaluation） |
 | 依赖一致性 | `python -m pip check` | 本项目 fastapi/starlette 冲突消失；余下为环境内无关预装包 |
-| 干净环境安装 | `python -m venv` + `pip install -e .` | 成功解析并安装 fastapi 0.112.4 / starlette 0.38.6 等；CLI 与 uvicorn 均可用 |
+| 干净环境安装 | `python -m venv` + `pip install -e .`（CI 路径用 `.[dev]`） | 成功解析并安装 fastapi 0.112.4 / starlette 0.38.6 / jieba 0.42.1 等；CLI、uvicorn 与 CI 的 lint/mypy/pytest 步骤均在干净环境内跑通 |
+| 指标可复现性 A/B | 同一 venv、同一代码，仅差 `jieba` | 无 jieba：30/35、Citation 87.9%；有 jieba：35/35、Citation 100% → 已将 `jieba` 声明为硬依赖 |
 | 真实 HTTP provider | 本地 OpenAI 兼容端点（chat + embeddings） | 7 项测试全绿：结构化输出、鉴权、5xx 重试、401 映射、超时、embeddings、成本 |
 | MCP 双服务链路 | 启动 MCP HTTP 服务进程 | API `/health` 显示 `mcp_transport=http`，`/mcp/tools` 走 HTTP，研究任务产生 mcp 调用 |
 | 完整链路 | CLI 真实运行（"分析当前大模型 Agent 在软件开发中的主要应用方向…"） | Planner 3 子任务 → 3 次工具调用 → 9 条证据 → Verifier 9 checks（sufficient=True）→ Critic → Writer 3 节/5 结论 → 9 条引用全部可解析 → Trace{agent:5, llm:7, tool:3, retrieval:1} |

@@ -50,3 +50,14 @@ def test_fastapi_and_starlette_are_a_compatible_pair() -> None:
         f"installed starlette {starlette_version} violates fastapi {fastapi_version} "
         f"({starlette_req.specifier}); pick a compatible pair instead of upgrading blindly"
     )
+
+
+def test_tokenizer_dependency_is_declared_for_reproducible_metrics() -> None:
+    """Regression: the tokenizer must be declared, not optional.
+
+    Leaving jieba optional made the evaluation baseline environment-dependent
+    (clean environment without it scored 30/35 where 35/35 was reported).
+    """
+    declared = {Requirement(dep).name.lower() for dep in _pyproject_dependencies()}
+    assert "jieba" in declared
+    assert md.version("jieba")
