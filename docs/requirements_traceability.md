@@ -35,6 +35,7 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 | --- | --- | --- |
 | A 模块清单 / B 模块作用 / C 依赖关系 | `docs/audit_report.md` §A–C（17 模块 + 单向依赖图） | ✅ |
 | D 已实现功能 | §D + README Project Overview | ✅ |
+| 提交仓库自洽（GitHub 门面） | `scripts/verify_fresh_clone.py`：全新 clone（167 个 tracked 文件、无 runs/）内 ruff / mypy / pytest 198 / benchmark / compose 拓扑全部通过 | ✅ |
 | 示例运行结果可用（交付物 15） | `tests/unit/test_example_artifacts.py`：`sample_result.json` / `sample_trace.json` / `sample_report.md` 结构与彼此一致（引用可解析、5 个 agent span、LLM 记录 model、markdown 与 JSON 报告一致、非占位文件） | ✅ |
 | E 部分实现功能 | §E（检索语义质量、并行、超时中断、语义判分、持久化） | ✅ |
 | F Stub / TODO / FIXME | `rg` 扫描：TODO/FIXME/NotImplementedError/stub = 0；`pass` 8 处均非空实现 | ✅ |

@@ -298,6 +298,7 @@ python -m pytest -q -m evaluation         # 全量 Golden Dataset 冒烟
 ruff check . && ruff format --check . && mypy researchpilot
 python -m pip check                       # 依赖一致性
 python scripts/ci_dry_run.py              # 在本地执行 CI 工作流里的每条命令（docker job 跳过并说明）
+python scripts/verify_fresh_clone.py      # 从干净 clone 复现上述流程，证明提交的仓库自洽
 ```
 
 测试目录：`tests/unit/`（组件契约、依赖一致性、路径解析、工具参数策略、安全加固）、

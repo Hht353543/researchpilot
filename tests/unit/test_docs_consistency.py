@@ -70,6 +70,8 @@ def test_documented_commands_exist() -> None:
         "scripts/retrieval_ablation.py": ROOT / "scripts" / "retrieval_ablation.py",
         "scripts/verify_live_model.py": ROOT / "scripts" / "verify_live_model.py",
         "scripts/local_model_server.py": ROOT / "scripts" / "local_model_server.py",
+        "scripts/ci_dry_run.py": ROOT / "scripts" / "ci_dry_run.py",
+        "scripts/verify_fresh_clone.py": ROOT / "scripts" / "verify_fresh_clone.py",
     }
     for name, path in scripts_and_modules.items():
         assert path.exists(), f"{name} is referenced but missing"
