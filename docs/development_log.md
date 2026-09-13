@@ -187,6 +187,8 @@ avg_latency=0.33s p95=1.37s tokens=658,286 cost=$0.000000
 | 11 | KB 重排策略被 **KnowledgeBase 自己的 settings** 固定，运行时覆盖不生效（LLM 重排永远不触发） | `rag/knowledge_base.py:search`、`tools/.../knowledge_search.py` | 传入 `rerank_strategy="llm"` 的 pipeline 没有任何 rerank span | `search(...)` 新增 `rerank_strategy` 参数，工具传入运行时 settings；新增 LLM 重排测试 |
 | 12 | `/kb/reindex` 只是"再插入一遍"，**磁盘上删除的文档仍留在索引** | `rag/knowledge_base.py:load_default` | 删除 `memory.md` 后 reindex，文档数与 chunk 数不变 | 重建立即 `store.clear()` 再 ingest；新增 API 级回归测试（5 → 4 篇） |
 | 12b | **评测指标依赖未声明的可选依赖** `jieba`：干净环境（CI/容器）与装有 jieba 的开发环境跑同一份代码得到不同基线 | `pyproject.toml`、`requirements.txt`、`utils.content_tokens` | 干净 venv 复现：无 jieba 时 30/35（Citation 87.9%），安装 jieba 后同一 venv 立刻 35/35（Citation 100%）→ 将 `jieba>=0.42` 声明为硬依赖；`test_packaging.py` 增加回归测试，确保依赖被声明且已安装 |
+| 12c | **切换 embedding 提供方后仍复用旧索引向量**（索引只存维度、不存 embedder 身份）→ 检索静默失真 | `rag/knowledge_base.py`、`rag/vector_store.py` | 索引新增 embedder 指纹（provider:model:dim），不匹配自动重建并告警；新增回归测试 `test_embedder_change_invalidates_persisted_index` |
+| 12d | **弱模型返回「schema 合法但内容为空」的报告**（`conclusions=[]`、无引用）时，系统照原样输出无引用报告 | `agents/writer.py` | 新增空报告回退：无引用绑定且有可用证据 → 改用确定性抽取式写作器；单测 + 真实模型复测（引用正确率 0% → 100%，状态仍如实标记 degraded） |
 | 13 | 依赖冲突：`fastapi 0.110.3` 要求 `starlette<0.38`，环境里是 `1.6.0`（`Router(on_startup=...)` 已被移除，应用根本无法构造） | `pyproject.toml` + 环境 | `pip check` 报错；`TypeError: Router.__init__() got an unexpected keyword argument 'on_startup'` | 基于实际 API 使用选择兼容版本对 `fastapi>=0.110,<0.113` + `starlette>=0.37.2,<0.39`（实测 fastapi 0.112.4 / starlette 0.38.6）；`pip check` 中该冲突消失；新增打包一致性测试 |
 | 13b | 长期记忆写入使用**进程级默认路径**而不是注入的 `runs_path`（测试/容器/只读 HOME 下会写到错误位置，写失败还会把成功任务变成 failed） | `agents/base.py:build_runtime`、`pipeline.py` | 注入 tmp `runs_path` 后 `runs/long_term_memory.json` 不生成，反而出现在仓库默认 `runs/` | runtime 显式构造 `LongTermMemory(settings.runs_dir()/...)`；持久化失败只降级为 `degraded` 并记录 `memory:` 错误；新增 `test_memory_layers_are_actually_used` |
 
@@ -245,7 +247,7 @@ README 与 `docs/*`。
 ruff check .                      -> All checks passed!
 ruff format --check .             -> 114 files already formatted
 mypy researchpilot                -> Success: no issues found in 69 source files
-python -m pytest -q               -> 164 passed
+python -m pytest -q               -> 168 passed
 python -m pip check               -> 本项目 fastapi/starlette 冲突已消失（余下为环境里无关包的既有冲突）
 python scripts/run_benchmark.py   -> 见 docs/evaluation.md（35/35，Recall 93.9%，Citation 100%，Tool F1 85.9%）
 真实 HTTP provider 全链路          -> 见 tests/integration/test_openai_provider.py（7 项全绿）

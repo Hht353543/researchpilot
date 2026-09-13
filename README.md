@@ -34,7 +34,7 @@ LLM → Prompt → Structured Output → Tool Calling → RAG → Knowledge Base
 | 服务化 | FastAPI（类型安全、参数校验、错误语义、日志）+ 零依赖前端（输入 / 模型参数 / 知识库 / 时间线 / 报告 / 指标 / 评测面板） |
 | 知识库管理 | 文档入库、检索、删除（级联删除 chunk）、全量重建索引（磁盘删除的文件不会残留） |
 | LLM 抽象 | 任意 OpenAI 兼容端点（OpenAI / DeepSeek / vLLM / Ollama…）+ 确定性离线 provider；真实 HTTP 链路由本地兼容端点端到端测试覆盖 |
-| 工程质量 | **164 个测试**（unit / integration / evaluation，含真实 HTTP provider 链路）、ruff、mypy、pip check、Dockerfile、docker-compose、GitHub Actions |
+| 工程质量 | **168 个测试**（unit / integration / evaluation，含真实 HTTP provider 链路）、ruff、mypy、pip check、Dockerfile、docker-compose、GitHub Actions |
 
 ---
 
@@ -266,7 +266,7 @@ docker compose up --build
 ## Testing
 
 ```bash
-python -m pytest -q                       # 单元 + 集成 + 评测（164 个测试）
+python -m pytest -q                       # 单元 + 集成 + 评测（168 个测试）
 python -m pytest -q -m "not evaluation"   # 快速回归
 python -m pytest -q -m evaluation         # 全量 Golden Dataset 冒烟
 ruff check . && ruff format --check . && mypy researchpilot
@@ -305,6 +305,28 @@ Settings/面板元素必须存在并被读取）。CI 中作为独立步骤执�
 > （检索、工具、校验、引用绑定、追踪、评测、故障恢复），因此这组数字衡量的是**系统管线正确性与回归基线**，
 > **不代表前沿模型的生成质量**。真实模型质量请用 `python scripts/run_benchmark.py --provider openai`
 > 重新运行，数字会自动覆盖写入 `docs/evaluation.md`，本文件中的表格也请同步替换为实测值。
+
+---
+
+## 真实模型验证（本地真实 LLM + 真实 embedding，已实测）
+
+仓库不仅验证过离线确定性 provider，还用**本地真实模型**跑通了整条链路（无厂商 Key、无外网）：
+
+- 生成模型：`Qwen/Qwen1.5-0.5B-Chat`（真实权重，GPU）
+- 向量模型：`shibing624/text2vec-base-chinese`（768 维真实中文 embedding）
+- 服务方式：`scripts/local_model_server.py`（自实现 OpenAI 兼容端点，含 chat + embeddings）
+
+| 验证项 | 实测结果 |
+| --- | --- |
+| 结构化输出探针（项目 provider + 校验/修复重试） | ✅ 一次通过，`attempts=1 tokens=520 repairs=0` |
+| 端到端流水线（3 条 Golden Dataset 任务） | 1/3 通过，Retrieval Recall 100%，平均 450s/任务、73k–96k token/任务 |
+| 失败原因（已定位并修复） | 0.5B 模型返回 schema 合法但内容为空的报告（无任何引用）→ 新增"空报告回退"到确定性抽取式写作器 |
+| 修复后复测（同任务同模型） | ✅ 通过，**引用正确率 100%** |
+| 检索消融（hash vs text2vec × dense/keyword/hybrid） | 见 [`docs/retrieval_ablation.md`](docs/retrieval_ablation.md)：hybrid 最优；真实 embedding 在本合成语料上并非自动更好 |
+
+完整数据与复现命令见 [`docs/evaluation_local_model.md`](docs/evaluation_local_model.md) 与
+[`docs/retrieval_ablation.md`](docs/retrieval_ablation.md)。要换成线上模型，只需
+`export API_KEY=sk-... && python scripts/verify_live_model.py --limit 35`。
 
 ---
 

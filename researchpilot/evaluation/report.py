@@ -227,11 +227,15 @@ def render_resume_section(report: EvaluationReport) -> str:
 
 
 def write_docs(
-    report: EvaluationReport, *, docs_dir: str | Path = Path("docs"), resume: bool = True
+    report: EvaluationReport,
+    *,
+    docs_dir: str | Path = Path("docs"),
+    resume: bool = True,
+    filename: str = "evaluation.md",
 ) -> list[Path]:
     directory = Path(docs_dir)
     directory.mkdir(parents=True, exist_ok=True)
-    evaluation = directory / "evaluation.md"
+    evaluation = directory / filename
     evaluation.write_text(render_evaluation_markdown(report), encoding="utf-8")
     written = [evaluation]
     if resume:

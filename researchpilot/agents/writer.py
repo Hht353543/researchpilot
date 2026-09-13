@@ -77,6 +77,21 @@ class WriterAgent(BaseAgent):
                     runtime.errors.append(f"writer: {type(exc).__name__}: {exc}")
             if report is None:
                 report = self._fallback_report(plan, usable, verification)
+            elif (
+                usable
+                and not report.conclusions
+                and not any(section.evidence_ids for section in report.sections)
+            ):
+                # A weak model can return a schema-valid but empty report (observed
+                # with a 0.5B local model: all arrays empty -> a report with zero
+                # citations). Fall back to the deterministic extractive writer so
+                # every claim stays bound to evidence instead of shipping an
+                # uncited report.
+                runtime.errors.append(
+                    "writer: model returned a report without any citation binding; "
+                    "used the deterministic extractive fallback"
+                )
+                report = self._fallback_report(plan, usable, verification)
             report = self._bind_citations(report, usable, verification, injection_ids)
             report.markdown = render_report(report, usable, runtime.sources.all())
             self.note(

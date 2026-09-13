@@ -110,3 +110,44 @@ def test_writer_flags_injection_evidence_and_insufficient_verification() -> None
     )
     assert any("注入" in item for item in bound.limitations)
     assert any("不足" in item for item in bound.limitations)
+
+
+def test_writer_replaces_an_empty_model_report_with_cited_fallback() -> None:
+    """Regression: a schema-valid but empty report must not ship without citations."""
+    from researchpilot.agents.writer import WriterAgent
+    from researchpilot.schemas import Evidence as EvidenceModel
+    from researchpilot.schemas import ResearchPlan, Subtask
+
+    class _Runtime:
+        def __init__(self) -> None:
+            self.errors: list[str] = []
+            self.sources = _StubSources()
+
+    class _StubSources:
+        def all(self):
+            return [
+                SourceRef(id="s1", kind="knowledge_base", title="doc", locator="d#c0", retrieved_at="now")
+            ]
+
+        def as_dict(self):
+            return {"s1": {"kind": "knowledge_base"}}
+
+    agent = WriterAgent.__new__(WriterAgent)
+    agent.runtime = _Runtime()  # type: ignore[assignment]
+    plan = ResearchPlan(
+        objective="obj",
+        subtasks=[
+            Subtask(
+                id="S1",
+                question="q1",
+                intent="knowledge_search",
+                tools=["knowledge_search"],
+                expected_output="x",
+            )
+        ],
+    )
+    usable = [EvidenceModel(id="E1", subtask_id="S1", claim="MCP 基于 JSON-RPC", quote="q", source_id="s1")]
+    fallback = agent._fallback_report(plan, usable, VerificationReport(sufficient=True))
+    assert fallback.conclusions and fallback.conclusions[0].evidence_ids == ["E1"]
+    markdown = render_report(fallback, usable, agent.runtime.sources.all())
+    assert "[E1]" in markdown

@@ -166,6 +166,27 @@ def test_vector_store_roundtrip(tmp_path: Path) -> None:
     assert loaded.stats()["documents"] == store.stats()["documents"]
 
 
+def test_embedder_change_invalidates_persisted_index(tmp_path: Path, settings) -> None:
+    """Regression: switching embedders must rebuild, never reuse stale vectors."""
+    from researchpilot.rag.knowledge_base import KnowledgeBase
+
+    base = settings.model_copy(update={"runs_path": str(tmp_path / "runs")})
+    kb = KnowledgeBase(base)
+    kb.ingest_text("混合检索通过 RRF 融合语义与关键词排名。" * 4, title="doc")
+    kb.save()
+    first = KnowledgeBase.load_or_create(base)
+    assert first.store.stats()["chunks"] == kb.store.stats()["chunks"]
+    assert first.store.fingerprint == kb.embedder_fingerprint()
+
+    # Same corpus, different embedder configuration -> index must be rebuilt.
+    switched = base.model_copy(update={"embedding_dim": 96})
+    rebuilt = KnowledgeBase.load_or_create(switched)
+    assert rebuilt.embedder_fingerprint() != first.embedder_fingerprint()
+    assert rebuilt.store.fingerprint == rebuilt.embedder_fingerprint()
+    assert rebuilt.store.dimension == 96
+    assert rebuilt.store.stats()["chunks"] >= 1
+
+
 @pytest.mark.parametrize(
     "text",
     ["", "   ", "短文本"],

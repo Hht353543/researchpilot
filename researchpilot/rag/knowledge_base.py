@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,8 @@ from researchpilot.rag.models import Chunk, Document
 from researchpilot.rag.retriever import RetrievalResult, Retriever
 from researchpilot.rag.vector_store import VectorStore
 from researchpilot.utils import utc_now_iso
+
+logger = logging.getLogger("researchpilot.rag")
 
 
 class IngestReport(BaseModel):
@@ -45,6 +48,15 @@ class KnowledgeBase:
         self.store = store or VectorStore(dimension=self.embedder.dimension)
         self.chunker = chunker or MarkdownChunker()
         self.loader = loader or DocumentLoader()
+        self.store.fingerprint = self.embedder_fingerprint()
+
+    def embedder_fingerprint(self) -> str:
+        """Identity of the embedder a persisted index must match."""
+        return (
+            f"{self.settings.embedding_provider}:"
+            f"{self.settings.embedding_model}:"
+            f"{getattr(self.embedder, 'dimension', self.settings.embedding_dim)}"
+        )
 
     # -- ingestion --------------------------------------------------------- #
     def ingest_path(self, path: str | Path) -> IngestReport:
@@ -176,6 +188,7 @@ class KnowledgeBase:
         return self.settings.runs_dir() / "knowledge_base.json"
 
     def save(self, path: str | Path | None = None) -> Path:
+        self.store.fingerprint = self.embedder_fingerprint()
         return self.store.save(path or self.index_path())
 
     @classmethod
@@ -184,9 +197,20 @@ class KnowledgeBase:
         kb = cls(settings)
         path = kb.index_path()
         if path.exists():
-            kb.store = VectorStore.load(path)
-            kb.store.dimension = kb.embedder.dimension
-            return kb
+            loaded = VectorStore.load(path)
+            expected = kb.embedder_fingerprint()
+            if loaded.fingerprint == expected:
+                kb.store = loaded
+                kb.store.dimension = kb.embedder.dimension
+                return kb
+            # A different embedder makes the stored vectors meaningless for queries
+            # from this embedder: rebuild instead of silently returning garbage.
+            logger.warning(
+                "knowledge base index was built with %r but the configured embedder is %r; "
+                "rebuilding the index",
+                loaded.fingerprint or "unknown",
+                expected,
+            )
         kb.load_default()
         kb.save()
         return kb

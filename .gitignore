@@ -11,8 +11,9 @@ htmlcov/
 build/
 dist/
 
-# runtime artifacts
+# runtime artifacts (including ablation / live-run scratch directories)
 runs/
+runs_*/
 *.log
 
 # local secrets

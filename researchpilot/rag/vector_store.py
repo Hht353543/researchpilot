@@ -74,6 +74,9 @@ class VectorStore:
 
     def __init__(self, *, dimension: int = 384) -> None:
         self.dimension = dimension
+        # Identifies which embedder produced the stored vectors: loading an index
+        # built by a different embedder would compare incompatible vectors.
+        self.fingerprint: str = ""
         self._chunks: dict[str, Chunk] = {}
         self._documents: dict[str, Document] = {}
         self._bm25: BM25Index | None = None
@@ -262,6 +265,7 @@ class VectorStore:
     def to_dict(self) -> dict[str, Any]:
         return {
             "dimension": self.dimension,
+            "fingerprint": self.fingerprint,
             "documents": [d.model_dump() for d in self._documents.values()],
             "chunks": [c.model_dump() for c in self._chunks.values()],
         }
@@ -276,6 +280,7 @@ class VectorStore:
     def load(cls, path: str | Path) -> VectorStore:
         payload = json.loads(Path(path).read_text(encoding="utf-8"))
         store = cls(dimension=int(payload.get("dimension", 384)))
+        store.fingerprint = str(payload.get("fingerprint", ""))
         for doc in payload.get("documents", []):
             store.upsert_document(Document.model_validate(doc))
         store.add_chunks([Chunk.model_validate(c) for c in payload.get("chunks", [])])

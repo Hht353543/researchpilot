@@ -24,8 +24,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from researchpilot.config import Settings, get_settings
-from researchpilot.llm.base import ChatMessage, LLMConfigError, LLMError
+from researchpilot.llm.base import LLMConfigError, LLMError, StructuredOutputError
 from researchpilot.llm.openai_provider import OpenAICompatibleProvider
+from researchpilot.llm.structured import StructuredLLMRunner
 from researchpilot.schemas import CritiqueReport
 
 
@@ -49,33 +50,46 @@ def probe(settings: Settings) -> int:
             file=sys.stderr,
         )
         return 2
-    provider = OpenAICompatibleProvider(settings.model_copy(update={"max_tokens": 64, "max_retries": 1}))
+    provider = OpenAICompatibleProvider(settings.model_copy(update={"max_tokens": 512, "max_retries": 1}))
     print(f"probe -> model={settings.model} base_url={settings.base_url}")
+    # Exercise the same structured-output runtime as the pipeline: JSON extraction
+    # (fences/prose tolerated) + schema validation + bounded repair retries.
+    runner = StructuredLLMRunner(provider, max_repair_retries=2, token_budget=0, max_tokens=512)
     try:
-        response = provider.complete(
-            [
-                ChatMessage(role="system", content="You are a terse evaluator. Reply with JSON only."),
-                ChatMessage(
-                    role="user",
-                    content=(
-                        'Return {"issues": [], "needs_more_research": false, "follow_up_queries": [], '
-                        '"coverage": {}, "overall_assessment": "probe ok"}'
-                    ),
-                ),
-            ],
-            response_schema=CritiqueReport,
+        result = runner.run(
+            CritiqueReport,
+            agent="LiveProbe",
+            system="You are a terse evaluator. Reply with JSON only.",
+            user=(
+                'Return {"issues": [], "needs_more_research": false, "follow_up_queries": [], '
+                '"coverage": {}, "overall_assessment": "probe ok"}'
+            ),
             purpose="probe",
         )
     except LLMConfigError as exc:
         print(f"ERROR: credential/config rejected: {exc}", file=sys.stderr)
         return 3
+    except StructuredOutputError as exc:
+        print(
+            f"ERROR: provider answered but structured output failed even after repair retries "
+            f"({type(exc).__name__}: {exc}).\n"
+            "Small local models sometimes need more max_tokens; a production model should "
+            "satisfy the schema directly.",
+            file=sys.stderr,
+        )
+        return 5
     except LLMError as exc:
         print(f"ERROR: provider call failed: {exc}", file=sys.stderr)
         return 4
-    parsed = CritiqueReport.model_validate_json(response.text)
+    except Exception as exc:  # pragma: no cover - defensive
+        print(
+            f"ERROR: unexpected probe failure ({type(exc).__name__}: {exc}).",
+            file=sys.stderr,
+        )
+        return 5
     print(
-        f"probe -> ok: finish={response.finish_reason} attempts={response.attempts} "
-        f"tokens={response.usage.total_tokens} payload={parsed.overall_assessment!r}"
+        f"probe -> ok: schema=CritiqueReport attempts={result.attempts} "
+        f"tokens={result.usage.total_tokens} repairs={len(result.errors)}"
     )
     return 0
 
@@ -86,6 +100,16 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=None, help="number of golden-dataset tasks")
     parser.add_argument("--task-ids", nargs="*", default=None, help="specific golden-dataset task ids")
     parser.add_argument("--no-docs", action="store_true", help="do not regenerate docs/")
+    parser.add_argument(
+        "--docs-filename",
+        default=None,
+        help="write the report to docs/<filename> (default: evaluation_<provider>.md)",
+    )
+    parser.add_argument(
+        "--update-resume",
+        action="store_true",
+        help="also rewrite docs/resume.md (only when the live run is the full dataset)",
+    )
     args = parser.parse_args()
 
     settings = _settings()
@@ -107,7 +131,8 @@ def main() -> int:
         f"cost=${metrics.total_cost_usd:.4f}"
     )
     if not args.no_docs:
-        for path in write_docs(report):
+        filename = args.docs_filename or f"evaluation_{report.provider}.md"
+        for path in write_docs(report, filename=filename, resume=args.update_resume):
             print(f"wrote {path} (provider={report.provider})")
     print(
         "NOTE: docs/evaluation.md and docs/resume.md now describe a live-model run; "
