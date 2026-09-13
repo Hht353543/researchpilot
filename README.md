@@ -15,6 +15,10 @@ LLM → Prompt → Structured Output → Tool Calling → RAG → Knowledge Base
 
 ## Project Overview
 
+> 代码审查与修复记录：本仓库经过一轮完整的「审查 → 定位 → 修复 → 补测试 → 运行验证 → 更新文档」，
+> 结论（A–J 能力清单、八项接线专项检查、BUG/PARTIAL/MISSING/DEAD CODE/FAKE FEATURE/TECH DEBT 分类、
+> 25 项发现的严重程度分布与验证证据）见 [`docs/audit_report.md`](docs/audit_report.md)。
+
 | 能力 | 实现 |
 | --- | --- |
 | 多 Agent 编排 | Planner → Researcher → Verifier → Critic → Writer（结构化状态，可重试、可降级） |
@@ -30,7 +34,7 @@ LLM → Prompt → Structured Output → Tool Calling → RAG → Knowledge Base
 | 服务化 | FastAPI（类型安全、参数校验、错误语义、日志）+ 零依赖前端（输入 / 模型参数 / 知识库 / 时间线 / 报告 / 指标 / 评测面板） |
 | 知识库管理 | 文档入库、检索、删除（级联删除 chunk）、全量重建索引（磁盘删除的文件不会残留） |
 | LLM 抽象 | 任意 OpenAI 兼容端点（OpenAI / DeepSeek / vLLM / Ollama…）+ 确定性离线 provider；真实 HTTP 链路由本地兼容端点端到端测试覆盖 |
-| 工程质量 | **138 个测试**（unit / integration / evaluation，含真实 HTTP provider 链路）、ruff、mypy、pip check、Dockerfile、docker-compose、GitHub Actions |
+| 工程质量 | **161 个测试**（unit / integration / evaluation，含真实 HTTP provider 链路）、ruff、mypy、pip check、Dockerfile、docker-compose、GitHub Actions |
 
 ---
 
@@ -250,7 +254,7 @@ docker compose up --build
 ## Testing
 
 ```bash
-python -m pytest -q                       # 单元 + 集成 + 评测（138 个测试）
+python -m pytest -q                       # 单元 + 集成 + 评测（161 个测试）
 python -m pytest -q -m "not evaluation"   # 快速回归
 python -m pytest -q -m evaluation         # 全量 Golden Dataset 冒烟
 ruff check . && ruff format --check . && mypy researchpilot
@@ -334,7 +338,7 @@ data/knowledge_base/      示例知识库（10 篇、39 个 chunk）
 data/web_corpus/          离线 Web 合成语料
 eval/golden_dataset.jsonl 35 条评测任务
 tests/{unit,integration,evaluation,fixtures}
-docs/                     architecture / adr / api / evaluation / resume / development_log
+docs/                     architecture / adr / api / evaluation / resume / audit_report / development_log
 examples/                 示例运行结果（报告、result JSON、trace JSON）
 scripts/                  run_benchmark.py / run_demo.py
 ```

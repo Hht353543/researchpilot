@@ -133,10 +133,17 @@ class ResearchPipeline:
             result.errors = list(runtime.errors)
             result.status = self._status(runtime, bundle)
             if report is not None and result.status != "failed":
-                runtime.memory.persist_task_result(
-                    objective=request.question,
-                    conclusions=[(c.statement, c.confidence) for c in report.conclusions],
-                )
+                try:
+                    runtime.memory.persist_task_result(
+                        objective=request.question,
+                        conclusions=[(c.statement, c.confidence) for c in report.conclusions],
+                    )
+                except Exception as exc:
+                    # Memory is an enhancement: a failed write must not destroy an
+                    # otherwise valid report, but it has to be visible as degradation.
+                    result.errors.append(f"memory: {type(exc).__name__}: {exc}")
+                    if result.status == "succeeded":
+                        result.status = "degraded"
         except BudgetExceededError as exc:
             result.errors.append(f"budget: {exc}")
             result.status = "degraded"

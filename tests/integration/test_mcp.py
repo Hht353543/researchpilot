@@ -157,6 +157,9 @@ def test_stdio_subprocess_client(settings: Settings, tmp_path, monkeypatch) -> N
 @pytest.mark.anyio
 async def test_http_transport(settings: Settings, knowledge_base: KnowledgeBase) -> None:
     app = create_http_app(McpServer(settings, knowledge_base=knowledge_base))
+    # Regression: /openapi.json used to raise PydanticUserError because the
+    # response annotation was imported inside create_http_app.
+    assert set(app.openapi()["paths"]) >= {"/health", "/mcp"}
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://mcp") as client:
         health = await client.get("/health")

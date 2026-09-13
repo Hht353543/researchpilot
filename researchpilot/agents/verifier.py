@@ -140,6 +140,15 @@ class VerifierAgent(BaseAgent):
                 if relevant_subtask and subtask_best < 0.15:
                     status = "unsupported"
                     reason_prefix = "no retrieved source is topically related to the sub-task"
+                elif grounding < 0.35:
+                    # The quote must exist in the retrieved source. Claim/quote
+                    # agreement alone can be faked by an ungrounded sentence, so
+                    # grounding is the primary invariant, not the combined score.
+                    status = "unsupported"
+                    reason_prefix = "quote is not present in the cited source"
+                elif grounding < 0.65:
+                    status = "weak"
+                    reason_prefix = "quote only partially matches the cited source"
                 elif combined >= 0.6:
                     status = "supported"
                     reason_prefix = ""

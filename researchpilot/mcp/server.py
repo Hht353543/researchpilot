@@ -8,6 +8,12 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+# Imported at module level (not inside create_http_app) so FastAPI can resolve the
+# response annotation when generating /openapi.json and /docs: with
+# ``from __future__ import annotations`` a function-local import leaves an
+# unresolvable ForwardRef and OpenAPI generation raises PydanticUserError.
+from fastapi import Body, FastAPI
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from researchpilot.config import Settings, get_settings
@@ -299,9 +305,6 @@ def serve_stdio(server: McpServer | None = None, *, stdin: Any = None, stdout: A
 
 def create_http_app(server: McpServer | None = None) -> Any:
     """Streamable-HTTP transport: ``POST /mcp`` with a JSON-RPC body."""
-    from fastapi import Body, FastAPI
-    from fastapi.responses import JSONResponse
-
     mcp = server or McpServer()
     app = FastAPI(title="ResearchPilot MCP", version="0.1.0")
 

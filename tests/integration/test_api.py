@@ -265,3 +265,46 @@ async def test_evaluation_latest_when_missing(client: httpx.AsyncClient, tmp_pat
     monkeypatch.chdir(tmp_path)
     payload = (await client.get("/evaluation/latest")).json()
     assert payload["available"] is False
+
+
+@pytest.mark.anyio
+async def test_api_key_never_leaks_into_responses_or_traces(tmp_path) -> None:
+    """Secrets must not appear in API payloads, traces, reports or logs payloads."""
+    import json as jsonlib
+
+    from researchpilot.api.app import create_app as build_app
+    from researchpilot.config import Settings as ApiSettings
+
+    secret = "sk-SECRET-DO-NOT-LEAK-1234567890"
+    settings = ApiSettings(
+        provider="openai",
+        api_key=secret,
+        base_url="http://127.0.0.1:9/v1",  # unreachable: the run degrades, no real key needed
+        request_timeout_s=0.2,
+        max_retries=0,
+        kb_path=str(Path(__file__).resolve().parents[1] / "fixtures" / "kb"),
+        runs_path=str(tmp_path / "runs"),
+        embedding_dim=64,
+    )
+    app = build_app(settings)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as http:
+        result = (await http.post("/research", json={"question": "工具注册表需要哪些字段？"})).json()
+        task_id = result["task_id"]
+
+        payloads = {
+            "result": jsonlib.dumps(result, ensure_ascii=False),
+            "trace": (await http.get(f"/research/{task_id}/trace")).text,
+            "sources": (await http.get(f"/research/{task_id}/sources")).text,
+            "metrics": (await http.get(f"/research/{task_id}/metrics")).text,
+            "config": (await http.get("/config")).text,
+            "health": (await http.get("/health")).text,
+            "mcp": (await http.get("/mcp/tools")).text,
+        }
+    for name, payload in payloads.items():
+        assert secret not in payload, f"{name} leaked the API key"
+        assert "DONOTLEAK" not in payload.upper().replace("-", "")
+    assert "api_key" not in result, "result envelope must not echo provider settings"
+    # The key also must not be written into run artifacts on disk.
+    for path in (tmp_path / "runs").glob("*"):
+        assert secret not in path.read_text(encoding="utf-8", errors="ignore")

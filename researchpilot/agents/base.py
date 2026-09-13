@@ -11,6 +11,7 @@ from researchpilot.config import Settings, get_settings
 from researchpilot.llm.base import LLMProvider
 from researchpilot.llm.factory import build_structured_runner
 from researchpilot.llm.structured import StructuredLLMRunner
+from researchpilot.memory.long_term import LongTermMemory
 from researchpilot.memory.manager import MemoryManager
 from researchpilot.observability.trace import Tracer
 from researchpilot.rag.knowledge_base import KnowledgeBase
@@ -73,6 +74,14 @@ def build_runtime(
     knowledge_base = knowledge_base or KnowledgeBase.load_or_create(settings)
     web_backend = build_web_backend(settings)
     llm = build_structured_runner(settings, provider=provider, tracer=tracer)
+    if memory is None:
+        # Long-term memory must live under the *task's* runs_path, not under the
+        # process-wide default: otherwise injected settings (tests, a Docker
+        # volume, a read-only home directory) silently write to the wrong place.
+        memory = MemoryManager(
+            task_id=task_id,
+            long_term=LongTermMemory(settings.runs_dir() / "long_term_memory.json"),
+        )
     if tools is None:
         tools = build_default_registry(
             settings=settings,
@@ -91,7 +100,7 @@ def build_runtime(
         llm=llm,
         tools=tools,
         knowledge_base=knowledge_base,
-        memory=memory or MemoryManager(task_id=task_id),
+        memory=memory,
         sources=sources or SourceRegistry(),
         web_backend=web_backend,
         mcp_client=mcp_client,
