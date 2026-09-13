@@ -256,7 +256,7 @@ README 与 `docs/*`。
 ruff check .                      -> All checks passed!
 ruff format --check .             -> 114 files already formatted
 mypy researchpilot                -> Success: no issues found in 69 source files
-python -m pytest -q               -> 195 passed
+python -m pytest -q               -> 198 passed
 python -m pip check               -> 本项目 fastapi/starlette 冲突已消失（余下为环境里无关包的既有冲突）
 python scripts/run_benchmark.py   -> 见 docs/evaluation.md（35/35，Recall 93.9%，Citation 100%，Tool F1 85.9%）
 真实 HTTP provider 全链路          -> 见 tests/integration/test_openai_provider.py（7 项全绿）

@@ -38,7 +38,7 @@ LLM → Prompt → Structured Output → Tool Calling → RAG → Knowledge Base
 | 服务化 | FastAPI（类型安全、参数校验、错误语义、日志）+ 零依赖前端（输入 / 模型参数 / 知识库 / 时间线 / 报告 / 指标 / 评测面板） |
 | 知识库管理 | 文档入库、检索、删除（级联删除 chunk）、全量重建索引（磁盘删除的文件不会残留） |
 | LLM 抽象 | 任意 OpenAI 兼容端点（OpenAI / DeepSeek / vLLM / Ollama…）+ 确定性离线 provider；真实 HTTP 链路由本地兼容端点端到端测试覆盖 |
-| 工程质量 | **195 个测试**（unit / integration / evaluation，含真实 HTTP provider 链路）、ruff、mypy、pip check、Dockerfile、docker-compose、GitHub Actions |
+| 工程质量 | **198 个测试**（unit / integration / evaluation，含真实 HTTP provider 链路）、ruff、mypy、pip check、Dockerfile、docker-compose、GitHub Actions |
 
 ---
 
@@ -292,7 +292,7 @@ python scripts/compose_smoke.py      # 也可由 pytest 执行：tests/integrati
 ## Testing
 
 ```bash
-python -m pytest -q                       # 单元 + 集成 + 评测（195 个测试）
+python -m pytest -q                       # 单元 + 集成 + 评测（198 个测试）
 python -m pytest -q -m "not evaluation"   # 快速回归
 python -m pytest -q -m evaluation         # 全量 Golden Dataset 冒烟
 ruff check . && ruff format --check . && mypy researchpilot
