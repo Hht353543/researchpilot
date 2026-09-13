@@ -34,7 +34,7 @@ LLM → Prompt → Structured Output → Tool Calling → RAG → Knowledge Base
 | 服务化 | FastAPI（类型安全、参数校验、错误语义、日志）+ 零依赖前端（输入 / 模型参数 / 知识库 / 时间线 / 报告 / 指标 / 评测面板） |
 | 知识库管理 | 文档入库、检索、删除（级联删除 chunk）、全量重建索引（磁盘删除的文件不会残留） |
 | LLM 抽象 | 任意 OpenAI 兼容端点（OpenAI / DeepSeek / vLLM / Ollama…）+ 确定性离线 provider；真实 HTTP 链路由本地兼容端点端到端测试覆盖 |
-| 工程质量 | **161 个测试**（unit / integration / evaluation，含真实 HTTP provider 链路）、ruff、mypy、pip check、Dockerfile、docker-compose、GitHub Actions |
+| 工程质量 | **164 个测试**（unit / integration / evaluation，含真实 HTTP provider 链路）、ruff、mypy、pip check、Dockerfile、docker-compose、GitHub Actions |
 
 ---
 
@@ -160,6 +160,18 @@ python scripts/run_benchmark.py --provider mock      # 离线确定性，CI 使�
 python scripts/run_benchmark.py --provider openai    # 真实模型（需 API_KEY）
 ```
 
+真实模型可用一条命令完成自检与评测（脚本永不打印密钥，凭据缺失/被拒绝时给出明确退出码）：
+
+```bash
+export API_KEY=sk-...                                # 或 RESEARCHPILOT_API_KEY
+python scripts/verify_live_model.py --probe-only     # 1 次最小真实调用
+python scripts/verify_live_model.py --limit 35       # 真实模型跑完整 Golden Dataset
+```
+
+> 本开发环境中的 `OPENAI_API_KEY` 对 `api.openai.com` 返回 **HTTP 401 `invalid_api_key`**
+> （见 `docs/audit_report.md` 的"仍然存在的问题"），因此仓库内提交的评测数字来自离线确定性 provider；
+> 换成有效凭据后按上面两条命令即可生成真实模型数字（`docs/evaluation.md` 与 `docs/resume.md` 会自动重写）。
+
 指标（Task Success Rate / Retrieval Recall / Context Relevance / Citation Correctness /
 Tool Selection Accuracy & F1 / Tool Success Rate / Latency(P50,P95) / Tokens / Cost）
 全部来自真实运行，并自动写入 `docs/evaluation.md`；`docs/resume.md` 中的简历 bullet 同样由脚本用实测数字生成。
@@ -254,7 +266,7 @@ docker compose up --build
 ## Testing
 
 ```bash
-python -m pytest -q                       # 单元 + 集成 + 评测（161 个测试）
+python -m pytest -q                       # 单元 + 集成 + 评测（164 个测试）
 python -m pytest -q -m "not evaluation"   # 快速回归
 python -m pytest -q -m evaluation         # 全量 Golden Dataset 冒烟
 ruff check . && ruff format --check . && mypy researchpilot

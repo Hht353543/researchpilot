@@ -150,7 +150,7 @@ MCP Server 与 3 种传输；三层记忆；统一 Trace；35 条 Golden Dataset
 | 验证 | 命令 / 方式 | 结果 |
 | --- | --- | --- |
 | 静态检查 | `ruff check .` / `ruff format --check .` / `mypy researchpilot` | 全部通过（0 error） |
-| 测试 | `python -m pytest -q` | **161 passed**（含 unit / integration / evaluation） |
+| 测试 | `python -m pytest -q` | **164 passed**（含 unit / integration / evaluation） |
 | 依赖一致性 | `python -m pip check` | 本项目 fastapi/starlette 冲突消失；余下为环境内无关预装包 |
 | 干净环境安装 | `python -m venv` + `pip install -e .` | 成功解析并安装 fastapi 0.112.4 / starlette 0.38.6 等；CLI 与 uvicorn 均可用 |
 | 真实 HTTP provider | 本地 OpenAI 兼容端点（chat + embeddings） | 7 项测试全绿：结构化输出、鉴权、5xx 重试、401 映射、超时、embeddings、成本 |
@@ -163,8 +163,11 @@ MCP Server 与 3 种传输；三层记忆；统一 Trace；35 条 Golden Dataset
 
 ## 仍然存在的问题
 
-1. **未调用真实厂商 API**：无 API Key；provider 链路是用本地 OpenAI 兼容端点验证的。真实模型质量必须用
-   `python scripts/run_benchmark.py --provider openai` 重跑并替换文档数字。
+1. **未完成真实厂商模型调用（外部凭据阻塞）**：本环境的 `OPENAI_API_KEY` 存在但对 `api.openai.com` 返回
+   **HTTP 401 `invalid_api_key`**（`scripts/verify_live_model.py --probe-only` exit=3，密钥在被拒绝前已被 OpenAI 掩码），
+   因此无法用该凭据获得真实模型输出。已具备的是：真实 HTTP provider 全链路（本地 OpenAI 兼容端点，7 项测试）
+   与一条命令完成的自检脚本 `scripts/verify_live_model.py`（`--probe-only` / `--limit 35`）。
+   换入有效凭据后即可生成真实模型评测并自动重写 `docs/evaluation.md` 与 `docs/resume.md`。
 2. **Docker / CI 未实机运行**：本环境无 docker 引擎、无 GitHub Actions；已完成静态校验与镜像内命令的实机等价验证。
 3. **Context Relevance 28.8%**：哈希向量语义弱，需真实 embedding 与交叉编码器重排。
 4. **串行子任务**、**线程池超时不可中断**、**JSON 单机存储**、**无多租户鉴权/流式输出**：见 Future Work。
