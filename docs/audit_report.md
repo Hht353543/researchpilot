@@ -150,13 +150,13 @@ MCP Server 与 3 种传输；三层记忆；统一 Trace；35 条 Golden Dataset
 | 验证 | 命令 / 方式 | 结果 |
 | --- | --- | --- |
 | 静态检查 | `ruff check .` / `ruff format --check .` / `mypy researchpilot` | 全部通过（0 error） |
-| 测试 | `python -m pytest -q` | **208 passed**（含 unit / integration / evaluation）+ 9 个前端 node 测试 |
+| 测试 | `python -m pytest -q` | **210 passed**（含 unit / integration / evaluation）+ 9 个前端 node 测试 |
 | 提交的仓库自洽（全新 clone） | `scripts/verify_fresh_clone.py`：把仓库 clone 到临时目录后执行 CI 干跑；实测 **167 个受版本控制文件、clone 中无 `runs/`**，ruff / mypy / 198 项测试 / 评测 / benchmark / compose 拓扑全部通过 |
 | CI 工作流本身可执行 | `python scripts/ci_dry_run.py`（解析真实 `.github/workflows/ci.yml`） | **9/9 步骤通过**：ruff → mypy → unit+integration(+coverage) → node 前端测试 → Golden Dataset 完整性 → benchmark → evaluation 冒烟 → compose 拓扑；`docker build` job 需引擎，明确跳过并说明 |
 | 依赖一致性 | `python -m pip check` | 本项目 fastapi/starlette 冲突消失；余下为环境内无关预装包 |
 | 干净环境安装 | `python -m venv` + `pip install -e .`（CI 路径用 `.[dev]`） | 成功解析并安装 fastapi 0.112.4 / starlette 0.38.6 / jieba 0.42.1 等；CLI、uvicorn 与 CI 的 lint/mypy/pytest 步骤均在干净环境内跑通 |
 | 指标可复现性 A/B | 同一 venv、同一代码，仅差 `jieba` | 无 jieba：30/35、Citation 87.9%；有 jieba：35/35、Citation 100% → 已将 `jieba` 声明为硬依赖 |
-| MCP STDIO 编码（Windows） | `tests/integration/test_mcp_stdio_encoding.py`（9 项）+ 原 `test_stdio_subprocess_client` | 在**未设置 PYTHONIOENCODING、locale=cp936** 的 plain pytest 下：中文 query/结果/校验错误、英文 query、malformed 参数、tool 异常、stdout 纯净性全部通过；服务端在**无任何环境辅助**时输出的字节可按 UTF-8 严格解码 |
+| MCP STDIO 编码（Windows） | `tests/integration/test_mcp_stdio_encoding.py`（12 项）+ 原 `test_stdio_subprocess_client` | 在**未设置 PYTHONIOENCODING、locale=cp936** 的 plain pytest 下：中文 query/结果/校验错误、英文 query、malformed 参数、tool 异常、stdout 纯净性全部通过；服务端在**无任何环境辅助**时、以及在被喂入**非 UTF-8 的 `PYTHONIOENCODING=cp936` + `PYTHONUTF8=0`** 时，输出的字节仍可按 UTF-8 严格解码 |
 | 真实 HTTP provider | 本地 OpenAI 兼容端点（chat + embeddings） | 7 项测试全绿：结构化输出、鉴权、5xx 重试、401 映射、超时、embeddings、成本 |
 | **真实模型端到端** | 本地 `Qwen1.5-0.5B-Chat`（GPU）+ `text2vec-base-chinese`(768d) | 探针 1 次通过（attempts=1, 520 tokens, 0 repairs）；流水线 3 任务 1/3、Recall 100%；新增空报告回退后同任务引用正确率 100%（`docs/evaluation_local_model.md`） |
 | 检索消融（真实数据） | `scripts/retrieval_ablation.py` | hash：dense/keyword/hybrid Recall 80.6/82.2/82.2%、Precision 43.3/50.6/51.7%；text2vec-768d：72.2/82.2/82.2%、47.8/50.6/51.7%，hybrid MRR 0.796（`docs/retrieval_ablation.md`） |

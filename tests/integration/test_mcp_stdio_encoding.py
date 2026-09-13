@@ -7,8 +7,10 @@ reported invalid unicode) and the response bytes were not valid UTF-8 on the way
 out -> ``UnicodeDecodeError`` inside ``readline()``.
 
 Covered here: Chinese query + Chinese result, English query, Chinese validation
-error, malformed arguments, unknown tool, tool exceptions, stdout purity, and the
-server working with *no* environment help at all.
+error, malformed arguments, unknown tool, tool exceptions, stdout purity, the
+server working with *no* environment help at all, and — the portable stand-in for
+a POSIX host whose locale is not UTF-8 — neither side being swayed by a hostile
+non-UTF-8 ``PYTHONIOENCODING``/``PYTHONUTF8`` in the environment.
 """
 
 from __future__ import annotations
@@ -173,13 +175,13 @@ def _raw_server_env(**extra: str) -> dict[str, str]:
     return env
 
 
-def _spawn_raw_server(tmp_path: Path) -> subprocess.Popen[bytes]:
+def _spawn_raw_server(tmp_path: Path, **extra_env: str) -> subprocess.Popen[bytes]:
     return subprocess.Popen(
         SERVER_CMD,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        env=_raw_server_env(RESEARCHPILOT_RUNS_PATH=str(tmp_path / "runs")),
+        env=_raw_server_env(RESEARCHPILOT_RUNS_PATH=str(tmp_path / "runs"), **extra_env),
         cwd=str(REPO_ROOT),
     )
 
@@ -234,6 +236,56 @@ def test_server_stdout_carries_protocol_messages_only(tmp_path: Path) -> None:
     finally:
         if process.poll() is None:  # pragma: no cover
             process.terminate()
+
+
+def test_server_ignores_a_hostile_non_utf8_environment(tmp_path: Path) -> None:
+    """An explicitly non-UTF-8 stdio environment must not break the protocol.
+
+    ``PYTHONIOENCODING`` behaves the same on Windows and POSIX, so forcing it to
+    ``cp936`` is the portable equivalent of running the server on a host whose
+    locale is not UTF-8 (e.g. ``LANG=C``): the server pins its own streams instead
+    of trusting whatever the environment asks for.
+    """
+    process = _spawn_raw_server(tmp_path, PYTHONIOENCODING="cp936", PYTHONUTF8="0")
+    try:
+        assert process.stdin is not None and process.stdout is not None
+        request = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "search_knowledge", "arguments": {"query": "工具注册表", "top_k": 2}},
+        }
+        process.stdin.write((json.dumps(request, ensure_ascii=False) + "\n").encode("utf-8"))
+        process.stdin.flush()
+        raw = process.stdout.readline()
+        payload = json.loads(raw.decode("utf-8", errors="strict"))
+        assert payload["result"]["isError"] is False
+        structured = payload["result"]["structuredContent"]
+        assert structured["query"] == "工具注册表"
+        assert structured["items"]
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except Exception:  # pragma: no cover
+            process.kill()
+
+
+def test_client_overrides_a_hostile_inherited_encoding(
+    stdio_env: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The parent's own encoding env must not leak into the child we launch.
+
+    This machine sets ``PYTHONIOENCODING`` by default, which is exactly what hid
+    the original bug: without the explicit override the child would speak cp936.
+    """
+    monkeypatch.setenv("PYTHONIOENCODING", "cp936")
+    monkeypatch.setenv("PYTHONUTF8", "0")
+    with StdioMcpClient(timeout_s=60) as client:
+        result = client.call_tool("search_knowledge", {"query": "工具注册表", "top_k": 2})
+    assert result["isError"] is False
+    assert result["structuredContent"]["query"] == "工具注册表"
+    assert result["structuredContent"]["items"]
 
 
 def test_client_launches_child_with_explicit_utf8(monkeypatch: pytest.MonkeyPatch) -> None:
