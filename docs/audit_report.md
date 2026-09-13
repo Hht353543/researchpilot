@@ -139,9 +139,9 @@ MCP Server 与 3 种传输；三层记忆；统一 Trace；35 条 Golden Dataset
 | P0 | 0 | 初始状态可运行 |
 | P1 | 2 | Planner 崩溃于向量库故障；真实 provider 链路未验证 |
 | P2 | 12 | 缓存键/缓存未启用、指标真空 1.0、cwd 依赖路径、Prompt 非 JSON、Agent 内 if/elif、故障注入未生效、无证据仍成功、LLM 重排不可达、reindex 残留、依赖不兼容、长期记忆路径错误 |
-| P3 | 10 | 记忆命中未落盘、死代码、`.env.example` 不同步、前端缺字段/面板、`latency_ms=0`、无 requirements、SSRF、注入检测漏检、MCP 回退不可见 |
+| P3 | 11 | 记忆命中未落盘、死代码、`.env.example` 不同步、前端缺字段/面板、`latency_ms=0`、无 requirements、SSRF、注入检测漏检、MCP 回退不可见、MCP `/openapi.json` 崩溃、校验器可被自洽但未落地的句子骗过 |
 | P4 | 3 | docker 引擎不可用、无 npm 链、离线指标不代表模型质量（已如实标注） |
-| **合计** | **27**（修复 25 + 环境限制 2） | |
+| **合计** | **28**（修复 26 + 环境限制 2） | |
 
 ---
 
