@@ -308,3 +308,39 @@ async def test_api_key_never_leaks_into_responses_or_traces(tmp_path) -> None:
     # The key also must not be written into run artifacts on disk.
     for path in (tmp_path / "runs").glob("*"):
         assert secret not in path.read_text(encoding="utf-8", errors="ignore")
+
+
+@pytest.mark.anyio
+async def test_storage_failure_degrades_instead_of_crashing(tmp_path) -> None:
+    """A read-only/full/misconfigured runs_path must not turn into a 500."""
+    from researchpilot.api.app import create_app as build_app
+    from researchpilot.config import Settings as ApiSettings
+
+    blocker = tmp_path / "runs_blocked"
+    blocker.write_text("this is a file, not a directory", encoding="utf-8")
+    settings = ApiSettings(
+        provider="mock",
+        kb_path=str(Path(__file__).resolve().parents[1] / "fixtures" / "kb"),
+        runs_path=str(blocker),
+        embedding_dim=64,
+        top_k=3,
+        max_iterations=1,
+        web_corpus_path=str(tmp_path / "no-corpus"),
+    )
+    app = build_app(settings)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as http:
+        # sync research still returns a usable (degraded) result
+        response = await http.post("/research", json={"question": "工具注册表需要哪些字段？"})
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["status"] in {"degraded", "failed"}
+        assert any("persistence" in message for message in payload["errors"]), payload["errors"]
+        assert payload["report"] is not None
+
+        # async submit cannot persist its placeholder -> explicit 503
+        submitted = await http.post(
+            "/research", json={"question": "工具注册表需要哪些字段？", "mode": "async"}
+        )
+        assert submitted.status_code == 503
+        assert submitted.json()["kind"] == "storage_unavailable"

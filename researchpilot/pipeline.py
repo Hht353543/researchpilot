@@ -29,6 +29,10 @@ from researchpilot.tools.registry import ToolRegistry
 from researchpilot.utils import new_id, utc_now_iso
 
 
+class StorageUnavailableError(RuntimeError):
+    """Raised when the run store cannot be written (the API maps it to HTTP 503)."""
+
+
 class ResearchPipeline:
     """End-to-end multi-agent deep research."""
 
@@ -158,8 +162,19 @@ class ResearchPipeline:
         metrics = tracer.metrics()
         result.metrics = _with_iterations(metrics, result.evidence.iterations, result.evidence.tool_calls)
         tracer.finish()
-        self.trace_store.save(tracer.to_trace())
-        self.result_store.save(result)
+        # Persistence must never destroy an otherwise valid in-memory result: a
+        # read-only / full / misconfigured runs_path degrades the run instead of
+        # raising out of the API (see docs/audit_report.md).
+        for label, action in (
+            ("trace", lambda: self.trace_store.save(tracer.to_trace())),
+            ("result", lambda: self.result_store.save(result)),
+        ):
+            try:
+                action()
+            except Exception as exc:
+                result.errors.append(f"persistence[{label}]: {type(exc).__name__}: {exc}")
+                if result.status == "succeeded":
+                    result.status = "degraded"
         return result
 
     def _execute(
@@ -245,7 +260,12 @@ class ResearchPipeline:
             settings=request.settings,
             created_at=utc_now_iso(),
         )
-        self.result_store.save(placeholder)
+        try:
+            self.result_store.save(placeholder)
+        except Exception as exc:
+            raise StorageUnavailableError(
+                f"cannot persist runs under {self.result_store.runs_dir}: {type(exc).__name__}: {exc}"
+            ) from exc
 
         def _worker() -> None:
             self.run(request, task_id=task_id)

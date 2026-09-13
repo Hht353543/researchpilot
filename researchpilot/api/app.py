@@ -30,6 +30,7 @@ from researchpilot.api.schemas import (
 from researchpilot.api.service import ServiceContainer
 from researchpilot.config import Settings, get_settings
 from researchpilot.llm.base import BudgetExceededError, LLMConfigError, LLMError
+from researchpilot.pipeline import StorageUnavailableError
 from researchpilot.rag.retriever import RetrievalResult
 from researchpilot.schemas import ResearchRequest, ResearchResult
 from researchpilot.utils import utc_now_iso
@@ -88,6 +89,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.exception_handler(LLMError)
     async def llm_handler(request: Request, exc: LLMError) -> JSONResponse:
         return JSONResponse(status_code=502, content={"detail": str(exc), "kind": "llm"})
+
+    @app.exception_handler(StorageUnavailableError)
+    async def storage_handler(request: Request, exc: StorageUnavailableError) -> JSONResponse:
+        return JSONResponse(status_code=503, content={"detail": str(exc), "kind": "storage_unavailable"})
+
+    @app.exception_handler(OSError)
+    async def os_error_handler(request: Request, exc: OSError) -> JSONResponse:
+        """Any storage/IO failure must surface as 503, not an unhandled traceback."""
+        return JSONResponse(
+            status_code=503,
+            content={"detail": f"{type(exc).__name__}: {exc}", "kind": "storage_unavailable"},
+        )
 
     # -- meta --------------------------------------------------------------- #
     @app.get("/health", response_model=HealthResponse, tags=["meta"])

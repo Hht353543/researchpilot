@@ -49,6 +49,7 @@ class KnowledgeBase:
         self.chunker = chunker or MarkdownChunker()
         self.loader = loader or DocumentLoader()
         self.store.fingerprint = self.embedder_fingerprint()
+        self.persistence_error: str = ""
 
     def embedder_fingerprint(self) -> str:
         """Identity of the embedder a persisted index must match."""
@@ -166,7 +167,10 @@ class KnowledgeBase:
 
     # -- inspection -------------------------------------------------------- #
     def stats(self) -> dict[str, Any]:
-        return self.store.stats()
+        stats = self.store.stats()
+        if self.persistence_error:
+            stats["persistence_error"] = self.persistence_error
+        return stats
 
     def summaries(self) -> list[Any]:
         return self.store.summaries()
@@ -188,8 +192,22 @@ class KnowledgeBase:
         return self.settings.runs_dir() / "knowledge_base.json"
 
     def save(self, path: str | Path | None = None) -> Path:
+        """Persist the index, tolerating an unwritable runs_path.
+
+        The in-memory index stays fully usable, so a read-only / full / misconfigured
+        runs_path must not stop the service from starting. The failure is recorded
+        (surfaced via /health) rather than silently swallowed.
+        """
         self.store.fingerprint = self.embedder_fingerprint()
-        return self.store.save(path or self.index_path())
+        target = Path(path) if path is not None else self.index_path()
+        try:
+            saved = self.store.save(target)
+            self.persistence_error = ""
+            return saved
+        except Exception as exc:
+            self.persistence_error = f"{type(exc).__name__}: {exc}"
+            logger.warning("could not persist the knowledge base index: %s", self.persistence_error)
+            return target
 
     @classmethod
     def load_or_create(cls, settings: Settings | None = None) -> KnowledgeBase:

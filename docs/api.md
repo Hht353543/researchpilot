@@ -225,6 +225,7 @@ Base URL：`http://127.0.0.1:8000`（`python -m researchpilot.cli serve`）
 | 请求体/参数非法 | `422` | FastAPI + Pydantic 校验 |
 | 未知 task/doc | `404` | 资源不存在 |
 | token 预算耗尽 | `429` | `BudgetExceededError` |
+| 运行目录不可写（只读/磁盘满/路径被文件占用） | 同步 `POST /research` 返回 `200` + `status=degraded`（`errors` 含 `persistence[...]`）；`mode=async` 提交返回 `503` + `kind=storage_unavailable` | 索引/结果无法落盘时，内存中的结果仍然可用；服务不会崩溃 |
 
 ### `GET /health` 与 MCP 传输
 
