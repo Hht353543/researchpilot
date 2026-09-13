@@ -191,6 +191,7 @@ avg_latency=0.33s p95=1.37s tokens=658,286 cost=$0.000000
 | 12d | **弱模型返回「schema 合法但内容为空」的报告**（`conclusions=[]`、无引用）时，系统照原样输出无引用报告 | `agents/writer.py` | 新增空报告回退：无引用绑定且有可用证据 → 改用确定性抽取式写作器；单测 + 真实模型复测（引用正确率 0% → 100%，状态仍如实标记 degraded） |
 | 12e | **存储不可用时直接抛异常**：不可写/被文件占用的 `runs_path` 让 `pipeline.run()` 抛 `FileExistsError`（API 500），启动阶段 KB 索引写入失败也会让服务起不来 | `pipeline.py`、`rag/knowledge_base.py`、`api/app.py` | Trace/Result 落盘失败→记录 `persistence[...]` 并降级返回；KB 索引落盘失败→记录 `persistence_error`（`/health` 可见）且服务照常启动；新增 `StorageUnavailableError` → async 提交 503、`OSError` 统一 503；新增 `test_storage_failure_degrades_instead_of_crashing` |
 | 12h | 验证缺口（非缺陷）：规格 §3 要求「Plan 真的驱动执行」「Critic 真的能触发补检」，此前只有间接证据 | tests/integration/test_plan_driven_execution.py（新增 5 项） | 直接执行证据：计划只声明 web_search → 只调用 web_search；换成 metadata → 只调用 metadata；强制 Critic 要求补检 → trace 出现 pipeline.iteration[2] 且证据合并；max_iterations=2 时补检轮数恰好 1 |
+| 12i | 验证缺口（非缺陷）：规格 §12/§13 的「API 级 timeout」与 §18.6「LLM Output Validation」此前只有组件级/单元级证据 | tests/integration/test_resilience_paths.py（新增 2 项） | ① 慢工具经真实 HTTP `/research` → 200 + degraded + tool_failures≥1 + 明确 timeout 错误、整体有界；② 全程返回非 JSON 的 provider → 仍产出结构化计划 + 抽取式证据（逐条带 verbatim quote）+ 报告，且**没有任何未绑定引用的结论** |
 | 12f | `RESEARCHPILOT_MAX_CONTEXT_CHARS` 被硬编码 12000 覆盖（配置不生效） | `rag/knowledge_base.py:search` | 改为读取 `settings.max_context_chars`；新增 `test_knowledge_base_honours_max_context_chars_setting` |
 | 12g | 超长结构化 payload 用**字符串截断**放进 prompt，会把 JSON 切断（模型收到非法输入） | `llm/prompts.py:_untrusted` | 新增 `_shrink_json`：按预算结构化收缩（截断长字符串、裁掉超长列表、深层降级为摘要），保证仍是合法 JSON；新增 `test_oversized_prompt_payloads_stay_valid_json` |
 | 13 | 依赖冲突：`fastapi 0.110.3` 要求 `starlette<0.38`，环境里是 `1.6.0`（`Router(on_startup=...)` 已被移除，应用根本无法构造） | `pyproject.toml` + 环境 | `pip check` 报错；`TypeError: Router.__init__() got an unexpected keyword argument 'on_startup'` | 基于实际 API 使用选择兼容版本对 `fastapi>=0.110,<0.113` + `starlette>=0.37.2,<0.39`（实测 fastapi 0.112.4 / starlette 0.38.6）；`pip check` 中该冲突消失；新增打包一致性测试 |
@@ -251,7 +252,7 @@ README 与 `docs/*`。
 ruff check .                      -> All checks passed!
 ruff format --check .             -> 114 files already formatted
 mypy researchpilot                -> Success: no issues found in 69 source files
-python -m pytest -q               -> 182 passed
+python -m pytest -q               -> 184 passed
 python -m pip check               -> 本项目 fastapi/starlette 冲突已消失（余下为环境里无关包的既有冲突）
 python scripts/run_benchmark.py   -> 见 docs/evaluation.md（35/35，Recall 93.9%，Citation 100%，Tool F1 85.9%）
 真实 HTTP provider 全链路          -> 见 tests/integration/test_openai_provider.py（7 项全绿）

@@ -8,7 +8,7 @@
 复现入口：
 
 ```bash
-python -m pytest -q                     # 182 个测试（unit / integration / evaluation）
+python -m pytest -q                     # 184 个测试（unit / integration / evaluation）
 node --test "tests/frontend/**/*.test.mjs"   # 9 个前端逻辑测试
 ruff check . && ruff format --check . && mypy researchpilot
 python scripts/run_benchmark.py --provider mock   # 离线回归基线 35/35
@@ -174,8 +174,8 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 | --- | --- | --- |
 | POST /research 与 GET /research/{id}、/trace、/sources、/metrics | `tests/integration/test_api.py`（含 async 202 轮询） | ✅ |
 | Frontend→HTTP→Service→Agent→Tools/RAG/MCP→Result 闭环 | 前端契约测试 + 真实 HTTP 端到端（本地真实模型、compose 拓扑） | ✅ |
-| 404 / 422 / 500 / timeout / empty / invalid | 404、422、超时、空问题均有测试 | ✅ |
-| LLM failure | 运行时故障 → 200 + `status=degraded/failed` + `errors` | ✅ |
+| 404 / 422 / 500 / timeout / empty / invalid | 404、422、超时、空问题均有测试；**API 级超时**：`test_tool_timeout_surfaces_through_the_api`（工具超时经真实 HTTP 端点返回 200 + degraded + tool_failures≥1，不挂起/不 500） | ✅ |
+| LLM failure | 运行时故障 → 200 + `status=degraded/failed` + `errors`；另见 `test_unparseable_llm_output_degrades_without_fabricating`（§18.6 输出校验：全程返回非 JSON 的 provider 仍产出结构化计划、抽取式证据与**无未引用结论**的报告） | ✅ |
 | tool failure | 故障注入 4 类（超时/失败/空结果/预算） | ✅ |
 | database / storage failure | 不可写 `runs_path`：同步研究降级返回、async 提交 503、启动不崩（`test_storage_failure_degrades_instead_of_crashing`） | ✅ |
 
@@ -215,7 +215,7 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 | --- | --- | --- |
 | ruff | `ruff check .` → All checks passed；`ruff format --check .` → 136 files formatted | ✅ |
 | mypy | `mypy researchpilot` → Success（69 source files） | ✅ |
-| pytest | 182 passed（+ 9 node 前端测试） | ✅ |
+| pytest | 184 passed（+ 9 node 前端测试） | ✅ |
 | pip check | 本项目依赖对无冲突；其余为环境内无关预装包冲突（逐条说明） | ⚠️ 环境噪声已定位 |
 | 前端 npm test/build/lint | 无 npm 工具链（vanilla JS、无 package.json）→ `node --test`（零依赖 9 项）+ OpenAPI 契约测试等价覆盖 | ⚠️ 等价方案 |
 | 不为绿色而关闭规则 | 仅对中文全角标点关闭 RUF001-003，并在 pyproject 中注明原因 | ✅ |
