@@ -19,6 +19,10 @@ runs_*/
 # local secrets
 .env
 
-# generated benchmark output (keep the committed summary in docs/)
+# generated benchmark output (timestamped runs stay local; the reports referenced
+# by docs/ are committed so every documented number is traceable)
 benchmarks/*.json
 !benchmarks/.gitkeep
+!benchmarks/latest_mock.json
+!benchmarks/latest_openai.json
+!benchmarks/real_llm_3tasks_before_writer_fallback.json

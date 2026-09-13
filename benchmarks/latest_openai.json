@@ -1,0 +1,170 @@
+{
+  "run_id": "eval_fd2117ab4574",
+  "generated_at": "2026-09-13T10:05:44Z",
+  "provider": "openai",
+  "model": "Qwen/Qwen1.5-0.5B-Chat",
+  "mode": "live model",
+  "dataset_path": "eval\\golden_dataset.jsonl",
+  "dataset": {
+    "tasks": 35,
+    "categories": {
+      "bad_source": 2,
+      "citation": 3,
+      "mcp": 3,
+      "multi_agent": 3,
+      "multi_step": 3,
+      "no_result": 3,
+      "prompt_injection": 3,
+      "rag": 3,
+      "simple_fact": 3,
+      "timeout_recovery": 2,
+      "tool_abuse": 4,
+      "tool_calling": 3
+    },
+    "with_expected_docs": 30,
+    "with_expected_tools": 35,
+    "fault_injection_tasks": 4
+  },
+  "metrics": {
+    "tasks": 1,
+    "passed": 1,
+    "task_success_rate": 1.0,
+    "retrieval_tasks": 1,
+    "citation_tasks": 1,
+    "tool_selection_tasks": 1,
+    "retrieval_recall": 1.0,
+    "context_relevance": 0.125,
+    "citation_correctness": 1.0,
+    "tool_selection_accuracy": 1.0,
+    "tool_selection_f1": 0.4,
+    "tool_success_rate": 1.0,
+    "tool_calls": 5,
+    "tool_failures": 0,
+    "retries": 11,
+    "llm_calls": 20,
+    "avg_latency_s": 410.119,
+    "p50_latency_s": 410.119,
+    "p95_latency_s": 410.119,
+    "total_tokens": 71304,
+    "avg_tokens": 71304.0,
+    "total_cost_usd": 0.0,
+    "avg_cost_usd": 0.0,
+    "avg_iterations": 1.0
+  },
+  "categories": [
+    {
+      "category": "simple_fact",
+      "tasks": 1,
+      "passed": 1,
+      "task_success_rate": 1.0,
+      "avg_latency_s": 410.119,
+      "avg_tokens": 71304.0,
+      "retrieval_tasks": 1,
+      "tool_selection_tasks": 1,
+      "citation_correctness": 1.0,
+      "retrieval_recall": 1.0,
+      "context_relevance": 0.125,
+      "tool_selection_f1": 0.4
+    }
+  ],
+  "judgements": [
+    {
+      "task_id": "fact-01-mcp-protocol",
+      "category": "simple_fact",
+      "passed": true,
+      "status": "degraded",
+      "checks": [
+        {
+          "name": "report_present",
+          "passed": true,
+          "detail": "report=yes chars=6597"
+        },
+        {
+          "name": "required_any_1",
+          "passed": true,
+          "detail": "matched='JSON-RPC' group=['JSON-RPC', 'jsonrpc']"
+        },
+        {
+          "name": "required_any_2",
+          "passed": true,
+          "detail": "matched='tools/call' group=['tools/call']"
+        },
+        {
+          "name": "required_any_3",
+          "passed": true,
+          "detail": "matched='tools/list' group=['tools/list']"
+        },
+        {
+          "name": "citation_integrity",
+          "passed": true,
+          "detail": "1.00 >= 0.90 (20/20)"
+        }
+      ],
+      "retrieved_docs": [
+        "kb-tool-calling-mcp",
+        "kb-evaluation-observability",
+        "web_002",
+        "web_000",
+        "web_001",
+        "web_008",
+        "web_004",
+        "kb-glossary"
+      ],
+      "expected_docs": [
+        "kb-tool-calling-mcp"
+      ],
+      "used_tools": [
+        "knowledge_search",
+        "web_search",
+        "metadata",
+        "mcp_research_context"
+      ],
+      "expected_tools": [
+        "knowledge_search"
+      ],
+      "retrieval_recall": 1.0,
+      "context_relevance": 0.125,
+      "citation_correctness": 1.0,
+      "retrieval_applicable": true,
+      "citation_applicable": true,
+      "tool_selection_applicable": true,
+      "tool_selection_recall": 1.0,
+      "tool_selection_f1": 0.4,
+      "tool_calls": 5,
+      "tool_failures": 0,
+      "llm_calls": 20,
+      "retries": 11,
+      "iterations": 1,
+      "latency_s": 410.119,
+      "tokens": 71304,
+      "cost_usd": 0.0,
+      "errors": [
+        "planner: StructuredOutputError: ResearchPlan validation failed after 3 attempts: attempt 3: ValidationError: 18 validation errors for ResearchPlan\nsubtasks.0.intent\n  Input should be 'knowledge_search', 'web_search', 'document_reader', 'mcp', 'calculation' or 'synthesis' [type=literal_error, input_value='', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error\nsubtasks.0.tools.0\n  Input should be 'web_search', 'knowledge_search', 'document_reader', 'calculator', 'metadata' or 'mcp_research_context' [type=literal_error, input_value={'name': 'Calculator', 'd...rmissions': ['compute']}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error\nsubtasks.0.tools.1\n  Input should be 'web_search', 'knowledge_search', 'document_reader', 'calculator', 'metadata' or 'mcp_research_context' [type=literal_error, input_value={'name': 'DocumentReader'...issions': ['read-only']}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error\nsubtasks.0.tools.2\n  Input should be 'web_search', 'knowledge_search', 'document_reader', 'calculator', 'metadata' or 'mcp_research_context' [type=literal_error, input_value={'name': 'Calculator', 'd...'mcp_research_context']}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error\nsubtasks.0.tools.3\n  Input should be 'web_search', 'knowledge_search', 'document_reader', 'calculator', 'metadata' or 'mcp_research_context' [type=literal_error, input_value={'name': 'DocumentReader'...'mcp_research_context']}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error\nsubtasks.0.tools.4\n  Input should be 'web_search', 'knowledge_search', 'document_reader', 'calculator', 'metadata' or 'mcp_research_context' [type=literal_error, input_value={'name': 'Calculator', 'd...'mcp_research_context']}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error\nsubtasks.0.tools.5\n  Input should be 'web_search', 'knowledge_search', 'document_reader', 'calculator', 'metadata' or 'mcp_research_context' [type=literal_error, input_value={'name': 'DocumentReader'...'mcp_research_context']}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error\nsubtasks.0.tools.6\n  Input should be 'web_search', 'knowledge_search', 'document_reader', 'calculator', 'metadata' or 'mcp_research_context' [type=literal_error, input_value={'name': 'Calculator', 'd...'mcp_research_context']}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error\nsubtasks.0.tools.7\n  Input should be 'web_search', 'knowledge_search', 'document_reader', 'calculator', 'metadata' or 'mcp_research_context' [type=literal_error, input_value={'name': 'DocumentReader'...'mcp_research_context']}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error\nsubtasks.0.tools.8\n  Input should be 'web_search', 'knowledge_search', 'document_reader', 'calculator', 'metadata' or 'mcp_research_context' [type=literal_error, input_value={'name': 'Calculator', 'd...'mcp_research_context']}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error\nsubtasks.0.tools.9\n  Input should be 'web_search', 'knowledge_search', 'document_reader', 'calculator', 'metadata' or 'mcp_research_context' [type=literal_error, input_value={'name': 'DocumentReader'...'mcp_research_context']}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error\nsubtasks.0.tools.10\n  Input should be 'web_search', 'knowledge_search', 'document_reader', 'calculator', 'metadata' or 'mcp_research_context' [type=literal_error, input_value={'name': 'Calculator', 'd...'mcp_research_context']}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error\nsubtasks.0.tools.11\n  Input should be 'web_search', 'knowledge_search', 'document_reader', 'calculator', 'metadata' or 'mcp_research_context' [type=literal_error, input_value={'name': 'DocumentReader'... 'mcp_researchContext']}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error\nsubtasks.0.tools.12\n  Input should be 'web_search', 'knowledge_search', 'document_reader', 'calculator', 'metadata' or 'mcp_research_context' [type=literal_error, input_value={'name': 'Calculator', 'd...'mcp_research_context']}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error\nsubtasks.0.tools.13\n  Input should be 'web_search', 'knowledge_search', 'document_reader', 'calculator', 'metadata' or 'mcp_research_context' [type=literal_error, input_value={'name': 'DocumentReader'...'mcp_research_context']}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error\nsubtasks.0.tools.14\n  Input should be 'web_search', 'knowledge_search', 'document_reader', 'calculator', 'metadata' or 'mcp_research_context' [type=literal_error, input_value={'name': 'Calculator', 'd...'mcp_research_context']}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error\nsubtasks.0.tools.15\n  Input should be 'web_search', 'knowledge_search', 'document_reader', 'calculator', 'metadata' or 'mcp_research_context' [type=literal_error, input_value={'name': 'DocumentReader'...issions': ['read-only']}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error\nsubtasks.0.expected_output\n  Field required [type=missing, input_value={'id': '', 'question': ''...sions': ['read-only']}]}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing",
+        "researcher[S1]: StructuredOutputError: EvidenceBundle validation failed after 3 attempts: attempt 3: ValidationError: 16 validation errors for EvidenceBundle\nevidence.0.quote\n  Value error, evidence quote must not be empty [type=value_error, input_value='', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/value_error\nevidence.1.claim\n  Field required [type=missing, input_value={'id': '', 'kind': 'knowl...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.1.quote\n  Field required [type=missing, input_value={'id': '', 'kind': 'knowl...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.1.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': 'knowl...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.2.claim\n  Field required [type=missing, input_value={'id': '', 'kind': 'docum...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.2.quote\n  Field required [type=missing, input_value={'id': '', 'kind': 'docum...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.2.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': 'docum...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.3.claim\n  Field required [type=missing, input_value={'id': '', 'kind': 'web',...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.3.quote\n  Field required [type=missing, input_value={'id': '', 'kind': 'web',...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.3.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': 'web',...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.4.claim\n  Field required [type=missing, input_value={'id': '', 'kind': 'mcp',...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.4.quote\n  Field required [type=missing, input_value={'id': '', 'kind': 'mcp',...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.4.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': 'mcp',...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.5.claim\n  Field required [type=missing, input_value={'id': '', 'kind': 'compu...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.5.quote\n  Field required [type=missing, input_value={'id': '', 'kind': 'compu...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.5.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': 'compu...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing",
+        "researcher[S2]: StructuredOutputError: EvidenceBundle validation failed after 3 attempts: attempt 3: ValidationError: 16 validation errors for EvidenceBundle\nevidence.0.quote\n  Value error, evidence quote must not be empty [type=value_error, input_value='', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/value_error\nevidence.1.claim\n  Field required [type=missing, input_value={'id': '', 'kind': 'knowl...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.1.quote\n  Field required [type=missing, input_value={'id': '', 'kind': 'knowl...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.1.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': 'knowl...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.2.claim\n  Field required [type=missing, input_value={'id': '', 'kind': 'docum...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.2.quote\n  Field required [type=missing, input_value={'id': '', 'kind': 'docum...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.2.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': 'docum...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.3.claim\n  Field required [type=missing, input_value={'id': '', 'kind': 'web',...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.3.quote\n  Field required [type=missing, input_value={'id': '', 'kind': 'web',...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.3.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': 'web',...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.4.claim\n  Field required [type=missing, input_value={'id': '', 'kind': 'mcp',...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.4.quote\n  Field required [type=missing, input_value={'id': '', 'kind': 'mcp',...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.4.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': 'mcp',...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.5.claim\n  Field required [type=missing, input_value={'id': '', 'kind': 'compu...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.5.quote\n  Field required [type=missing, input_value={'id': '', 'kind': 'compu...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.5.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': 'compu...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing",
+        "researcher[S3]: StructuredOutputError: EvidenceBundle validation failed after 3 attempts: attempt 3: ValidationError: 49 validation errors for EvidenceBundle\nevidence.0.quote\n  Value error, evidence quote must not be empty [type=value_error, input_value='', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/value_error\nevidence.1.claim\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.1.quote\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.1.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.2.claim\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.2.quote\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.2.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.3.claim\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.3.quote\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.3.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.4.claim\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.4.quote\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.4.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.5.claim\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.5.quote\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.5.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.6.claim\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.6.quote\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.6.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.7.claim\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.7.quote\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.7.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.8.claim\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.8.quote\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.8.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.9.claim\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.9.quote\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.9.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.10.claim\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.10.quote\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.10.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.11.claim\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.11.quote\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.11.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.12.claim\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.12.quote\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.12.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.13.claim\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.13.quote\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.13.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.14.claim\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.14.quote\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.14.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.15.claim\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.15.quote\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.15.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': '', 't...e': 0.0, 'metadata': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.16.claim\n  Field required [type=missing, input_value={'id': '', 'kind': ''}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.16.quote\n  Field required [type=missing, input_value={'id': '', 'kind': ''}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.16.source_id\n  Field required [type=missing, input_value={'id': '', 'kind': ''}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing",
+        "verifier: StructuredOutputError: VerificationReport validation failed after 3 attempts: attempt 3: ValidationError: 1 validation error for VerificationReport\nchecks.0.status\n  Input should be 'supported', 'weak' or 'unsupported' [type=literal_error, input_value='Unsupported', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error",
+        "writer: BudgetExceededError: token budget exceeded: 80205 > 80000"
+      ],
+      "notes": "单跳事实检索：协议名与方法列表。"
+    }
+  ],
+  "failed_checks": {},
+  "environment": {
+    "python": "3.12.2",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "embedding_provider": "openai",
+    "embedding_dim": 768,
+    "retrieval_top_k": 6,
+    "max_iterations": 1,
+    "web_search_mode": "offline",
+    "mcp_transport": "inprocess"
+  },
+  "duration_s": 410.123,
+  "settings_snapshot": {
+    "temperature": 0.2,
+    "max_tokens": 600,
+    "token_budget": 80000,
+    "rerank_strategy": "heuristic"
+  }
+}
