@@ -150,7 +150,7 @@ MCP Server 与 3 种传输；三层记忆；统一 Trace；35 条 Golden Dataset
 | 验证 | 命令 / 方式 | 结果 |
 | --- | --- | --- |
 | 静态检查 | `ruff check .` / `ruff format --check .` / `mypy researchpilot` | 全部通过（0 error） |
-| 测试 | `python -m pytest -q` | **177 passed**（含 unit / integration / evaluation）+ 9 个前端 node 测试 |
+| 测试 | `python -m pytest -q` | **182 passed**（含 unit / integration / evaluation）+ 9 个前端 node 测试 |
 | 依赖一致性 | `python -m pip check` | 本项目 fastapi/starlette 冲突消失；余下为环境内无关预装包 |
 | 干净环境安装 | `python -m venv` + `pip install -e .`（CI 路径用 `.[dev]`） | 成功解析并安装 fastapi 0.112.4 / starlette 0.38.6 / jieba 0.42.1 等；CLI、uvicorn 与 CI 的 lint/mypy/pytest 步骤均在干净环境内跑通 |
 | 指标可复现性 A/B | 同一 venv、同一代码，仅差 `jieba` | 无 jieba：30/35、Citation 87.9%；有 jieba：35/35、Citation 100% → 已将 `jieba` 声明为硬依赖 |

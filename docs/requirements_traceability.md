@@ -8,7 +8,7 @@
 复现入口：
 
 ```bash
-python -m pytest -q                     # 177 个测试（unit / integration / evaluation）
+python -m pytest -q                     # 182 个测试（unit / integration / evaluation）
 node --test "tests/frontend/**/*.test.mjs"   # 9 个前端逻辑测试
 ruff check . && ruff format --check . && mypy researchpilot
 python scripts/run_benchmark.py --provider mock   # 离线回归基线 35/35
@@ -62,13 +62,13 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 | 要求 | 证据 | 状态 |
 | --- | --- | --- |
 | Planner 生成结构化 Plan | `ResearchPlan` + `tests/unit/test_planner.py` | ✅ |
-| Plan 驱动后续执行 | `_normalise` 校验工具可用性；Researcher 按 subtask.tools 执行（测试断言） | ✅ |
+| Plan 驱动后续执行 | `tests/integration/test_plan_driven_execution.py`：只声明 web_search 的计划只调用 web_search；换成 metadata 计划则只调用 metadata；证据的 subtask_id 回填计划 id | ✅ |
 | Researcher 真的执行 Tool Calling | 真实运行 3 次工具调用；tool span 记录 arguments/attempts | ✅ |
 | RAG 真的被使用 | `knowledge_search` → Retriever（retrieval span） | ✅ |
 | MCP 真的被调用 | `mcp_research_context`；compose 拓扑实测 `mcp_calls=1` | ✅ |
 | Evidence 保存 | `EvidenceBundle` + 工作记忆去重 + `runs/*.result.json` | ✅ |
 | Verifier 真正验证 Evidence | 代码复核四项判定，覆盖 LLM 自评（单测） | ✅ |
-| Critic 能触发重新研究 | `needs_more_research` + follow_up_queries → 迭代补检 | ✅ |
+| Critic 能触发重新研究 | 同文件：强制 Critic 要求补检后，pipeline 真的进入第二轮（trace 含 pipeline.iteration[2]、证据合并、Critic 被二次调用） | ✅ |
 | Writer 只基于 Evidence 写作 | 引用绑定校验 + 注入证据隔离 + 空报告回退 | ✅ |
 | Final Report 含 Citation | 真实运行 9 条引用全部可解析；参考文献由代码生成 | ✅ |
 
@@ -215,7 +215,7 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 | --- | --- | --- |
 | ruff | `ruff check .` → All checks passed；`ruff format --check .` → 136 files formatted | ✅ |
 | mypy | `mypy researchpilot` → Success（69 source files） | ✅ |
-| pytest | 177 passed（+ 9 node 前端测试） | ✅ |
+| pytest | 182 passed（+ 9 node 前端测试） | ✅ |
 | pip check | 本项目依赖对无冲突；其余为环境内无关预装包冲突（逐条说明） | ⚠️ 环境噪声已定位 |
 | 前端 npm test/build/lint | 无 npm 工具链（vanilla JS、无 package.json）→ `node --test`（零依赖 9 项）+ OpenAPI 契约测试等价覆盖 | ⚠️ 等价方案 |
 | 不为绿色而关闭规则 | 仅对中文全角标点关闭 RUF001-003，并在 pyproject 中注明原因 | ✅ |
