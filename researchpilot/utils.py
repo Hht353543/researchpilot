@@ -8,7 +8,7 @@ import json
 import re
 import time
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Any
 
@@ -54,6 +54,29 @@ def utc_now_iso() -> str:
 def project_root() -> Path:
     """Repository root, resolved from this file (independent of the process cwd)."""
     return Path(__file__).resolve().parents[1]
+
+
+def reconfigure_utf8(stream: Any, *, errors: str = "backslashreplace") -> None:
+    """Force a text stream to UTF-8.
+
+    Windows consoles default to the locale code page (``cp936`` here), so printing
+    an emoji, a box-drawing character or captured subprocess output raises
+    ``UnicodeEncodeError``. Scripts and the CLI therefore pin stdout/stderr to
+    UTF-8 with a lossy-but-safe error handler (never crash just to print a log).
+    """
+    reconfigure = getattr(stream, "reconfigure", None)
+    if reconfigure is None:  # StringIO / captured stream
+        return
+    with suppress(ValueError, OSError):
+        reconfigure(encoding="utf-8", errors=errors)
+
+
+def configure_script_stdio() -> None:
+    """Apply :func:`reconfigure_utf8` to ``sys.stdout``/``sys.stderr``."""
+    import sys
+
+    reconfigure_utf8(sys.stdout)
+    reconfigure_utf8(sys.stderr)
 
 
 def resolve_input_path(value: str | Path, *, root: Path | None = None) -> Path:

@@ -27,6 +27,11 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
+# Run as `python scripts/ci_dry_run.py`: make the package importable from the repo.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from researchpilot.utils import configure_script_stdio  # noqa: E402
 
 # Jobs whose steps only need the local toolchain; `docker` needs an engine.
 REPRODUCIBLE_JOBS = ("lint", "typecheck", "test", "evaluation")
@@ -93,6 +98,7 @@ def include_install() -> bool:
 
 
 def main() -> int:
+    configure_script_stdio()
     parser = argparse.ArgumentParser(description="Run the CI workflow steps locally")
     parser.add_argument("--workflow", default=str(WORKFLOW))
     parser.add_argument("--job", action="append", default=None, help="job name (repeatable)")

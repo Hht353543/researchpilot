@@ -8,7 +8,7 @@
 复现入口：
 
 ```bash
-python -m pytest -q                     # 198 个测试（unit / integration / evaluation）
+python -m pytest -q                     # 208 个测试（unit / integration / evaluation）
 node --test "tests/frontend/**/*.test.mjs"   # 9 个前端逻辑测试
 ruff check . && ruff format --check . && mypy researchpilot
 python scripts/run_benchmark.py --provider mock   # 离线回归基线 35/35
@@ -25,7 +25,7 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 | 代码 Bug 审查 | `docs/audit_report.md` BUG 分类 + 逐条修复；31 项发现中 29 项已修复 | ✅ |
 | 架构 Bug 审查 | ADR-0001..0005、`docs/architecture.md`；修复 Planner 崩溃于向量库故障等架构级缺陷 | ✅ |
 | 功能缺失检查 | 新增 KB 删除、全量重建、工具缓存启用、LLM 重排可达、前端 max_tokens/评测面板 | ✅ |
-| 工程质量 | ruff / format / mypy / pip check / 198 pytest + 9 node / CI / Docker 资产测试 | ✅ |
+| 工程质量 | ruff / format / mypy / pip check / 208 pytest + 9 node / CI / Docker 资产测试 | ✅ |
 | AI Agent 特有可靠性 | 注入隔离、工具预算、超时重试、token 预算、无证据降级、引用绑定、修复重试 | ✅ |
 | 发现→定位→修改→补测试→运行→验证→更新文档 闭环 | `docs/development_log.md` 逐条记录（含失败与回退）；每项均有对应测试 | ✅ |
 
@@ -35,7 +35,7 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 | --- | --- | --- |
 | A 模块清单 / B 模块作用 / C 依赖关系 | `docs/audit_report.md` §A–C（17 模块 + 单向依赖图） | ✅ |
 | D 已实现功能 | §D + README Project Overview | ✅ |
-| 提交仓库自洽（GitHub 门面） | `scripts/verify_fresh_clone.py`：全新 clone（167 个 tracked 文件、无 runs/）内 ruff / mypy / pytest 198 / benchmark / compose 拓扑全部通过 | ✅ |
+| 提交仓库自洽（GitHub 门面） | `scripts/verify_fresh_clone.py`：全新 clone（167 个 tracked 文件、无 runs/）内 ruff / mypy / pytest 207 / benchmark / compose 拓扑全部通过 | ✅ |
 | 示例运行结果可用（交付物 15） | `tests/unit/test_example_artifacts.py`：`sample_result.json` / `sample_trace.json` / `sample_report.md` 结构与彼此一致（引用可解析、5 个 agent span、LLM 记录 model、markdown 与 JSON 报告一致、非占位文件） | ✅ |
 | E 部分实现功能 | §E（检索语义质量、并行、超时中断、语义判分、持久化） | ✅ |
 | F Stub / TODO / FIXME | `rg` 扫描：TODO/FIXME/NotImplementedError/stub = 0；`pass` 8 处均非空实现 | ✅ |
@@ -218,7 +218,7 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 | ruff | `ruff check .` → All checks passed；`ruff format --check .` → 136 files formatted | ✅ |
 | CI 工作流本身可执行 | `scripts/ci_dry_run.py` 解析真实 `.github/workflows/ci.yml` 并逐条执行：lint / typecheck / test / evaluation 共 **9/9 步骤通过**（docker job 需容器引擎，明确跳过并说明原因） | ✅ |
 | mypy | `mypy researchpilot` → Success（69 source files） | ✅ |
-| pytest | 198 passed（+ 9 node 前端测试） | ✅ |
+| pytest | 208 passed（+ 9 node 前端测试） | ✅ |
 | pip check | 本项目依赖对无冲突；其余为环境内无关预装包冲突（逐条说明） | ⚠️ 环境噪声已定位 |
 | 前端 npm test/build/lint | 无 npm 工具链（vanilla JS、无 package.json）→ `node --test`（零依赖 9 项）+ OpenAPI 契约测试等价覆盖 | ⚠️ 等价方案 |
 | 不为绿色而关闭规则 | 仅对中文全角标点关闭 RUF001-003，并在 pyproject 中注明原因 | ✅ |

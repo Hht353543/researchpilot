@@ -17,9 +17,14 @@ from __future__ import annotations
 import argparse
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from researchpilot.utils import configure_script_stdio
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -37,6 +42,7 @@ def _run(command: list[str], *, cwd: Path) -> tuple[int, str]:
 
 
 def main() -> int:
+    configure_script_stdio()
     parser = argparse.ArgumentParser(description="Verify the committed tree is self-contained")
     parser.add_argument("--repo", default=str(ROOT))
     parser.add_argument("--keep", action="store_true", help="keep the temporary clone")

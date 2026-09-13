@@ -212,7 +212,7 @@ class Retriever:
             )
         except Exception:
             return []
-        scores = {s.id: s.score for s in result.value.scores}  # type: ignore[attr-defined]
+        scores = {s.id: s.score for s in result.value.scores}
         if not scores:
             return []
         reordered = sorted(hits, key=lambda h: scores.get(h.chunk.chunk_id, 0.0), reverse=True)[:k]

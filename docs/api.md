@@ -185,6 +185,25 @@ Base URL：`http://127.0.0.1:8000`（`python -m researchpilot.cli serve`）
  "tools": [{"name": "search_knowledge", "description": "...", "inputSchema": {...}}]}
 ```
 
+### MCP STDIO 传输的编码契约
+
+`python -m researchpilot.mcp_server --stdio` 使用**换行分隔的 JSON-RPC 2.0**，编码固定为 **UTF-8**，
+与操作系统 locale 无关（Windows 上默认可能是 `cp936`/`gbk`，会导致中文参数与结果损坏）：
+
+- 服务端启动时把 `stdin`/`stdout` 显式重配为 UTF-8（`errors="strict"`，`newline="\n"`），并直接读写底层字节缓冲；
+- 请求行若不是合法 UTF-8，服务端返回 `-32700` PARSE_ERROR 并继续服务（不静默、不崩溃）；
+- 启动横幅与所有日志一律写 **stderr**，stdout 只承载协议消息；
+- 客户端以 `-X utf8` + `PYTHONIOENCODING=utf-8` 启动子进程，并按 `encoding="utf-8", errors="strict"` 解码。
+
+客户端示例（Python）：
+
+```python
+from researchpilot.mcp.client import StdioMcpClient
+
+with StdioMcpClient() as client:  # 或 StdioMcpClient(command=[...])
+    result = client.call_tool("search_knowledge", {"query": "工具注册表", "top_k": 2})
+```
+
 ### `POST /mcp/call`
 
 ```json

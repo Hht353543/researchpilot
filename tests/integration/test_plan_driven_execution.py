@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from researchpilot.agents.base import build_runtime
+from researchpilot.agents.base import ResearchRuntime, build_runtime
 from researchpilot.agents.critic import CriticAgent
 from researchpilot.agents.researcher import ResearchAgent
 from researchpilot.config import Settings
@@ -49,7 +49,7 @@ def _plan(*, tools: list[str], intent: str = "web_search") -> ResearchPlan:
     )
 
 
-def _runtime(settings: Settings, knowledge_base: KnowledgeBase) -> object:
+def _runtime(settings: Settings, knowledge_base: KnowledgeBase) -> ResearchRuntime:
     return build_runtime(
         task_id="plan-driven",
         question="计划驱动执行",

@@ -37,7 +37,14 @@ def _load_generator(model_name: str, device: str) -> tuple[Any, Any, str]:
         resolved = "cuda" if torch.cuda.is_available() else "cpu"
     # explicit low_cpu_mem_usage=False: the default meta-device initialisation makes
     # ``.to(device)`` raise "Cannot copy out of meta tensor" on this stack.
-    model = AutoModelForCausalLM.from_pretrained(model_name, dtype=torch.float32, low_cpu_mem_usage=False)
+    # transformers ships stubs that type both the auto-class and PreTrainedModel as an
+    # unusable `_Wrapped`, so the loaded model is annotated `Any` deliberately. The
+    # call itself is verified at runtime (server runs on CPU and GPU).
+    model: Any = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        dtype=torch.float32,
+        low_cpu_mem_usage=False,
+    )
     model = model.to(resolved)
     if resolved.startswith("cuda"):
         model = model.half()

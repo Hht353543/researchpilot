@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import sys
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import Any
 
 # Imported at module level (not inside create_http_app) so FastAPI can resolve the
@@ -279,28 +280,98 @@ class McpServer:
 # --------------------------------------------------------------------------- #
 # Transports
 # --------------------------------------------------------------------------- #
+def configure_stdio_utf8() -> None:
+    """Pin the stdio transport to UTF-8, independent of the OS locale.
+
+    On Windows a Python process whose stdio is a pipe defaults to the *locale*
+    encoding (``cp936``/``gbk`` here) with ``surrogateescape``. The MCP stdio
+    protocol is newline-delimited JSON, i.e. UTF-8 by definition, so a server that
+    inherits the locale encoding corrupts Chinese arguments on the way in and
+    produces undecodable bytes on the way out. Launchers may set
+    ``PYTHONIOENCODING``/``-X utf8``, but the server must not depend on that.
+    """
+    for stream, errors in ((sys.stdin, "strict"), (sys.stdout, "strict")):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:  # e.g. pytest's capture or an in-memory stream
+            continue
+        with contextlib.suppress(ValueError, OSError):
+            reconfigure(encoding="utf-8", errors=errors, newline="\n")
+    stderr_reconfigure = getattr(sys.stderr, "reconfigure", None)
+    if stderr_reconfigure is not None:
+        # Logs stay on stderr and must never crash the protocol loop; replace any
+        # character the local console cannot render.
+        with contextlib.suppress(ValueError, OSError):
+            stderr_reconfigure(encoding="utf-8", errors="backslashreplace", newline="\n")
+
+
+def _iter_utf8_lines(stream: Any) -> Iterator[str]:
+    """Yield request lines as ``str``, decoding the raw bytes as UTF-8.
+
+    Reading the binary buffer (when present) bypasses the text layer entirely, so
+    the encoding can never be decided by the OS locale.
+    """
+    buffer = getattr(stream, "buffer", None)
+    if buffer is None:
+        # In-memory text stream (tests, embedded use).
+        yield from stream
+        return
+    for raw in buffer:
+        yield raw.decode("utf-8", errors="strict")
+
+
+def _write_utf8_line(stream: Any, text: str) -> None:
+    """Write one protocol line as UTF-8 with an explicit ``\\n`` terminator."""
+    buffer = getattr(stream, "buffer", None)
+    if buffer is None:
+        stream.write(text + "\n")
+        stream.flush()
+        return
+    buffer.write((text + "\n").encode("utf-8"))
+    buffer.flush()
+
+
 def serve_stdio(server: McpServer | None = None, *, stdin: Any = None, stdout: Any = None) -> None:
     """Newline-delimited JSON-RPC over stdio (the MCP stdio transport)."""
+    configure_stdio_utf8()
     server = server or McpServer()
     stream_in = stdin or sys.stdin
     stream_out = stdout or sys.stdout
-    for line in stream_in:
-        line = line.strip()
+    # Startup notice goes to stderr: stdout must carry protocol messages only.
+    # Emitted here (not in main) so every entry point - `python -m
+    # researchpilot.mcp_server --stdio`, the console script and embedded use -
+    # behaves identically.
+    with contextlib.suppress(ValueError, OSError, AttributeError):
+        sys.stderr.write(f"[researchpilot-mcp] stdio server ready (tools={sorted(server._tools)})\n")
+        sys.stderr.flush()
+    lines = _iter_utf8_lines(stream_in)
+    while True:
+        try:
+            line = next(lines).strip()
+        except StopIteration:
+            break
+        except UnicodeDecodeError as exc:
+            # A non-UTF-8 request line is a client-side protocol error: report it
+            # as JSON-RPC PARSE_ERROR (visible to the caller) and keep serving.
+            decode_error: Any = failure(
+                None, JsonRpcError(PARSE_ERROR, f"request line is not valid UTF-8: {exc}")
+            )
+            _write_utf8_line(stream_out, json.dumps(decode_error, ensure_ascii=False))
+            continue
         if not line:
             continue
+        payload: Any
         try:
             message = json.loads(line)
             if isinstance(message, list):
                 responses = [server.handle(item) for item in message]
-                payload: Any = [r for r in responses if r is not None]
+                payload = [r for r in responses if r is not None]
             else:
                 payload = server.handle(message)
         except json.JSONDecodeError as exc:
             payload = failure(None, JsonRpcError(PARSE_ERROR, f"parse error: {exc}"))
         if payload is None:
             continue
-        stream_out.write(json.dumps(payload, ensure_ascii=False) + "\n")
-        stream_out.flush()
+        _write_utf8_line(stream_out, json.dumps(payload, ensure_ascii=False))
 
 
 def create_http_app(server: McpServer | None = None) -> Any:
@@ -344,11 +415,7 @@ def main() -> None:  # pragma: no cover - process entry point
             log_level=settings.log_level.lower(),
         )
     else:
-        server = McpServer(settings)
-        log = sys.stderr
-        log.write(f"[researchpilot-mcp] stdio server ready (tools={sorted(server._tools)})\n")
-        log.flush()
-        serve_stdio(server)
+        serve_stdio(McpServer(settings))
 
 
 if __name__ == "__main__":  # pragma: no cover

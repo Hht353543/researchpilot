@@ -81,7 +81,9 @@ def test_oversized_prompt_payloads_stay_valid_json() -> None:
         {"issues": []},
         {"S1": "子问题"},
     )
-    block = re.search(r'<untrusted source="evidence">\n(.*?)\n</untrusted>', prompt, re.S).group(1)
+    match = re.search(r'<untrusted source="evidence">\n(.*?)\n</untrusted>', prompt, re.S)
+    assert match is not None, "the evidence block must be present"
+    block = match.group(1)
     parsed = json.loads(block)  # must remain parseable even after shrinking
     assert isinstance(parsed, list) and parsed
     assert len(block) <= 6100, "payload must respect the untrusted-block budget"

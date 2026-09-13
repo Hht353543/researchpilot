@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -57,6 +58,12 @@ class InProcessMcpClient:
     def close(self) -> None:
         return None
 
+    def __enter__(self) -> InProcessMcpClient:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.close()
+
 
 class StdioMcpClient:
     """Spawns the MCP server as a subprocess and speaks newline-delimited JSON-RPC."""
@@ -64,8 +71,23 @@ class StdioMcpClient:
     name = "stdio"
 
     def __init__(self, *, command: list[str] | None = None, timeout_s: float = 20.0) -> None:
-        command = command or [sys.executable, "-m", "researchpilot.mcp_server", "--stdio"]
+        # `-X utf8` + PYTHONIOENCODING make the child's stdio UTF-8 regardless of
+        # the OS locale (Windows defaults to cp936 here, which corrupts Chinese
+        # arguments in both directions). The server also pins its own streams, so
+        # either side alone is enough - this is defence in depth for a subprocess
+        # we launch ourselves.
+        command = command or [
+            sys.executable,
+            "-X",
+            "utf8",
+            "-m",
+            "researchpilot.mcp_server",
+            "--stdio",
+        ]
         self.timeout_s = timeout_s
+        env = dict(os.environ)
+        env["PYTHONIOENCODING"] = "utf-8"
+        env["PYTHONUTF8"] = "1"
         self._process = subprocess.Popen(
             command,
             stdin=subprocess.PIPE,
@@ -73,6 +95,8 @@ class StdioMcpClient:
             stderr=subprocess.PIPE,
             text=True,
             encoding="utf-8",
+            errors="strict",
+            env=env,
             cwd=str(Path.cwd()),
         )
         self._request_id = 0
@@ -125,6 +149,12 @@ class StdioMcpClient:
             except Exception:  # pragma: no cover
                 self._process.kill()
 
+    def __enter__(self) -> StdioMcpClient:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.close()
+
 
 class HttpMcpClient:
     """Talks to the MCP server over streamable HTTP."""
@@ -171,6 +201,12 @@ class HttpMcpClient:
 
     def close(self) -> None:
         self._client.close()
+
+    def __enter__(self) -> HttpMcpClient:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.close()
 
 
 def build_mcp_client(

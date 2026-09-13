@@ -60,7 +60,7 @@ class VerifierAgent(BaseAgent):
                     purpose="verifier",
                     max_tokens=2000,
                 )
-                report = result.value  # type: ignore[assignment]
+                report = result.value
             except Exception as exc:
                 runtime.errors.append(f"verifier: {type(exc).__name__}: {exc}")
             report = self._audit(report, bundle, subtask_map, source_contents, plan.objective)

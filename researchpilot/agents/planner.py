@@ -52,7 +52,7 @@ class PlannerAgent(BaseAgent):
                     purpose="planner",
                     max_tokens=1500,
                 )
-                plan: ResearchPlan = result.value  # type: ignore[assignment]
+                plan: ResearchPlan = result.value
                 attempts = result.attempts
             except Exception as exc:
                 runtime.errors.append(f"planner: {type(exc).__name__}: {exc}")

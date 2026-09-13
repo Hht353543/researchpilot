@@ -72,7 +72,7 @@ class WriterAgent(BaseAgent):
                         purpose="writer",
                         max_tokens=3000,
                     )
-                    report = result.value  # type: ignore[assignment]
+                    report = result.value
                 except Exception as exc:
                     runtime.errors.append(f"writer: {type(exc).__name__}: {exc}")
             if report is None:

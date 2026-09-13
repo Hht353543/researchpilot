@@ -80,3 +80,19 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 ignore_missing_imports = true
 exclude = ["runs/", "build/"]
+# `mypy .` walks tests/ and scripts/ too; without explicit package bases the same
+# file can be imported both as `tests.fixtures.openai_stub` and `openai_stub`,
+# which mypy refuses to type-check ("found twice under different module names").
+explicit_package_bases = true
+namespace_packages = true
+mypy_path = "."
+
+# Test helpers and pytest fixtures take untyped framework objects (monkeypatch,
+# tmp_path, capsys, ...); demanding a full signature there produces noise without
+# catching real defects. Bodies are still type-checked, and `researchpilot/` keeps
+# the strict `disallow_untyped_defs` setting.
+[[tool.mypy.overrides]]
+module = ["tests.*", "tests", "scripts.*", "scripts"]
+disallow_untyped_defs = false
+check_untyped_defs = true
+disallow_incomplete_defs = false

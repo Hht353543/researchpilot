@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
@@ -23,8 +23,10 @@ ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
 @dataclass
-class StructuredCallResult:
-    value: BaseModel
+class StructuredCallResult(Generic[ModelT]):
+    """Result of one structured call, typed by the requested schema."""
+
+    value: ModelT
     response: LLMResponse
     usage: TokenUsage
     attempts: int
@@ -85,7 +87,7 @@ class StructuredLLMRunner:
         purpose: str = "",
         temperature: float | None = None,
         max_tokens: int | None = None,
-    ) -> StructuredCallResult:
+    ) -> StructuredCallResult[ModelT]:
         purpose = purpose or schema.__name__
         messages = [ChatMessage(role="system", content=system), ChatMessage(role="user", content=user)]
         errors: list[str] = []

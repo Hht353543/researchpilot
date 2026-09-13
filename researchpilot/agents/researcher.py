@@ -179,7 +179,7 @@ class ResearchAgent(BaseAgent):
                 purpose="researcher",
                 max_tokens=2000,
             )
-            bundle: EvidenceBundle = result.value  # type: ignore[assignment]
+            bundle: EvidenceBundle = result.value
             evidence = list(bundle.evidence)
         except Exception as exc:
             runtime.errors.append(f"researcher[{subtask.id}]: {type(exc).__name__}: {exc}")

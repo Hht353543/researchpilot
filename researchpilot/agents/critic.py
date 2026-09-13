@@ -51,7 +51,7 @@ class CriticAgent(BaseAgent):
                     purpose="critic",
                     max_tokens=1500,
                 )
-                report = result.value  # type: ignore[assignment]
+                report = result.value
             except Exception as exc:
                 runtime.errors.append(f"critic: {type(exc).__name__}: {exc}")
             report = self._augment(report, subtask_map, bundle, verification)

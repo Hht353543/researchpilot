@@ -124,7 +124,9 @@ def test_registry_caching() -> None:
     second = registry.invoke("flaky", {"text": "x"})
     assert first.ok and second.ok
     assert second.cached
-    assert registry.get("flaky").calls == 2  # 1 failure + 1 success, then cache hit
+    tool = registry.get("flaky")
+    assert isinstance(tool, FlakyTool), "the registry must return the registered tool instance"
+    assert tool.calls == 2  # 1 failure + 1 success, then cache hit
 
 
 def test_registry_membership_helpers() -> None:

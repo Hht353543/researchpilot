@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, cast
 
 from researchpilot.agents.base import build_runtime
 from researchpilot.agents.planner import PlannerAgent
@@ -120,8 +121,6 @@ def test_async_submission_returns_task_id(settings: Settings, knowledge_base: Kn
 
 
 def test_planner_falls_back_when_provider_fails(settings: Settings, knowledge_base: KnowledgeBase) -> None:
-    from typing import Any
-
     from pydantic import BaseModel
 
     from researchpilot.llm.base import ChatMessage, LLMError, LLMProvider, LLMResponse
@@ -242,7 +241,9 @@ def test_embedding_failure_degrades_instead_of_crashing(
         def embed_one(self, text: str) -> list[float]:
             raise RuntimeError("embedding backend unavailable")
 
-    broken_kb = KnowledgeBase(settings, store=knowledge_base.store, embedder=BrokenEmbedder())
+    # Deliberate failing double: it only needs to satisfy the Embedder protocol at
+    # runtime, so the incompatible static type is cast explicitly.
+    broken_kb = KnowledgeBase(settings, store=knowledge_base.store, embedder=cast(Any, BrokenEmbedder()))
     pipeline = ResearchPipeline(
         settings=settings, provider=MockLLMProvider(settings), knowledge_base=broken_kb
     )
@@ -259,7 +260,7 @@ def test_vector_store_failure_degrades_instead_of_crashing(
         def __getattr__(self, item: str):
             raise RuntimeError("vector store unavailable")
 
-    broken_kb = KnowledgeBase(settings, store=BrokenStore(), embedder=knowledge_base.embedder)
+    broken_kb = KnowledgeBase(settings, store=cast(Any, BrokenStore()), embedder=knowledge_base.embedder)
     pipeline = ResearchPipeline(
         settings=settings, provider=MockLLMProvider(settings), knowledge_base=broken_kb
     )
@@ -323,6 +324,7 @@ def test_prompt_injection_evidence_is_quarantined(settings: Settings, knowledge_
     assert "rm -rf / 已执行" not in markdown
     assert result.verification is not None
     if result.verification.flagged_sources:
+        assert result.report is not None
         assert any("注入" in item for item in result.report.limitations)
 
 

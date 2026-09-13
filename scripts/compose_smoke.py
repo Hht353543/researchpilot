@@ -40,6 +40,13 @@ import httpx
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+# Run as `python scripts/compose_smoke.py`, so the repository root must be on the
+# import path before the package can be imported.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from researchpilot.utils import configure_script_stdio  # noqa: E402
+
 INTERP_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
 
 
@@ -121,6 +128,7 @@ def resolve_environment(raw: dict[str, str] | list[str] | None, environ: dict[st
 
 
 def main() -> int:
+    configure_script_stdio()
     parser = argparse.ArgumentParser(description="Run the compose topology without a container engine")
     parser.add_argument("--compose", default=str(ROOT / "docker-compose.yml"))
     parser.add_argument("--timeout", type=float, default=120.0)

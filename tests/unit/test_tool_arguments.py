@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from researchpilot.tools.base import ToolRequestContext
-from researchpilot.tools.implementations.calculator import CalculatorTool
+from researchpilot.tools.implementations.calculator import CalculatorArgs, CalculatorTool
 from researchpilot.tools.implementations.document_reader import DocumentReaderTool
 from researchpilot.tools.implementations.knowledge_search import KnowledgeSearchTool
 from researchpilot.tools.implementations.mcp_tool import McpResearchContextTool
@@ -43,7 +43,9 @@ def test_calculator_extracts_expressions_only_when_present() -> None:
     args = tool.build_arguments(ToolRequestContext(question="请计算 61/48 * 100 的增长率"))
     assert args is not None
     assert args["expression"].startswith("61/48")
-    assert tool.validate(args).expression
+    validated = tool.validate(args)
+    assert isinstance(validated, CalculatorArgs)
+    assert validated.expression
 
 
 def test_metadata_defaults_to_statistics() -> None:
