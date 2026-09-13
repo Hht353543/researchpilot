@@ -193,6 +193,7 @@ avg_latency=0.33s p95=1.37s tokens=658,286 cost=$0.000000
 | 12h | 验证缺口（非缺陷）：规格 §3 要求「Plan 真的驱动执行」「Critic 真的能触发补检」，此前只有间接证据 | tests/integration/test_plan_driven_execution.py（新增 5 项） | 直接执行证据：计划只声明 web_search → 只调用 web_search；换成 metadata → 只调用 metadata；强制 Critic 要求补检 → trace 出现 pipeline.iteration[2] 且证据合并；max_iterations=2 时补检轮数恰好 1 |
 | 12i | 验证缺口（非缺陷）：规格 §12/§13 的「API 级 timeout」与 §18.6「LLM Output Validation」此前只有组件级/单元级证据 | tests/integration/test_resilience_paths.py（新增 2 项） | ① 慢工具经真实 HTTP `/research` → 200 + degraded + tool_failures≥1 + 明确 timeout 错误、整体有界；② 全程返回非 JSON 的 provider → 仍产出结构化计划 + 抽取式证据（逐条带 verbatim quote）+ 报告，且**没有任何未绑定引用的结论** |
 | 12j | 文档漂移：追溯矩阵/审查报告中的测试套件数字过期（写 170，实际已增长），且文档可能引用已重命名的测试 | docs/requirements_traceability.md、docs/audit_report.md、README.md + 新增 tests/unit/test_docs_consistency.py | 新增 4 项守卫测试：文档引用的每个测试函数/测试文件必须真实存在；文档引用的脚本必须存在；**当前状态文档中的套件数字必须等于真实收集数**（历史日志豁免）；同时修正过期数字 |
+| 12m | 验证缺口：CI 工作流从未被真正执行（此前只在本地跑过类似命令），workflow 文件里的命令能否跑通无从证明 | 新增 scripts/ci_dry_run.py + tests/unit/test_ci_workflow.py | 干跑驱动解析真实 ci.yml 并逐条执行 lint / typecheck / test / evaluation 的 run 步骤（docker job 明确跳过并说明原因）：**9/9 步骤通过**；首次运行即抓出脚本自身的 ruff 错误，说明"真的执行"与"看起来应该能跑"确有差距 |
 | 12k | `.dockerignore` 裸模式在 Docker 语义下只作用于构建上下文根目录（`__pycache__`/`*.pyc` 等不会排除嵌套目录）→ 镜像会夹带缓存 | `.dockerignore` | 改为 `**/__pycache__`、`**/*.pyc`、`**/.pytest_cache`、`**/.mypy_cache`、`**/.ruff_cache`，并补 `runs_*/`；新增忠实于 Docker 匹配语义的断言 |
 | 12l | 验证缺口：此前只断言 healthcheck 路由存在，未真正执行 Dockerfile 的 HEALTHCHECK 命令；也未校验镜像是否包含全部运行时输入文件 | `scripts/compose_smoke.py`、`tests/unit/test_docker_assets.py` | compose smoke 现在提取并执行 Dockerfile 的 HEALTHCHECK（exit 0）；新增运行时文件完整性测试（COPY 覆盖 + 不被 ignore 排除） |
 | 12f | `RESEARCHPILOT_MAX_CONTEXT_CHARS` 被硬编码 12000 覆盖（配置不生效） | `rag/knowledge_base.py:search` | 改为读取 `settings.max_context_chars`；新增 `test_knowledge_base_honours_max_context_chars_setting` |
@@ -255,7 +256,7 @@ README 与 `docs/*`。
 ruff check .                      -> All checks passed!
 ruff format --check .             -> 114 files already formatted
 mypy researchpilot                -> Success: no issues found in 69 source files
-python -m pytest -q               -> 184 passed
+python -m pytest -q               -> 195 passed
 python -m pip check               -> 本项目 fastapi/starlette 冲突已消失（余下为环境里无关包的既有冲突）
 python scripts/run_benchmark.py   -> 见 docs/evaluation.md（35/35，Recall 93.9%，Citation 100%，Tool F1 85.9%）
 真实 HTTP provider 全链路          -> 见 tests/integration/test_openai_provider.py（7 项全绿）

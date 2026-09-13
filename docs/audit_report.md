@@ -139,9 +139,9 @@ MCP Server 与 3 种传输；三层记忆；统一 Trace；35 条 Golden Dataset
 | P0 | 0 | 初始状态可运行 |
 | P1 | 2 | Planner 崩溃于向量库故障；真实 provider 链路未验证 |
 | P2 | 18 | **存储失败未降级**；缓存键/缓存未启用、指标真空 1.0、cwd 依赖路径、Prompt 非 JSON、Agent 内 if/elif、故障注入未生效、无证据仍成功、LLM 重排不可达、reindex 残留、依赖不兼容、长期记忆路径错误、评测指标依赖未声明的 jieba、**embedding 切换后索引未失效**、**弱模型空报告无引用回退缺失** |
-| P3 | 12 | `.dockerignore` 语义错误；记忆命中未落盘、死代码、`.env.example` 不同步、前端缺字段/面板、`latency_ms=0`、无 requirements、SSRF、注入检测漏检、MCP 回退不可见、MCP `/openapi.json` 崩溃、校验器可被自洽但未落地的句子骗过 |
+| P3 | 13 | CI 命令从未被真正执行（现由 `scripts/ci_dry_run.py` 逐条执行并发现脚本自身 lint 错误）；`.dockerignore` 语义错误；记忆命中未落盘、死代码、`.env.example` 不同步、前端缺字段/面板、`latency_ms=0`、无 requirements、SSRF、注入检测漏检、MCP 回退不可见、MCP `/openapi.json` 崩溃、校验器可被自洽但未落地的句子骗过 |
 | P4 | 3 | docker 引擎不可用（已穷尽 PATH/常见安装路径/podman/buildah/nerdctl/WSL 确认）、无 npm 构建链（已用零依赖 node 测试覆盖前端逻辑）、离线指标不代表模型质量（已如实标注） |
-| **合计** | **35**（修复 33 + 环境限制 2） | |
+| **合计** | **36**（修复 34 + 环境限制 2） | |
 
 ---
 
@@ -150,7 +150,8 @@ MCP Server 与 3 种传输；三层记忆；统一 Trace；35 条 Golden Dataset
 | 验证 | 命令 / 方式 | 结果 |
 | --- | --- | --- |
 | 静态检查 | `ruff check .` / `ruff format --check .` / `mypy researchpilot` | 全部通过（0 error） |
-| 测试 | `python -m pytest -q` | **191 passed**（含 unit / integration / evaluation）+ 9 个前端 node 测试 |
+| 测试 | `python -m pytest -q` | **195 passed**（含 unit / integration / evaluation）+ 9 个前端 node 测试 |
+| CI 工作流本身可执行 | `python scripts/ci_dry_run.py`（解析真实 `.github/workflows/ci.yml`） | **9/9 步骤通过**：ruff → mypy → unit+integration(+coverage) → node 前端测试 → Golden Dataset 完整性 → benchmark → evaluation 冒烟 → compose 拓扑；`docker build` job 需引擎，明确跳过并说明 |
 | 依赖一致性 | `python -m pip check` | 本项目 fastapi/starlette 冲突消失；余下为环境内无关预装包 |
 | 干净环境安装 | `python -m venv` + `pip install -e .`（CI 路径用 `.[dev]`） | 成功解析并安装 fastapi 0.112.4 / starlette 0.38.6 / jieba 0.42.1 等；CLI、uvicorn 与 CI 的 lint/mypy/pytest 步骤均在干净环境内跑通 |
 | 指标可复现性 A/B | 同一 venv、同一代码，仅差 `jieba` | 无 jieba：30/35、Citation 87.9%；有 jieba：35/35、Citation 100% → 已将 `jieba` 声明为硬依赖 |
