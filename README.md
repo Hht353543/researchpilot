@@ -34,7 +34,7 @@ LLM → Prompt → Structured Output → Tool Calling → RAG → Knowledge Base
 | 服务化 | FastAPI（类型安全、参数校验、错误语义、日志）+ 零依赖前端（输入 / 模型参数 / 知识库 / 时间线 / 报告 / 指标 / 评测面板） |
 | 知识库管理 | 文档入库、检索、删除（级联删除 chunk）、全量重建索引（磁盘删除的文件不会残留） |
 | LLM 抽象 | 任意 OpenAI 兼容端点（OpenAI / DeepSeek / vLLM / Ollama…）+ 确定性离线 provider；真实 HTTP 链路由本地兼容端点端到端测试覆盖 |
-| 工程质量 | **168 个测试**（unit / integration / evaluation，含真实 HTTP provider 链路）、ruff、mypy、pip check、Dockerfile、docker-compose、GitHub Actions |
+| 工程质量 | **169 个测试**（unit / integration / evaluation，含真实 HTTP provider 链路）、ruff、mypy、pip check、Dockerfile、docker-compose、GitHub Actions |
 
 ---
 
@@ -261,12 +261,34 @@ docker compose up --build
 `docker-compose.yml` 把 API 与 MCP Server 作为**两个独立服务**部署，API 通过 streamable-HTTP
 调用 MCP，体现"协议解耦"的工程价值。
 
+**本机没有容器引擎**（`docker`/`podman`/`buildah`/`nerdctl` 均不存在，WSL 也没有安装发行版），
+因此这里没跑过 `docker compose up`。作为等价验证，仓库提供了**由 compose 文件驱动的无引擎拓扑测试**：
+
+```bash
+python scripts/compose_smoke.py      # 也可由 pytest 执行：tests/integration/test_compose_topology.py
+```
+
+该脚本读取真实的 `docker-compose.yml`（服务、`command`、`ports`、`environment` 的
+`${VAR:-default}` 插值、`depends_on: service_healthy`），先起 `mcp` 并等其 healthcheck，再起 `api`，
+然后断言：MCP `/health` 正常、API `/health` 报告 `mcp_transport=http`、`/mcp/tools` 走 HTTP、
+前端 200、以及一次研究任务**真的通过 HTTP 调用了 MCP**（`mcp_calls=1`）。
+实测输出（本机）：
+
+```
+[compose-smoke] mcp healthy: tools=4
+[compose-smoke] api healthy: provider=mock mcp_transport=http kb_docs=10
+[compose-smoke] research: status=succeeded mcp_calls=1 evidence=8
+[compose-smoke] OK: compose topology verified without a container engine
+```
+
+容器内路径/主机名（`/app/...`、`mcp:8765`）到宿主机路径的映射会被逐条打印，保证证据透明。
+
 ---
 
 ## Testing
 
 ```bash
-python -m pytest -q                       # 单元 + 集成 + 评测（168 个测试）
+python -m pytest -q                       # 单元 + 集成 + 评测（169 个测试）
 python -m pytest -q -m "not evaluation"   # 快速回归
 python -m pytest -q -m evaluation         # 全量 Golden Dataset 冒烟
 ruff check . && ruff format --check . && mypy researchpilot

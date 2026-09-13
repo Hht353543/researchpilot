@@ -70,6 +70,8 @@ jobs:
         run: python scripts/run_benchmark.py --provider mock --no-docs
       - name: evaluation smoke test
         run: python -m pytest tests/evaluation/test_smoke.py -q -m evaluation
+      - name: compose topology smoke test (engine-free)
+        run: python scripts/compose_smoke.py --timeout 120
       - uses: actions/upload-artifact@v4
         if: always()
         with:

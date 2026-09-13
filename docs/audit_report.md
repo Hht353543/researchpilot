@@ -150,7 +150,7 @@ MCP Server 与 3 种传输；三层记忆；统一 Trace；35 条 Golden Dataset
 | 验证 | 命令 / 方式 | 结果 |
 | --- | --- | --- |
 | 静态检查 | `ruff check .` / `ruff format --check .` / `mypy researchpilot` | 全部通过（0 error） |
-| 测试 | `python -m pytest -q` | **168 passed**（含 unit / integration / evaluation）+ 9 个前端 node 测试 |
+| 测试 | `python -m pytest -q` | **169 passed**（含 unit / integration / evaluation）+ 9 个前端 node 测试 |
 | 依赖一致性 | `python -m pip check` | 本项目 fastapi/starlette 冲突消失；余下为环境内无关预装包 |
 | 干净环境安装 | `python -m venv` + `pip install -e .`（CI 路径用 `.[dev]`） | 成功解析并安装 fastapi 0.112.4 / starlette 0.38.6 / jieba 0.42.1 等；CLI、uvicorn 与 CI 的 lint/mypy/pytest 步骤均在干净环境内跑通 |
 | 指标可复现性 A/B | 同一 venv、同一代码，仅差 `jieba` | 无 jieba：30/35、Citation 87.9%；有 jieba：35/35、Citation 100% → 已将 `jieba` 声明为硬依赖 |
@@ -160,7 +160,7 @@ MCP Server 与 3 种传输；三层记忆；统一 Trace；35 条 Golden Dataset
 | MCP 双服务链路 | 启动 MCP HTTP 服务进程 | API `/health` 显示 `mcp_transport=http`，`/mcp/tools` 走 HTTP，研究任务产生 mcp 调用 |
 | 完整链路 | CLI 真实运行（"分析当前大模型 Agent 在软件开发中的主要应用方向…"） | Planner 3 子任务 → 3 次工具调用 → 9 条证据 → Verifier 9 checks（sufficient=True）→ Critic → Writer 3 节/5 结论 → 9 条引用全部可解析 → Trace{agent:5, llm:7, tool:3, retrieval:1} |
 | 离线 Benchmark | `scripts/run_benchmark.py --provider mock` | 35/35 通过；Recall 93.9%（分母 30）、Context Relevance 28.8%、Citation 100%（分母 34）、Tool F1 85.9%、Tool Success 74.6%、平均延迟 0.31s |
-| Docker 构建 | **未实机执行**（本环境无 docker 引擎） | 替代证据：`tests/unit/test_docker_assets.py` 校验 compose 服务与依赖条件、环境变量名、`COPY` 源与 `.dockerignore`、CMD 模块可导入、healthcheck 路径存在于真实路由表；另有干净环境 `pip install -e .` 与镜像内 CMD 实机跑通 |
+| Docker 构建 | **未实机执行**（本环境无 docker 引擎，已穷尽 PATH/安装路径/podman/buildah/nerdctl/WSL） | 等价证据：① `tests/unit/test_docker_assets.py` 校验 compose 结构与依赖条件、环境变量名、`COPY` 源与 `.dockerignore`、CMD 可导入、healthcheck 路由；② 干净环境 `pip install -e .` 与镜像内 CMD 实机跑通；③ **`scripts/compose_smoke.py` 用真实 compose 文件起双服务**：MCP 健康 → API `mcp_transport=http` → `/mcp/tools` 走 HTTP → 前端 200 → 研究任务 `mcp_calls=1` |
 
 ---
 
@@ -173,7 +173,12 @@ MCP Server 与 3 种传输；三层记忆；统一 Trace；35 条 Golden Dataset
    定位到「弱模型返回空报告 → 0 引用」后新增空报告回退，复测同任务**引用正确率 100%**。
    详见 `docs/evaluation_local_model.md`。换成线上有效 Key 只需
    `export API_KEY=sk-... && python scripts/verify_live_model.py --limit 35`。
-2. **Docker / CI 未实机运行**：本环境无 docker 引擎、无 GitHub Actions；已完成静态校验与镜像内命令的实机等价验证。
+2. **Docker 引擎仍缺失，但 compose 拓扑已用真实 compose 文件验证**：本机无 `docker`/`podman`/`buildah`/
+   `nerdctl`，WSL 无发行版，因此 `docker build` / `docker compose up` 无法在此环境执行。
+   新增 `scripts/compose_smoke.py`（+ `tests/integration/test_compose_topology.py` + CI 步骤）：
+   读取真实 `docker-compose.yml`，按 `depends_on: service_healthy` 先起 MCP 再起 API，实测
+   `mcp_transport=http`、`/mcp/tools` 走 HTTP、前端 200、研究任务 `mcp_calls=1`，并在宿主路径映射处打印每条 remap。
+   在有 Docker 的机器上执行 `docker compose up --build` 仍是唯一未做的动作。
 3. **Context Relevance 28.8%**：哈希向量语义弱，需真实 embedding 与交叉编码器重排。
 4. **串行子任务**、**线程池超时不可中断**、**JSON 单机存储**、**无多租户鉴权/流式输出**：见 Future Work。
 5. **语义类质量控制**仍以代码规则为准，LLM judge 默认关闭以保证可复现。
