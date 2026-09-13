@@ -1,0 +1,11 @@
+# USD per 1M tokens. Override/extend without touching code.
+# Cost for models that are not listed here (and for the offline mock provider) is 0.
+gpt-4o-mini:
+  input: 0.15
+  output: 0.6
+gpt-4o:
+  input: 2.5
+  output: 10.0
+deepseek-chat:
+  input: 0.27
+  output: 1.1

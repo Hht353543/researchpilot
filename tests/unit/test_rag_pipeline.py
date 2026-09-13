@@ -1,0 +1,179 @@
+"""Unit tests for loader -> cleaner -> chunker -> embeddings -> vector store -> retriever."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from researchpilot.config import Settings
+from researchpilot.rag.chunker import MarkdownChunker
+from researchpilot.rag.cleaner import TextCleaner
+from researchpilot.rag.embeddings import HashEmbedder, build_embedder
+from researchpilot.rag.loader import DocumentLoader
+from researchpilot.rag.models import Chunk, Document
+from researchpilot.rag.retriever import Retriever
+from researchpilot.rag.vector_store import VectorStore, tokenize
+
+FIXTURE_KB = Path(__file__).resolve().parents[1] / "fixtures" / "kb"
+
+
+def test_loader_reads_markdown_with_front_matter() -> None:
+    documents = DocumentLoader().load_path(FIXTURE_KB)
+    assert len(documents) == 5
+    first = next(doc for doc in documents if doc.doc_id == "kb-fixture-tools")
+    assert first.title == "工具与权限"
+    assert first.metadata["topic"] == "tools"
+    assert first.created_at.startswith("2026-01-02")
+
+
+def test_cleaner_removes_boilerplate_and_dedupes_lines() -> None:
+    cleaner = TextCleaner()
+    repeated = "正文第一段内容比较长需要保留下来，重复行应当被去重处理。"
+    text = f"版权所有 © 示例\n\n{repeated}\n{repeated}\n\n\n结束。"
+    cleaned, stats = cleaner.clean(text)
+    assert "版权所有" not in cleaned
+    assert cleaned.count("正文第一段内容比较长需要保留下来") == 1
+    assert stats["duplicate_lines_removed"] == 1
+    assert stats["chars_out"] < stats["chars_in"]
+
+
+def test_chunker_is_heading_aware_and_overlaps_by_sentence() -> None:
+    document = Document(
+        doc_id="d1",
+        title="T",
+        source="s",
+        content="# 标题一\n\n第一段内容足够长以便成为独立分块。第二句用于测试。\n\n## 标题二\n\n第二段内容也很长，用于验证分块上下文。",
+    )
+    chunker = MarkdownChunker(target_chars=40, max_chars=60, overlap_chars=30, min_chars=10)
+    chunks = chunker.chunk_document(document)
+    assert chunks
+    assert all(chunk.metadata["section"] for chunk in chunks)
+    assert chunks[0].metadata["section"].startswith("标题一")
+    assert any("标题二" in chunk.metadata["section"] for chunk in chunks)
+    for chunk in chunks:
+        assert chunk.content.strip().startswith(chunk.metadata["section"])
+        assert len(chunk.content) <= 60 + 40
+
+
+def test_hash_embedder_is_deterministic_and_normalised() -> None:
+    embedder = HashEmbedder(64)
+    first = embedder.embed_one("MCP 基于 JSON-RPC 2.0")
+    second = embedder.embed_one("MCP 基于 JSON-RPC 2.0")
+    assert first == second
+    assert len(first) == 64
+    norm = sum(v * v for v in first) ** 0.5
+    assert 0.99 <= norm <= 1.01
+    assert embedder.embed_one("完全不同的内容 ABC") != first
+
+
+def test_build_embedder_defaults_to_hash(settings: Settings) -> None:
+    embedder = build_embedder(settings)
+    assert embedder.name == "hash"
+    assert embedder.dimension == settings.embedding_dim
+
+
+def test_tokenize_keeps_cjk_words_and_latin_tokens() -> None:
+    tokens = tokenize("MCP 基于 JSON-RPC 2.0 的 tools/call 方法")
+    assert "mcp" in tokens
+    assert any("工具" in t or "方法" in t for t in tokens)
+
+
+def _store() -> VectorStore:
+    embedder = HashEmbedder(128)
+    store = VectorStore(dimension=128)
+    chunks = [
+        Chunk(
+            chunk_id=f"c{i}",
+            doc_id=f"doc{i}",
+            title=f"标题{i}",
+            source=f"src{i}",
+            content=content,
+            metadata={"topic": topic},
+        )
+        for i, (content, topic) in enumerate(
+            [
+                ("混合检索通过 RRF 融合语义与关键词排名。", "rag"),
+                ("工具注册表声明权限、超时与重试策略。", "tools"),
+                ("长期记忆需要 TTL 与去重策略。", "memory"),
+            ]
+        )
+    ]
+    store.add_chunks(
+        [
+            c.with_embedding(v)
+            for c, v in zip(chunks, embedder.embed([c.content for c in chunks]), strict=True)
+        ]
+    )
+    return store
+
+
+def test_vector_store_dense_keyword_and_hybrid_search() -> None:
+    embedder = HashEmbedder(128)
+    store = _store()
+    query = "RRF 混合检索"
+    vector = embedder.embed_one(query)
+    dense = store.dense_search(vector, k=3)
+    keyword = store.keyword_search(query, k=3)
+    hybrid = store.hybrid_search(query, vector, k=3)
+    assert dense and keyword and hybrid
+    assert hybrid[0].chunk.chunk_id in {hit.chunk.chunk_id for hit in dense + keyword}
+    assert hybrid[0].retriever == "hybrid"
+    assert hybrid[0].rank == 1
+
+
+def test_vector_store_metadata_filtering() -> None:
+    store = _store()
+    vector = HashEmbedder(128).embed_one("检索")
+    hits = store.dense_search(vector, k=5, filters={"topic": "tools"})
+    assert hits
+    assert {hit.chunk.metadata["topic"] for hit in hits} == {"tools"}
+    assert store.dense_search(vector, k=5, filters={"topic": "missing"}) == []
+
+
+def test_retriever_rewrites_reranks_and_builds_context() -> None:
+    embedder = HashEmbedder(128)
+    store = _store()
+    retriever = Retriever(store, embedder, settings=Settings(embedding_dim=128, top_k=2))
+    result = retriever.retrieve("工具注册表需要声明什么", top_k=2, rewrite=True, rerank=True)
+    assert result.strategy == "hybrid"
+    assert result.hits
+    assert result.hits[0].chunk.chunk_id == "c1"
+    assert result.rerank_strategy == "heuristic"
+    assert "[" in result.context  # context is labelled with chunk ids
+    assert result.items()[0]["source_id"] == "c1"
+
+
+def test_retriever_traces_spans() -> None:
+    from researchpilot.observability.trace import Tracer, tracer_scope
+
+    embedder = HashEmbedder(64)
+    store = _store()
+    tracer = Tracer("task-trace", "工具注册表")
+    retriever = Retriever(store, embedder, settings=Settings(embedding_dim=64, top_k=2), tracer=tracer)
+    with tracer_scope(tracer):
+        retriever.retrieve("工具注册表", top_k=1)
+    kinds = [span.kind for span in tracer.spans]
+    assert "retrieval" in kinds
+    assert any(span.output.get("doc_ids") for span in tracer.spans if span.kind == "retrieval")
+
+
+def test_vector_store_roundtrip(tmp_path: Path) -> None:
+    store = _store()
+    path = store.save(tmp_path / "vs.json")
+    loaded = VectorStore.load(path)
+    assert loaded.stats()["chunks"] == store.stats()["chunks"]
+    assert loaded.stats()["documents"] == store.stats()["documents"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["", "   ", "短文本"],
+)
+def test_chunker_handles_edge_cases(text: str) -> None:
+    document = Document(doc_id="d", title="t", source="s", content=text)
+    chunks = MarkdownChunker(min_chars=1).chunk_document(document)
+    if text.strip():
+        assert chunks
+    else:
+        assert chunks == []

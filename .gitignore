@@ -1,0 +1,23 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# runtime artifacts
+runs/
+*.log
+
+# local secrets
+.env
+
+# generated benchmark output (keep the committed summary in docs/)
+benchmarks/*.json
+!benchmarks/.gitkeep

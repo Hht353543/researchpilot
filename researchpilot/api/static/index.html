@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ResearchPilot · Multi-Agent Deep Research</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">RP</span>
+        <div>
+          <h1>ResearchPilot</h1>
+          <p class="subtitle">Multi-Agent Deep Research &amp; Knowledge Base Platform</p>
+        </div>
+      </div>
+      <div class="badges" id="badges"></div>
+    </header>
+
+    <main class="layout">
+      <section class="column">
+        <article class="card">
+          <h2>1 · Research Input</h2>
+          <textarea id="question" rows="5" placeholder="例如：分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。"></textarea>
+          <div class="row">
+            <button id="run" class="primary">Run research</button>
+            <button id="runAsync" class="ghost">Run async</button>
+            <span id="runStatus" class="status"></span>
+          </div>
+          <div class="samples" id="samples"></div>
+        </article>
+
+        <article class="card">
+          <h2>2 · Model Settings</h2>
+          <div class="grid2">
+            <label>model<input id="model" type="text" /></label>
+            <label>temperature<input id="temperature" type="number" step="0.1" min="0" max="2" /></label>
+            <label>presence_penalty<input id="presence" type="number" step="0.1" min="-2" max="2" /></label>
+            <label>frequency_penalty<input id="frequency" type="number" step="0.1" min="-2" max="2" /></label>
+            <label>top_k<input id="topk" type="number" min="1" max="20" /></label>
+            <label>max_iterations<input id="iterations" type="number" min="1" max="4" /></label>
+          </div>
+          <p class="hint" id="configHint"></p>
+        </article>
+
+        <article class="card">
+          <h2>3 · Knowledge Base</h2>
+          <div class="stats" id="kbStats"></div>
+          <div class="row">
+            <input id="kbQuery" type="text" placeholder="检索知识库…" />
+            <select id="kbStrategy">
+              <option value="hybrid">hybrid</option>
+              <option value="dense">dense</option>
+              <option value="keyword">keyword</option>
+            </select>
+            <button id="kbSearch" class="ghost">Search</button>
+            <button id="kbReindex" class="ghost">Reindex</button>
+          </div>
+          <div class="scroll" id="kbResults"></div>
+          <h3>Documents</h3>
+          <div class="scroll small" id="kbDocuments"></div>
+        </article>
+
+        <article class="card">
+          <h2>4 · Metrics</h2>
+          <div class="metrics" id="metrics"></div>
+        </article>
+
+        <article class="card">
+          <h2>5 · Sources &amp; MCP</h2>
+          <div class="scroll small" id="sources"></div>
+          <h3>MCP tools</h3>
+          <div class="scroll small" id="mcpTools"></div>
+        </article>
+      </section>
+
+      <section class="column wide">
+        <article class="card">
+          <h2>Agent Timeline</h2>
+          <div class="scroll timeline" id="timeline"></div>
+        </article>
+
+        <article class="card">
+          <h2>Final Report</h2>
+          <div class="report markdown" id="report"></div>
+        </article>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span id="footerInfo">ResearchPilot</span>
+    </footer>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

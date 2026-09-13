@@ -1,0 +1,899 @@
+{
+  "task_id": "task_e68dea8ff9cd",
+  "trace_id": "trace_29a568851356",
+  "status": "succeeded",
+  "question": "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。",
+  "settings": {
+    "model": null,
+    "temperature": null,
+    "presence_penalty": null,
+    "frequency_penalty": null,
+    "max_tokens": null,
+    "top_k": null,
+    "max_iterations": null,
+    "token_budget": null
+  },
+  "plan": {
+    "objective": "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。",
+    "subtasks": [
+      {
+        "id": "S1",
+        "question": "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 先界定核心概念、范围与关键术语",
+        "intent": "knowledge_search",
+        "tools": [
+          "knowledge_search"
+        ],
+        "expected_output": "核心概念定义、范围边界与术语表",
+        "priority": 5,
+        "depends_on": []
+      },
+      {
+        "id": "S2",
+        "question": "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 梳理当前应用趋势与落地现状（含时间线与驱动因素）",
+        "intent": "web_search",
+        "tools": [
+          "web_search",
+          "mcp_research_context"
+        ],
+        "expected_output": "趋势时间线、驱动因素与可验证的市场信号",
+        "priority": 5,
+        "depends_on": []
+      },
+      {
+        "id": "S3",
+        "question": "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 对比主要技术路线与实现方案",
+        "intent": "knowledge_search",
+        "tools": [
+          "knowledge_search",
+          "document_reader"
+        ],
+        "expected_output": "技术路线对比表（能力、复杂度、适用场景）",
+        "priority": 4,
+        "depends_on": []
+      },
+      {
+        "id": "S4",
+        "question": "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 收集代表性项目/框架案例并提取关键事实",
+        "intent": "web_search",
+        "tools": [
+          "web_search",
+          "knowledge_search"
+        ],
+        "expected_output": "代表性项目清单及其定位、能力与限制",
+        "priority": 4,
+        "depends_on": []
+      },
+      {
+        "id": "S5",
+        "question": "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 归纳优势、局限与风险，并给出权衡依据",
+        "intent": "knowledge_search",
+        "tools": [
+          "knowledge_search",
+          "metadata"
+        ],
+        "expected_output": "优缺点与风险的证据化清单",
+        "priority": 4,
+        "depends_on": []
+      },
+      {
+        "id": "S6",
+        "question": "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 汇总可追溯的参考资料与出处元数据",
+        "intent": "document_reader",
+        "tools": [
+          "document_reader",
+          "metadata"
+        ],
+        "expected_output": "带来源与元数据的参考资料列表",
+        "priority": 3,
+        "depends_on": []
+      },
+      {
+        "id": "S7",
+        "question": "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 交叉验证证据并形成结论",
+        "intent": "synthesis",
+        "tools": [],
+        "expected_output": "经过验证的结论与引用绑定关系",
+        "priority": 5,
+        "depends_on": [
+          "S1",
+          "S2",
+          "S3",
+          "S4",
+          "S5",
+          "S6"
+        ]
+      }
+    ],
+    "requires_knowledge_base": true,
+    "requires_web": true,
+    "requires_mcp": true,
+    "success_criteria": [
+      "每个子任务都有可追溯证据或明确说明缺口",
+      "结论句均绑定到具体证据 id",
+      "引用来源均可追溯到知识库文档或搜索结果"
+    ],
+    "max_iterations": 2,
+    "rationale": "按概念界定 → 事实检索 → 对比分析 → 风险权衡 → 交叉验证的顺序拆解。"
+  },
+  "evidence": {
+    "evidence": [
+      {
+        "id": "E1",
+        "subtask_id": "S1",
+        "claim": "LangGraph:以图结构表达 Agent 状态机,支持持久化检查点与人工介入,适合需要可控流程与恢复能力的生产系统。",
+        "quote": "LangGraph:以图结构表达 Agent 状态机,支持持久化检查点与人工介入,适合需要可控流程与恢复能力的生产系统。代价是抽象较多、上手成本偏高。",
+        "source_id": "kb-platforms-projects#c000",
+        "tool": "knowledge_search",
+        "confidence": 0.451,
+        "relevance": 0.203
+      },
+      {
+        "id": "E2",
+        "subtask_id": "S1",
+        "claim": "AutoGen(Microsoft):以多 Agent 对话为核心,支持代码执行与群聊式协作,适合研究型与自动化任务;",
+        "quote": "AutoGen(Microsoft):以多 Agent 对话为核心,支持代码执行与群聊式协作,适合研究型与自动化任务;需要额外约束以避免收敛困难与成本失控。",
+        "source_id": "kb-platforms-projects#c000",
+        "tool": "knowledge_search",
+        "confidence": 0.475,
+        "relevance": 0.249
+      },
+      {
+        "id": "E3",
+        "subtask_id": "S1",
+        "claim": "CrewAI:以角色(Role)与任务(Task)为中心的轻量级多 Agent 框架,学习曲线平缓,适合快速搭建流水线型协作。",
+        "quote": "CrewAI:以角色(Role)与任务(Task)为中心的轻量级多 Agent 框架,学习曲线平缓,适合快速搭建流水线型协作。",
+        "source_id": "kb-platforms-projects#c000",
+        "tool": "knowledge_search",
+        "confidence": 0.455,
+        "relevance": 0.21
+      },
+      {
+        "id": "E4",
+        "subtask_id": "S1",
+        "claim": "企业侧的使用重心正在从\"代码补全\"转向\"任务执行\":读取需求、跨仓库检索、修改多个文件、运行测试、提交变更。",
+        "quote": "企业侧的使用重心正在从\"代码补全\"转向\"任务执行\":读取需求、跨仓库检索、修改多个文件、运行测试、提交变更。这类任务要求 Agent 具备工具调用、长上下文编排与可审计的执行轨迹,而不仅是单轮代码生成。",
+        "source_id": "kb-enterprise-adoption#c001",
+        "tool": "knowledge_search",
+        "confidence": 0.452,
+        "relevance": 0.205
+      },
+      {
+        "id": "E5",
+        "subtask_id": "S1",
+        "claim": "低风险高收益场景最先普及:单元测试补全、依赖升级、日志与告警归因、文档与知识库问答、代码评审辅助。",
+        "quote": "低风险高收益场景最先普及:单元测试补全、依赖升级、日志与告警归因、文档与知识库问答、代码评审辅助。中等风险场景包括缺陷修复与小型重构,通常需要人工确认合并。高风险场景(生产变更、权限管理、资金与合规逻辑)仍以人机协同为主,Agent 负责提案与验证,人类负责审批。",
+        "source_id": "kb-enterprise-adoption#c001",
+        "tool": "knowledge_search",
+        "confidence": 0.43,
+        "relevance": 0.159
+      },
+      {
+        "id": "E6",
+        "subtask_id": "S1",
+        "claim": "企业级落地的瓶颈通常不在模型能力,而在:内部知识是否可检索(文档、代码、工单、规范)、身份与权限能否透传到工具层、执行过程能否被审计、失败能否被回滚。",
+        "quote": "企业级落地的瓶颈通常不在模型能力,而在:内部知识是否可检索(文档、代码、工单、规范)、身份与权限能否透传到工具层、执行过程能否被审计、失败能否被回滚。可观测性、沙箱执行与权限最小化是采购评估中的硬性要求。",
+        "source_id": "kb-enterprise-adoption#c003",
+        "tool": "knowledge_search",
+        "confidence": 0.415,
+        "relevance": 0.129
+      },
+      {
+        "id": "E7",
+        "subtask_id": "S1",
+        "claim": "三类形态并存:嵌入 IDE 与代码平台的编码 Agent、构建在通用模型之上的自研 Agent 平台、以及厂商提供的垂直 Agent(如客户服务、销售、I…",
+        "quote": "三类形态并存:嵌入 IDE 与代码平台的编码 Agent、构建在通用模型之上的自研 Agent 平台、以及厂商提供的垂直 Agent(如客户服务、销售、IT 运维)。自研平台的价值在于把企业内部工具通过统一注册表(Registry)与协议(如 MCP)接入,并用评测集量化效果。",
+        "source_id": "kb-enterprise-adoption#c003",
+        "tool": "knowledge_search",
+        "confidence": 0.449,
+        "relevance": 0.198
+      },
+      {
+        "id": "E8",
+        "subtask_id": "S1",
+        "claim": "中等风险场景包括缺陷修复与小型重构,通常需要人工确认合并。",
+        "quote": "中等风险场景包括缺陷修复与小型重构,通常需要人工确认合并。高风险场景(生产变更、权限管理、资金与合规逻辑)仍以人机协同为主,Agent 负责提案与验证,人类负责审批。",
+        "source_id": "kb-enterprise-adoption#c002",
+        "tool": "knowledge_search",
+        "confidence": 0.434,
+        "relevance": 0.168
+      },
+      {
+        "id": "E9",
+        "subtask_id": "S2",
+        "claim": "The dominant cost driver in multi-agent systems is repeated context: each age…",
+        "quote": "The dominant cost driver in multi-agent systems is repeated context: each agent re-reads evidence produced by earlier agents. Cost control patterns include tiered model routing, retrieval caching, summarising evidence before it enters the writing prompt, and hard token budgets pe",
+        "source_id": "web:web_006",
+        "tool": "web_search",
+        "confidence": 0.618,
+        "relevance": 0.536
+      },
+      {
+        "id": "E10",
+        "subtask_id": "S2",
+        "claim": "A platform team deployed an internal research agent over design docs",
+        "quote": "A platform team deployed an internal research agent over design docs, incident post-mortems and service metadata. Adoption succeeded after three changes: adding citation binding so every conclusion points to a stored source, exposing retrieval results in the UI so engineers could",
+        "source_id": "web:web_008",
+        "tool": "web_search",
+        "confidence": 0.607,
+        "relevance": 0.513
+      },
+      {
+        "id": "E11",
+        "subtask_id": "S2",
+        "claim": "Production reviews expect a task-level trace that nests agent spans",
+        "quote": "Production reviews expect a task-level trace that nests agent spans, LLM calls, tool calls, retrieval calls and retries, each with latency, token usage, model, inputs and outputs. Without this, debugging regressions becomes guesswork and incident reviews cannot reconstruct what t",
+        "source_id": "web:web_007",
+        "tool": "web_search",
+        "confidence": 0.606,
+        "relevance": 0.512
+      },
+      {
+        "id": "E12",
+        "subtask_id": "S2",
+        "claim": "Security reviews continue to rank indirect prompt injection as the highest-im…",
+        "quote": "Security reviews continue to rank indirect prompt injection as the highest-impact risk for tool-using agents: untrusted documents or web pages carry instructions that attempt to redirect the agent, exfiltrate data or trigger destructive tool calls. Effective mitigations combine i",
+        "source_id": "web:web_004",
+        "tool": "web_search",
+        "confidence": 0.602,
+        "relevance": 0.504
+      },
+      {
+        "id": "E13",
+        "subtask_id": "S2",
+        "claim": "Multi-agent orchestration is justified when a problem decomposes into genuine…",
+        "quote": "Multi-agent orchestration is justified when a problem decomposes into genuinely different roles with different tools, prompts or permissions, or when independent verification materially reduces error. It is usually not justified for single-step retrieval, formatting tasks or simp",
+        "source_id": "web:web_009",
+        "tool": "web_search",
+        "confidence": 0.604,
+        "relevance": 0.507
+      },
+      {
+        "id": "E14",
+        "subtask_id": "S2",
+        "claim": "常见评估维度包括:任务成功率、人工返工比例、工具调用成功率、单位任务成本与延迟、以及在高风险动作上的审批覆盖率。",
+        "quote": "常见评估维度包括:任务成功率、人工返工比例、工具调用成功率、单位任务成本与延迟、以及在高风险动作上的审批覆盖率。缺少评测与追踪能力的系统难以进入生产环境。",
+        "source_id": "kb-enterprise-adoption#c004",
+        "tool": "mcp_research_context",
+        "confidence": 0.432,
+        "relevance": 0.164
+      },
+      {
+        "id": "E15",
+        "subtask_id": "S5",
+        "claim": "Haystack:面向检索管线的工程化框架,组件边界清晰,便于做检索评测与替换。",
+        "quote": "Haystack:面向检索管线的工程化框架,组件边界清晰,便于做检索评测与替换。",
+        "source_id": "kb-platforms-projects#c001",
+        "tool": "knowledge_search",
+        "confidence": 0.42,
+        "relevance": 0.141
+      }
+    ],
+    "sources": [
+      {
+        "id": "kb-platforms-projects#c000",
+        "kind": "knowledge_base",
+        "title": "代表性项目与平台",
+        "locator": "kb-platforms-projects",
+        "doc_id": "kb-platforms-projects",
+        "chunk_id": "kb-platforms-projects#c000",
+        "url": "",
+        "retrieved_at": "2026-09-13T07:34:31Z",
+        "score": 0.312267,
+        "metadata": {
+          "section": "代表性项目与平台 > 开源编排框架",
+          "position": 0,
+          "chars": 381,
+          "tokens": 262,
+          "id": "kb-platforms-projects",
+          "title": "代表性项目与平台",
+          "source": "internal://research/landscape",
+          "topic": "landscape",
+          "tags": [
+            "landscape",
+            "frameworks",
+            "products"
+          ],
+          "created_at": "2026-03-20T08:00:00+00:00",
+          "retriever": "rerank"
+        }
+      },
+      {
+        "id": "kb-enterprise-adoption#c001",
+        "kind": "knowledge_base",
+        "title": "AI Agent 在企业软件开发中的落地现状",
+        "locator": "kb-enterprise-adoption",
+        "doc_id": "kb-enterprise-adoption",
+        "chunk_id": "kb-enterprise-adoption#c001",
+        "url": "",
+        "retrieved_at": "2026-09-13T07:34:31Z",
+        "score": 0.258616,
+        "metadata": {
+          "section": "AI Agent 在企业软件开发中的落地现状 > 落地场景分层",
+          "position": 1,
+          "chars": 268,
+          "tokens": 223,
+          "id": "kb-enterprise-adoption",
+          "title": "AI Agent 在企业软件开发中的落地现状",
+          "source": "internal://research/enterprise-adoption",
+          "topic": "adoption",
+          "tags": [
+            "enterprise",
+            "adoption",
+            "sdlc",
+            "roi"
+          ],
+          "created_at": "2026-03-04T08:00:00+00:00",
+          "retriever": "rerank"
+        }
+      },
+      {
+        "id": "kb-enterprise-adoption#c003",
+        "kind": "knowledge_base",
+        "title": "AI Agent 在企业软件开发中的落地现状",
+        "locator": "kb-enterprise-adoption",
+        "doc_id": "kb-enterprise-adoption",
+        "chunk_id": "kb-enterprise-adoption#c003",
+        "url": "",
+        "retrieved_at": "2026-09-13T07:34:31Z",
+        "score": 0.258327,
+        "metadata": {
+          "section": "AI Agent 在企业软件开发中的落地现状 > 采购形态",
+          "position": 3,
+          "chars": 274,
+          "tokens": 212,
+          "id": "kb-enterprise-adoption",
+          "title": "AI Agent 在企业软件开发中的落地现状",
+          "source": "internal://research/enterprise-adoption",
+          "topic": "adoption",
+          "tags": [
+            "enterprise",
+            "adoption",
+            "sdlc",
+            "roi"
+          ],
+          "created_at": "2026-03-04T08:00:00+00:00",
+          "retriever": "rerank"
+        }
+      },
+      {
+        "id": "kb-enterprise-adoption#c000",
+        "kind": "knowledge_base",
+        "title": "AI Agent 在企业软件开发中的落地现状",
+        "locator": "kb-enterprise-adoption",
+        "doc_id": "kb-enterprise-adoption",
+        "chunk_id": "kb-enterprise-adoption#c000",
+        "url": "",
+        "retrieved_at": "2026-09-13T07:34:31Z",
+        "score": 0.257226,
+        "metadata": {
+          "section": "AI Agent 在企业软件开发中的落地现状 > 从补全到执行",
+          "position": 0,
+          "chars": 134,
+          "tokens": 108,
+          "id": "kb-enterprise-adoption",
+          "title": "AI Agent 在企业软件开发中的落地现状",
+          "source": "internal://research/enterprise-adoption",
+          "topic": "adoption",
+          "tags": [
+            "enterprise",
+            "adoption",
+            "sdlc",
+            "roi"
+          ],
+          "created_at": "2026-03-04T08:00:00+00:00",
+          "retriever": "rerank"
+        }
+      },
+      {
+        "id": "kb-enterprise-adoption#c002",
+        "kind": "knowledge_base",
+        "title": "AI Agent 在企业软件开发中的落地现状",
+        "locator": "kb-enterprise-adoption",
+        "doc_id": "kb-enterprise-adoption",
+        "chunk_id": "kb-enterprise-adoption#c002",
+        "url": "",
+        "retrieved_at": "2026-09-13T07:34:31Z",
+        "score": 0.257155,
+        "metadata": {
+          "section": "AI Agent 在企业软件开发中的落地现状 > 组织与工程前提",
+          "position": 2,
+          "chars": 221,
+          "tokens": 187,
+          "id": "kb-enterprise-adoption",
+          "title": "AI Agent 在企业软件开发中的落地现状",
+          "source": "internal://research/enterprise-adoption",
+          "topic": "adoption",
+          "tags": [
+            "enterprise",
+            "adoption",
+            "sdlc",
+            "roi"
+          ],
+          "created_at": "2026-03-04T08:00:00+00:00",
+          "retriever": "rerank"
+        }
+      },
+      {
+        "id": "kb-enterprise-adoption#c004",
+        "kind": "knowledge_base",
+        "title": "AI Agent 在企业软件开发中的落地现状",
+        "locator": "kb-enterprise-adoption",
+        "doc_id": "kb-enterprise-adoption",
+        "chunk_id": "kb-enterprise-adoption#c004",
+        "url": "",
+        "retrieved_at": "2026-09-13T07:34:31Z",
+        "score": 0.252471,
+        "metadata": {
+          "section": "AI Agent 在企业软件开发中的落地现状 > 成熟度评估维度",
+          "position": 4,
+          "chars": 111,
+          "tokens": 95,
+          "id": "kb-enterprise-adoption",
+          "title": "AI Agent 在企业软件开发中的落地现状",
+          "source": "internal://research/enterprise-adoption",
+          "topic": "adoption",
+          "tags": [
+            "enterprise",
+            "adoption",
+            "sdlc",
+            "roi"
+          ],
+          "created_at": "2026-03-04T08:00:00+00:00",
+          "retriever": "rerank"
+        }
+      },
+      {
+        "id": "web:web_006",
+        "kind": "web",
+        "title": "Cost control patterns for multi-agent systems",
+        "locator": "https://example.org/notes/multi-agent-cost-control",
+        "doc_id": "",
+        "chunk_id": "",
+        "url": "https://example.org/notes/multi-agent-cost-control",
+        "retrieved_at": "2026-09-13T07:34:31Z",
+        "score": 1.0,
+        "metadata": {
+          "synthetic": true,
+          "date": "2025-10-21",
+          "publisher": "Example Platform Notes"
+        }
+      },
+      {
+        "id": "web:web_008",
+        "kind": "web",
+        "title": "Case study: a research agent in a 200-person platform team",
+        "locator": "https://example.org/cases/platform-team-research-agent",
+        "doc_id": "",
+        "chunk_id": "",
+        "url": "https://example.org/cases/platform-team-research-agent",
+        "retrieved_at": "2026-09-13T07:34:31Z",
+        "score": 0.954057,
+        "metadata": {
+          "synthetic": true,
+          "date": "2025-12-18",
+          "publisher": "Example Case Studies"
+        }
+      },
+      {
+        "id": "web:web_007",
+        "kind": "web",
+        "title": "Observability requirements for production agent workflows",
+        "locator": "https://example.org/reports/agent-observability-requirements",
+        "doc_id": "",
+        "chunk_id": "",
+        "url": "https://example.org/reports/agent-observability-requirements",
+        "retrieved_at": "2026-09-13T07:34:31Z",
+        "score": 0.947159,
+        "metadata": {
+          "synthetic": true,
+          "date": "2026-02-20",
+          "publisher": "Example Research"
+        }
+      },
+      {
+        "id": "web:web_004",
+        "kind": "web",
+        "title": "Prompt injection remains the top agent security risk",
+        "locator": "https://example.org/security/agent-injection-2026",
+        "doc_id": "",
+        "chunk_id": "",
+        "url": "https://example.org/security/agent-injection-2026",
+        "retrieved_at": "2026-09-13T07:34:31Z",
+        "score": 0.932656,
+        "metadata": {
+          "synthetic": true,
+          "date": "2026-01-06",
+          "publisher": "Example Security Review"
+        }
+      },
+      {
+        "id": "web:web_009",
+        "kind": "web",
+        "title": "When not to use multi-agent orchestration",
+        "locator": "https://example.org/notes/when-not-multi-agent",
+        "doc_id": "",
+        "chunk_id": "",
+        "url": "https://example.org/notes/when-not-multi-agent",
+        "retrieved_at": "2026-09-13T07:34:31Z",
+        "score": 0.932656,
+        "metadata": {
+          "synthetic": true,
+          "date": "2025-11-05",
+          "publisher": "Example Platform Notes"
+        }
+      },
+      {
+        "id": "kb-platforms-projects#full",
+        "kind": "document",
+        "title": "代表性项目与平台",
+        "locator": "kb-platforms-projects",
+        "doc_id": "kb-platforms-projects",
+        "chunk_id": "",
+        "url": "",
+        "retrieved_at": "2026-09-13T07:34:31Z",
+        "score": 0.0,
+        "metadata": {
+          "id": "kb-platforms-projects",
+          "title": "代表性项目与平台",
+          "source": "internal://research/landscape",
+          "topic": "landscape",
+          "tags": [
+            "landscape",
+            "frameworks",
+            "products"
+          ],
+          "created_at": "2026-03-20T08:00:00+00:00",
+          "truncated": false
+        }
+      },
+      {
+        "id": "kb-platforms-projects#c001",
+        "kind": "knowledge_base",
+        "title": "代表性项目与平台",
+        "locator": "kb-platforms-projects",
+        "doc_id": "kb-platforms-projects",
+        "chunk_id": "kb-platforms-projects#c001",
+        "url": "",
+        "retrieved_at": "2026-09-13T07:34:31Z",
+        "score": 0.283159,
+        "metadata": {
+          "section": "代表性项目与平台 > 厂商与平台产品",
+          "position": 1,
+          "chars": 400,
+          "tokens": 226,
+          "id": "kb-platforms-projects",
+          "title": "代表性项目与平台",
+          "source": "internal://research/landscape",
+          "topic": "landscape",
+          "tags": [
+            "landscape",
+            "frameworks",
+            "products"
+          ],
+          "created_at": "2026-03-20T08:00:00+00:00",
+          "retriever": "rerank"
+        }
+      },
+      {
+        "id": "web:web_002",
+        "kind": "web",
+        "title": "MCP adoption: from protocol proposal to enterprise tool gateway",
+        "locator": "https://example.org/notes/mcp-enterprise-gateway",
+        "doc_id": "",
+        "chunk_id": "",
+        "url": "https://example.org/notes/mcp-enterprise-gateway",
+        "retrieved_at": "2026-09-13T07:34:31Z",
+        "score": 0.931786,
+        "metadata": {
+          "synthetic": true,
+          "date": "2026-02-09",
+          "publisher": "Example Platform Notes"
+        }
+      }
+    ],
+    "gaps": [],
+    "iterations": 2,
+    "tool_calls": 28
+  },
+  "verification": {
+    "checks": [
+      {
+        "evidence_id": "E1",
+        "statement": "LangGraph:以图结构表达 Agent 状态机,支持持久化检查点与人工介入,适合需要可控流程与恢复能力的生产系统。",
+        "status": "supported",
+        "reason": "; quote grounding=1.00, claim support=1.00, relevance=0.33",
+        "overlap": 1.0
+      },
+      {
+        "evidence_id": "E2",
+        "statement": "AutoGen(Microsoft):以多 Agent 对话为核心,支持代码执行与群聊式协作,适合研究型与自动化任务;",
+        "status": "supported",
+        "reason": "; quote grounding=1.00, claim support=1.00, relevance=0.33",
+        "overlap": 1.0
+      },
+      {
+        "evidence_id": "E3",
+        "statement": "CrewAI:以角色(Role)与任务(Task)为中心的轻量级多 Agent 框架,学习曲线平缓,适合快速搭建流水线型协作。",
+        "status": "supported",
+        "reason": "; quote grounding=1.00, claim support=1.00, relevance=0.33",
+        "overlap": 1.0
+      },
+      {
+        "evidence_id": "E4",
+        "statement": "企业侧的使用重心正在从\"代码补全\"转向\"任务执行\":读取需求、跨仓库检索、修改多个文件、运行测试、提交变更。",
+        "status": "supported",
+        "reason": "; quote grounding=1.00, claim support=1.00, relevance=0.27",
+        "overlap": 1.0
+      },
+      {
+        "evidence_id": "E5",
+        "statement": "低风险高收益场景最先普及:单元测试补全、依赖升级、日志与告警归因、文档与知识库问答、代码评审辅助。",
+        "status": "supported",
+        "reason": "; quote grounding=1.00, claim support=1.00, relevance=0.27",
+        "overlap": 1.0
+      },
+      {
+        "evidence_id": "E6",
+        "statement": "企业级落地的瓶颈通常不在模型能力,而在:内部知识是否可检索(文档、代码、工单、规范)、身份与权限能否透传到工具层、执行过程能否被审计、失败能否被回滚。",
+        "status": "supported",
+        "reason": "; quote grounding=1.00, claim support=1.00, relevance=0.27",
+        "overlap": 1.0
+      },
+      {
+        "evidence_id": "E7",
+        "statement": "三类形态并存:嵌入 IDE 与代码平台的编码 Agent、构建在通用模型之上的自研 Agent 平台、以及厂商提供的垂直 Agent(如客户服务、销售、I…",
+        "status": "supported",
+        "reason": "; quote grounding=1.00, claim support=0.99, relevance=0.27",
+        "overlap": 0.988
+      },
+      {
+        "evidence_id": "E8",
+        "statement": "中等风险场景包括缺陷修复与小型重构,通常需要人工确认合并。",
+        "status": "supported",
+        "reason": "; quote grounding=1.00, claim support=1.00, relevance=0.27",
+        "overlap": 1.0
+      },
+      {
+        "evidence_id": "E9",
+        "statement": "The dominant cost driver in multi-agent systems is repeated context: each age…",
+        "status": "supported",
+        "reason": "; quote grounding=0.97, claim support=0.92, relevance=0.07",
+        "overlap": 0.923
+      },
+      {
+        "evidence_id": "E10",
+        "statement": "A platform team deployed an internal research agent over design docs",
+        "status": "supported",
+        "reason": "; quote grounding=1.00, claim support=1.00, relevance=0.07",
+        "overlap": 1.0
+      },
+      {
+        "evidence_id": "E11",
+        "statement": "Production reviews expect a task-level trace that nests agent spans",
+        "status": "supported",
+        "reason": "; quote grounding=0.97, claim support=1.00, relevance=0.07",
+        "overlap": 1.0
+      },
+      {
+        "evidence_id": "E12",
+        "statement": "Security reviews continue to rank indirect prompt injection as the highest-im…",
+        "status": "supported",
+        "reason": "; quote grounding=0.97, claim support=0.92, relevance=0.07",
+        "overlap": 0.917
+      },
+      {
+        "evidence_id": "E13",
+        "statement": "Multi-agent orchestration is justified when a problem decomposes into genuine…",
+        "status": "supported",
+        "reason": "; quote grounding=0.97, claim support=0.91, relevance=0.07",
+        "overlap": 0.909
+      },
+      {
+        "evidence_id": "E14",
+        "statement": "常见评估维度包括:任务成功率、人工返工比例、工具调用成功率、单位任务成本与延迟、以及在高风险动作上的审批覆盖率。",
+        "status": "supported",
+        "reason": "; quote grounding=1.00, claim support=1.00, relevance=0.27",
+        "overlap": 1.0
+      },
+      {
+        "evidence_id": "E15",
+        "statement": "Haystack:面向检索管线的工程化框架,组件边界清晰,便于做检索评测与替换。",
+        "status": "supported",
+        "reason": "; quote grounding=1.00, claim support=1.00, relevance=0.27",
+        "overlap": 1.0
+      }
+    ],
+    "unsupported_claims": [],
+    "flagged_sources": [],
+    "source_quality": {
+      "kb-platforms-projects#c000": 0.85,
+      "kb-enterprise-adoption#c001": 0.85,
+      "kb-enterprise-adoption#c003": 0.85,
+      "kb-enterprise-adoption#c002": 0.85,
+      "web:web_006": 0.5,
+      "web:web_008": 0.5,
+      "web:web_007": 0.5,
+      "web:web_004": 0.5,
+      "web:web_009": 0.5,
+      "kb-enterprise-adoption#c004": 0.85,
+      "kb-platforms-projects#c001": 0.85
+    },
+    "coverage_score": 0.5,
+    "sufficient": true,
+    "missing_topics": [
+      "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 对比主要技术路线与实现方案",
+      "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 收集代表性项目/框架案例并提取关键事实",
+      "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 汇总可追溯的参考资料与出处元数据"
+    ],
+    "overall_score": 0.829
+  },
+  "critique": {
+    "issues": [
+      {
+        "severity": "high",
+        "category": "coverage",
+        "description": "子任务缺少证据支撑：分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 对比主要技术路线与实现方案",
+        "suggested_fix": "补充一次针对性检索（知识库优先，其次 Web）"
+      },
+      {
+        "severity": "high",
+        "category": "coverage",
+        "description": "子任务缺少证据支撑：分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 收集代表性项目/框架案例并提取关键事实",
+        "suggested_fix": "补充一次针对性检索（知识库优先，其次 Web）"
+      },
+      {
+        "severity": "high",
+        "category": "coverage",
+        "description": "子任务缺少证据支撑：分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 汇总可追溯的参考资料与出处元数据",
+        "suggested_fix": "补充一次针对性检索（知识库优先，其次 Web）"
+      }
+    ],
+    "needs_more_research": true,
+    "follow_up_queries": [
+      "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 对比主要技术路线与实现方案",
+      "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 收集代表性项目/框架案例并提取关键事实",
+      "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 汇总可追溯的参考资料与出处元数据"
+    ],
+    "coverage": {
+      "subtask_coverage": 0.5,
+      "evidence_count": 15.0,
+      "high_severity_issues": 3.0
+    },
+    "overall_assessment": "研究基本覆盖目标问题，仍存在上述缺口，建议按 follow-up 查询补检。"
+  },
+  "report": {
+    "title": "研究报告：分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。",
+    "executive_summary": "本研究围绕“分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。”完成 15 条证据采集，其中 15 条通过支撑性校验。核心发现包括：The dominant cost driver in multi-agent systems is repeated… [E9]；A platform team deployed an internal research agent over de… [E10]；Production reviews expect a task-level trace that nests age… [E11]。证据仍存在缺口：分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性…；分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性…；分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性…。",
+    "conclusions": [
+      {
+        "statement": "The dominant cost driver in multi-agent systems is repeated context: each age…",
+        "evidence_ids": [
+          "E9"
+        ],
+        "confidence": 0.618
+      },
+      {
+        "statement": "A platform team deployed an internal research agent over design docs",
+        "evidence_ids": [
+          "E10"
+        ],
+        "confidence": 0.607
+      },
+      {
+        "statement": "Production reviews expect a task-level trace that nests agent spans",
+        "evidence_ids": [
+          "E11"
+        ],
+        "confidence": 0.606
+      },
+      {
+        "statement": "Multi-agent orchestration is justified when a problem decomposes into genuine…",
+        "evidence_ids": [
+          "E13"
+        ],
+        "confidence": 0.604
+      },
+      {
+        "statement": "Security reviews continue to rank indirect prompt injection as the highest-im…",
+        "evidence_ids": [
+          "E12"
+        ],
+        "confidence": 0.602
+      }
+    ],
+    "sections": [
+      {
+        "heading": "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 先界定核心概念、范围与关键…",
+        "body": "- AutoGen(Microsoft):以多 Agent 对话为核心,支持代码执行与群聊式协作,适合研究型与自动化任务; [E2]（来源：kb-platforms-projects#c000）\n- CrewAI:以角色(Role)与任务(Task)为中心的轻量级多 Agent 框架,学习曲线平缓,适合快速搭建流水线型协作。 [E3]（来源：kb-platforms-projects#c000）\n- 企业侧的使用重心正在从\"代码补全\"转向\"任务执行\":读取需求、跨仓库检索、修改多个文件、运行测试、提交变更。 [E4]（来源：kb-enterprise-adoption#c001）\n- LangGraph:以图结构表达 Agent 状态机,支持持久化检查点与人工介入,适合需要可控流程与恢复能力的生产系统。 [E1]（来源：kb-platforms-projects#c000）\n- 三类形态并存:嵌入 IDE 与代码平台的编码 Agent、构建在通用模型之上的自研 Agent 平台、以及厂商提供的垂直 Agent(如客户服务、销售、I… [E7]（来源：kb-enterprise-adoption#c003）\n- 中等风险场景包括缺陷修复与小型重构,通常需要人工确认合并。 [E8]（来源：kb-enterprise-adoption#c002）\n- 低风险高收益场景最先普及:单元测试补全、依赖升级、日志与告警归因、文档与知识库问答、代码评审辅助。 [E5]（来源：kb-enterprise-adoption#c001）\n- 企业级落地的瓶颈通常不在模型能力,而在:内部知识是否可检索(文档、代码、工单、规范)、身份与权限能否透传到工具层、执行过程能否被审计、失败能否被回滚。 [E6]（来源：kb-enterprise-adoption#c003）",
+        "evidence_ids": [
+          "E2",
+          "E3",
+          "E4",
+          "E1",
+          "E7",
+          "E8",
+          "E5",
+          "E6"
+        ]
+      },
+      {
+        "heading": "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 梳理当前应用趋势与落地现状…",
+        "body": "- The dominant cost driver in multi-agent systems is repeated context: each age… [E9]（来源：web:web_006）\n- A platform team deployed an internal research agent over design docs [E10]（来源：web:web_008）\n- Production reviews expect a task-level trace that nests agent spans [E11]（来源：web:web_007）\n- Multi-agent orchestration is justified when a problem decomposes into genuine… [E13]（来源：web:web_009）\n- Security reviews continue to rank indirect prompt injection as the highest-im… [E12]（来源：web:web_004）\n- 常见评估维度包括:任务成功率、人工返工比例、工具调用成功率、单位任务成本与延迟、以及在高风险动作上的审批覆盖率。 [E14]（来源：kb-enterprise-adoption#c004）",
+        "evidence_ids": [
+          "E9",
+          "E10",
+          "E11",
+          "E13",
+          "E12",
+          "E14"
+        ]
+      },
+      {
+        "heading": "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 对比主要技术路线与实现方案",
+        "body": "- 该子任务未获得可引用证据，结论待补充（见 limitations）。",
+        "evidence_ids": []
+      },
+      {
+        "heading": "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 收集代表性项目/框架案例并…",
+        "body": "- 该子任务未获得可引用证据，结论待补充（见 limitations）。",
+        "evidence_ids": []
+      },
+      {
+        "heading": "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 归纳优势、局限与风险，并给…",
+        "body": "- Haystack:面向检索管线的工程化框架,组件边界清晰,便于做检索评测与替换。 [E15]（来源：kb-platforms-projects#c001）",
+        "evidence_ids": [
+          "E15"
+        ]
+      },
+      {
+        "heading": "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 汇总可追溯的参考资料与出处…",
+        "body": "- 该子任务未获得可引用证据，结论待补充（见 limitations）。",
+        "evidence_ids": []
+      },
+      {
+        "heading": "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 交叉验证证据并形成结论",
+        "body": "- 该子任务未获得可引用证据，结论待补充（见 limitations）。",
+        "evidence_ids": []
+      }
+    ],
+    "recommendations": [
+      "针对“分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 对比主…”补充一手资料后更新结论。",
+      "针对“分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 收集代…”补充一手资料后更新结论。",
+      "针对“分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 汇总可…”补充一手资料后更新结论。",
+      "补充一次针对性检索（知识库优先，其次 Web）",
+      "补充一次针对性检索（知识库优先，其次 Web）"
+    ],
+    "limitations": [
+      "部分子问题缺少直接证据，相关结论以现有资料为限。"
+    ],
+    "dropped_citations": [],
+    "markdown": "# 研究报告：分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。\n\n## 执行摘要 (Executive Summary)\n\n本研究围绕“分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。”完成 15 条证据采集，其中 15 条通过支撑性校验。核心发现包括：The dominant cost driver in multi-agent systems is repeated… [E9]；A platform team deployed an internal research agent over de… [E10]；Production reviews expect a task-level trace that nests age… [E11]。证据仍存在缺口：分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性…；分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性…；分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性…。\n\n## 关键结论 (Key Findings)\n\n- The dominant cost driver in multi-agent systems is repeated context: each age… [E9]  _(confidence=0.62)_\n- A platform team deployed an internal research agent over design docs [E10]  _(confidence=0.61)_\n- Production reviews expect a task-level trace that nests agent spans [E11]  _(confidence=0.61)_\n- Multi-agent orchestration is justified when a problem decomposes into genuine… [E13]  _(confidence=0.60)_\n- Security reviews continue to rank indirect prompt injection as the highest-im… [E12]  _(confidence=0.60)_\n\n## 详细分析 (Analysis)\n\n### 分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 先界定核心概念、范围与关键…\n\n- AutoGen(Microsoft):以多 Agent 对话为核心,支持代码执行与群聊式协作,适合研究型与自动化任务; [E2]（来源：kb-platforms-projects#c000）\n- CrewAI:以角色(Role)与任务(Task)为中心的轻量级多 Agent 框架,学习曲线平缓,适合快速搭建流水线型协作。 [E3]（来源：kb-platforms-projects#c000）\n- 企业侧的使用重心正在从\"代码补全\"转向\"任务执行\":读取需求、跨仓库检索、修改多个文件、运行测试、提交变更。 [E4]（来源：kb-enterprise-adoption#c001）\n- LangGraph:以图结构表达 Agent 状态机,支持持久化检查点与人工介入,适合需要可控流程与恢复能力的生产系统。 [E1]（来源：kb-platforms-projects#c000）\n- 三类形态并存:嵌入 IDE 与代码平台的编码 Agent、构建在通用模型之上的自研 Agent 平台、以及厂商提供的垂直 Agent(如客户服务、销售、I… [E7]（来源：kb-enterprise-adoption#c003）\n- 中等风险场景包括缺陷修复与小型重构,通常需要人工确认合并。 [E8]（来源：kb-enterprise-adoption#c002）\n- 低风险高收益场景最先普及:单元测试补全、依赖升级、日志与告警归因、文档与知识库问答、代码评审辅助。 [E5]（来源：kb-enterprise-adoption#c001）\n- 企业级落地的瓶颈通常不在模型能力,而在:内部知识是否可检索(文档、代码、工单、规范)、身份与权限能否透传到工具层、执行过程能否被审计、失败能否被回滚。 [E6]（来源：kb-enterprise-adoption#c003）\n\n### 分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 梳理当前应用趋势与落地现状…\n\n- The dominant cost driver in multi-agent systems is repeated context: each age… [E9]（来源：web:web_006）\n- A platform team deployed an internal research agent over design docs [E10]（来源：web:web_008）\n- Production reviews expect a task-level trace that nests agent spans [E11]（来源：web:web_007）\n- Multi-agent orchestration is justified when a problem decomposes into genuine… [E13]（来源：web:web_009）\n- Security reviews continue to rank indirect prompt injection as the highest-im… [E12]（来源：web:web_004）\n- 常见评估维度包括:任务成功率、人工返工比例、工具调用成功率、单位任务成本与延迟、以及在高风险动作上的审批覆盖率。 [E14]（来源：kb-enterprise-adoption#c004）\n\n### 分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 对比主要技术路线与实现方案\n\n- 该子任务未获得可引用证据，结论待补充（见 limitations）。\n\n### 分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 收集代表性项目/框架案例并…\n\n- 该子任务未获得可引用证据，结论待补充（见 limitations）。\n\n### 分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 归纳优势、局限与风险，并给…\n\n- Haystack:面向检索管线的工程化框架,组件边界清晰,便于做检索评测与替换。 [E15]（来源：kb-platforms-projects#c001）\n\n### 分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 汇总可追溯的参考资料与出处…\n\n- 该子任务未获得可引用证据，结论待补充（见 limitations）。\n\n### 分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 交叉验证证据并形成结论\n\n- 该子任务未获得可引用证据，结论待补充（见 limitations）。\n\n## 建议 (Recommendations)\n\n- 针对“分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 对比主…”补充一手资料后更新结论。\n- 针对“分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 收集代…”补充一手资料后更新结论。\n- 针对“分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。 —— 汇总可…”补充一手资料后更新结论。\n- 补充一次针对性检索（知识库优先，其次 Web）\n- 补充一次针对性检索（知识库优先，其次 Web）\n\n## 局限与待补 (Limitations)\n\n- 部分子问题缺少直接证据，相关结论以现有资料为限。\n\n## 参考文献 (References)\n\n1. **代表性项目与平台** — knowledge_base — `kb-platforms-projects` (retrieved 2026-09-13T07:34:31Z)\n2. **When not to use multi-agent orchestration** — web — `https://example.org/notes/when-not-multi-agent` (retrieved 2026-09-13T07:34:31Z)\n3. **Case study: a research agent in a 200-person platform team** — web — `https://example.org/cases/platform-team-research-agent` (retrieved 2026-09-13T07:34:31Z)\n4. **Prompt injection remains the top agent security risk** — web — `https://example.org/security/agent-injection-2026` (retrieved 2026-09-13T07:34:31Z)\n5. **Observability requirements for production agent workflows** — web — `https://example.org/reports/agent-observability-requirements` (retrieved 2026-09-13T07:34:31Z)\n6. **AI Agent 在企业软件开发中的落地现状** — knowledge_base — `kb-enterprise-adoption` (retrieved 2026-09-13T07:34:31Z)\n7. **代表性项目与平台** — knowledge_base — `kb-platforms-projects` (retrieved 2026-09-13T07:34:31Z)\n8. **Cost control patterns for multi-agent systems** — web — `https://example.org/notes/multi-agent-cost-control` (retrieved 2026-09-13T07:34:31Z)\n9. **AI Agent 在企业软件开发中的落地现状** — knowledge_base — `kb-enterprise-adoption` (retrieved 2026-09-13T07:34:31Z)\n10. **AI Agent 在企业软件开发中的落地现状** — knowledge_base — `kb-enterprise-adoption` (retrieved 2026-09-13T07:34:31Z)\n11. **AI Agent 在企业软件开发中的落地现状** — knowledge_base — `kb-enterprise-adoption` (retrieved 2026-09-13T07:34:31Z)\n\n## 证据附录 (Evidence)\n\n| id | claim | quote | source | confidence |\n| --- | --- | --- | --- | --- |\n| E1 | LangGraph:以图结构表达 Agent 状态机,支持持久化检查点与人工介入,适合需要可控流程与恢复能力的生产系统。 | LangGraph:以图结构表达 Agent 状态机,支持持久化检查点与人工介入,适合需要可控流程与恢复能力的生产系统。代价是抽象较多、上手成本偏高。 | [1] 代表性项目与平台 | 0.45 |\n| E2 | AutoGen(Microsoft):以多 Agent 对话为核心,支持代码执行与群聊式协作,适合研究型与自动化任务; | AutoGen(Microsoft):以多 Agent 对话为核心,支持代码执行与群聊式协作,适合研究型与自动化任务;需要额外约束以避免收敛困难与成本失控。 | [1] 代表性项目与平台 | 0.47 |\n| E3 | CrewAI:以角色(Role)与任务(Task)为中心的轻量级多 Agent 框架,学习曲线平缓,适合快速搭建流水线型协作。 | CrewAI:以角色(Role)与任务(Task)为中心的轻量级多 Agent 框架,学习曲线平缓,适合快速搭建流水线型协作。 | [1] 代表性项目与平台 | 0.46 |\n| E4 | 企业侧的使用重心正在从\"代码补全\"转向\"任务执行\":读取需求、跨仓库检索、修改多个文件、运行测试、提交变更。 | 企业侧的使用重心正在从\"代码补全\"转向\"任务执行\":读取需求、跨仓库检索、修改多个文件、运行测试、提交变更。这类任务要求 Agent 具备工具调用、长上下文编排与可审计的执行轨迹,而不仅是单轮代码生成。 | [9] AI Agent 在企业软件开发中的落地现状 | 0.45 |\n| E5 | 低风险高收益场景最先普及:单元测试补全、依赖升级、日志与告警归因、文档与知识库问答、代码评审辅助。 | 低风险高收益场景最先普及:单元测试补全、依赖升级、日志与告警归因、文档与知识库问答、代码评审辅助。中等风险场景包括缺陷修复与小型重构,通常需要人工确认合并。高风险场景(生产变更、权限管理、资金与合规逻辑)仍以人机协同为主,Agent 负责提案与验证,人类负责审批。 | [9] AI Agent 在企业软件开发中的落地现状 | 0.43 |\n| E6 | 企业级落地的瓶颈通常不在模型能力,而在:内部知识是否可检索(文档、代码、工单、规范)、身份与权限能否透传到工具层、执行过程能否被审计、失败能否被回滚。 | 企业级落地的瓶颈通常不在模型能力,而在:内部知识是否可检索(文档、代码、工单、规范)、身份与权限能否透传到工具层、执行过程能否被审计、失败能否被回滚。可观测性、沙箱执行与权限最小化是采购评估中的硬性要求。 | [6] AI Agent 在企业软件开发中的落地现状 | 0.41 |\n| E7 | 三类形态并存:嵌入 IDE 与代码平台的编码 Agent、构建在通用模型之上的自研 Agent 平台、以及厂商提供的垂直 Agent(如客户服务、销售、I… | 三类形态并存:嵌入 IDE 与代码平台的编码 Agent、构建在通用模型之上的自研 Agent 平台、以及厂商提供的垂直 Agent(如客户服务、销售、IT 运维)。自研平台的价值在于把企业内部工具通过统一注册表(Registry)与协议(如 MCP)接入,并用评测集量化效果。 | [6] AI Agent 在企业软件开发中的落地现状 | 0.45 |\n| E8 | 中等风险场景包括缺陷修复与小型重构,通常需要人工确认合并。 | 中等风险场景包括缺陷修复与小型重构,通常需要人工确认合并。高风险场景(生产变更、权限管理、资金与合规逻辑)仍以人机协同为主,Agent 负责提案与验证,人类负责审批。 | [11] AI Agent 在企业软件开发中的落地现状 | 0.43 |\n| E9 | The dominant cost driver in multi-agent systems is repeated context: each age… | The dominant cost driver in multi-agent systems is repeated context: each agent re-reads evidence produced by earlier agents. Cost control patterns include tie… | [8] Cost control patterns for multi-agent systems | 0.62 |\n| E10 | A platform team deployed an internal research agent over design docs | A platform team deployed an internal research agent over design docs, incident post-mortems and service metadata. Adoption succeeded after three changes: addin… | [3] Case study: a research agent in a 200-person platform team | 0.61 |\n| E11 | Production reviews expect a task-level trace that nests agent spans | Production reviews expect a task-level trace that nests agent spans, LLM calls, tool calls, retrieval calls and retries, each with latency, token usage, model,… | [5] Observability requirements for production agent workflows | 0.61 |\n| E12 | Security reviews continue to rank indirect prompt injection as the highest-im… | Security reviews continue to rank indirect prompt injection as the highest-impact risk for tool-using agents: untrusted documents or web pages carry instructio… | [4] Prompt injection remains the top agent security risk | 0.60 |\n| E13 | Multi-agent orchestration is justified when a problem decomposes into genuine… | Multi-agent orchestration is justified when a problem decomposes into genuinely different roles with different tools, prompts or permissions, or when independe… | [2] When not to use multi-agent orchestration | 0.60 |\n| E14 | 常见评估维度包括:任务成功率、人工返工比例、工具调用成功率、单位任务成本与延迟、以及在高风险动作上的审批覆盖率。 | 常见评估维度包括:任务成功率、人工返工比例、工具调用成功率、单位任务成本与延迟、以及在高风险动作上的审批覆盖率。缺少评测与追踪能力的系统难以进入生产环境。 | [10] AI Agent 在企业软件开发中的落地现状 | 0.43 |\n| E15 | Haystack:面向检索管线的工程化框架,组件边界清晰,便于做检索评测与替换。 | Haystack:面向检索管线的工程化框架,组件边界清晰,便于做检索评测与替换。 | [7] 代表性项目与平台 | 0.42 |\n"
+  },
+  "metrics": {
+    "latency_ms": 4079.447,
+    "llm_calls": 32,
+    "tool_calls": 28,
+    "tool_failures": 0,
+    "retrieval_calls": 18,
+    "retries": 0,
+    "mcp_calls": 2,
+    "iterations": 2,
+    "usage": {
+      "prompt_tokens": 56276,
+      "completion_tokens": 22583,
+      "total_tokens": 78859,
+      "cost_usd": 0.0
+    },
+    "agent_latency_ms": {
+      "PlannerAgent": 571.449,
+      "ResearchAgent": 1659.551,
+      "VerifierAgent": 702.852,
+      "CriticAgent": 711.736,
+      "pipeline.iteration[2]": 405.907,
+      "WriterAgent": 433.859
+    }
+  },
+  "errors": [],
+  "created_at": "2026-09-13T07:34:30Z",
+  "completed_at": "2026-09-13T07:34:31Z"
+}

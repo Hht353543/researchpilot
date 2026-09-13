@@ -1,0 +1,47 @@
+services:
+  api:
+    build: .
+    image: researchpilot:latest
+    command: uvicorn researchpilot.api.app:create_app --factory --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      RESEARCHPILOT_PROVIDER: ${RESEARCHPILOT_PROVIDER:-mock}
+      RESEARCHPILOT_MODEL: ${MODEL:-gpt-4o-mini}
+      RESEARCHPILOT_API_KEY: ${API_KEY:-}
+      RESEARCHPILOT_BASE_URL: ${BASE_URL:-https://api.openai.com/v1}
+      RESEARCHPILOT_MCP_TRANSPORT: http
+      RESEARCHPILOT_MCP_URL: http://mcp:8765/mcp
+      RESEARCHPILOT_KB_PATH: /app/data/knowledge_base
+      RESEARCHPILOT_RUNS_PATH: /app/runs
+    volumes:
+      - runs:/app/runs
+    depends_on:
+      - mcp
+    restart: unless-stopped
+
+  # The MCP server is a first-class service: it can be scaled / restarted on its own
+  # and is consumed by the API over the streamable-HTTP transport.
+  mcp:
+    build: .
+    image: researchpilot:latest
+    command: python -m researchpilot.mcp_server
+    ports:
+      - "8765:8765"
+    environment:
+      RESEARCHPILOT_MCP_TRANSPORT: http
+      RESEARCHPILOT_MCP_HOST: 0.0.0.0
+      RESEARCHPILOT_MCP_PORT: "8765"
+      RESEARCHPILOT_KB_PATH: /app/data/knowledge_base
+      RESEARCHPILOT_RUNS_PATH: /app/runs
+    volumes:
+      - runs:/app/runs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8765/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  runs:
