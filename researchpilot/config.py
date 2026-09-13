@@ -73,6 +73,7 @@ class Settings(BaseSettings):
     retrieve_k: int = 12
     max_iterations: int = 2
     rerank_strategy: Literal["heuristic", "llm"] = "heuristic"
+    tool_cache_ttl_s: float = 60.0
 
     # --- Paths ---------------------------------------------------------------
     kb_path: str = "data/knowledge_base"
@@ -87,8 +88,10 @@ class Settings(BaseSettings):
 
     # --- Web search ----------------------------------------------------------
     web_search_mode: WebSearchMode = "offline"
+    web_corpus_path: str = "data/web_corpus"
     web_search_url: str = ""
     web_search_timeout_s: float = 10.0
+    web_search_allowed_hosts: str = ""
 
     # --- Misc ----------------------------------------------------------------
     log_level: str = "INFO"
@@ -96,7 +99,9 @@ class Settings(BaseSettings):
     pricing_file: str = "configs/pricing.yaml"
 
     def kb_dir(self) -> Path:
-        return Path(self.kb_path)
+        from researchpilot.utils import resolve_input_path
+
+        return resolve_input_path(self.kb_path)
 
     def runs_dir(self) -> Path:
         return Path(self.runs_path)
@@ -112,9 +117,9 @@ class Settings(BaseSettings):
             "gpt-4.1-mini": {"input": 0.4, "output": 1.6},
             "deepseek-chat": {"input": 0.27, "output": 1.1},
         }
-        from researchpilot.utils import load_pricing_file
+        from researchpilot.utils import load_pricing_file, resolve_input_path
 
-        table.update(load_pricing_file(self.pricing_file))
+        table.update(load_pricing_file(resolve_input_path(self.pricing_file)))
         return table
 
 

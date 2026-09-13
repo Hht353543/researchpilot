@@ -104,6 +104,23 @@ class ToolContext:
         return value
 
 
+@dataclass
+class ToolRequestContext:
+    """What an agent knows when it decides how to call a tool for one sub-task.
+
+    Tools own the policy that turns a research sub-task into their own typed
+    arguments, so agents never need ``if tool_name == ...`` dispatch chains.
+    """
+
+    question: str
+    subtask_id: str = ""
+    agent: str = ""
+    top_k: int = 6
+    doc_id_hint: str = ""
+    settings: Settings | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
+
+
 class BaseTool(ABC):
     """Subclasses declare ``name``/``description``/``args_model`` and implement ``run``."""
 
@@ -119,6 +136,14 @@ class BaseTool(ABC):
 
     @abstractmethod
     def run(self, args: BaseModel, ctx: ToolContext) -> ToolResult: ...
+
+    def build_arguments(self, request: ToolRequestContext) -> dict[str, Any] | None:
+        """Default auto-invocation policy for this tool.
+
+        Returning ``None`` means "this tool needs information the agent does not
+        have; skip it for this sub-task" (e.g. ``document_reader`` without a doc id).
+        """
+        return None
 
     def validate(self, arguments: dict[str, Any]) -> BaseModel:
         return self.args_model.model_validate(arguments or {})

@@ -17,7 +17,10 @@ services:
     volumes:
       - runs:/app/runs
     depends_on:
-      - mcp
+      mcp:
+        # Wait for the MCP server healthcheck so the API really talks HTTP to it
+        # instead of falling back to the in-process client during startup.
+        condition: service_healthy
     restart: unless-stopped
 
   # The MCP server is a first-class service: it can be scaled / restarted on its own

@@ -161,7 +161,18 @@ Base URL：`http://127.0.0.1:8000`（`python -m researchpilot.cli serve`）
 
 ### `POST /kb/reindex`
 
-重新读取 `RESEARCHPILOT_KB_PATH` 下的全部文档并重建索引（返回入库统计）。
+**全量重建**索引：先清空现有 chunk，再重新读取 `RESEARCHPILOT_KB_PATH` 下的全部文档。
+磁盘上被删除/改名的文件不会残留在索引中（返回入库统计）。
+
+### `DELETE /kb/documents/{doc_id}`
+
+删除文档及其全部 chunk：
+
+```json
+{"doc_id": "kb-fixture-memory", "chunks_removed": 1, "stats": {"documents": 4, "chunks": 9}}
+```
+
+未知 `doc_id` 返回 `404`。
 
 ---
 
@@ -204,3 +215,19 @@ Base URL：`http://127.0.0.1:8000`（`python -m researchpilot.cli serve`）
 | `503` | Provider 配置缺失（如选择了 `openai` 但未设置 `API_KEY`） |
 
 所有响应都带 `X-Process-Time-Ms`；服务端日志记录方法、路径、状态码与耗时。
+
+### 运行时故障 vs 部署期故障
+
+| 场景 | 行为 | 原因 |
+| --- | --- | --- |
+| 部署期 provider 配置错误（如 `provider=openai` 但没有 `API_KEY`） | 启动即失败（`LLMConfigError`，附带修复提示） | 配置错误应当 fail-fast，不能静默退回 mock 模型 |
+| 运行时上游不可用（网络错误、超时、5xx、本地检索已成功的场景） | `200` + `status="degraded"`（或 `failed`），`errors[]` 记录原因，报告由本地证据生成或显式声明缺口 | 研究任务本身仍然产出一份可审计的结果文档 |
+| 请求体/参数非法 | `422` | FastAPI + Pydantic 校验 |
+| 未知 task/doc | `404` | 资源不存在 |
+| token 预算耗尽 | `429` | `BudgetExceededError` |
+
+### `GET /health` 与 MCP 传输
+
+`/health` 返回实际生效的 MCP 传输（`inprocess` / `stdio` / `http` / `inprocess-fallback`）。
+当 API 与 MCP 作为两个容器部署时（`docker-compose.yml`），API 会重试连接 MCP 服务；
+若最终失败则回退到进程内客户端，并在 `/health` 中显式暴露该回退，避免"看起来走了 MCP 其实没有"。

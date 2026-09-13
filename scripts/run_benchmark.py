@@ -43,16 +43,23 @@ def main() -> int:
     print(
         f"tool_selection_accuracy={metrics.tool_selection_accuracy:.1%} "
         f"tool_selection_f1={metrics.tool_selection_f1:.1%} "
-        f"tool_success_rate={metrics.tool_success_rate:.1%}"
+        f"tool_success_rate="
+        f"{'n/a' if metrics.tool_success_rate is None else f'{metrics.tool_success_rate:.1%}'}"
     )
     print(
         f"avg_latency={metrics.avg_latency_s:.2f}s p95={metrics.p95_latency_s:.2f}s "
         f"tokens={metrics.total_tokens} cost=${metrics.total_cost_usd:.6f}"
     )
     for row in report.categories:
+
+        def pct(value: float | None) -> str:
+            return "n/a" if value is None else f"{value:.0%}"
+
         print(
             f"  {row.category:<20} {row.passed}/{row.tasks} ({row.task_success_rate:.0%}) "
-            f"latency={row.avg_latency_s:.2f}s tokens={row.avg_tokens:.0f}"
+            f"latency={row.avg_latency_s:.2f}s tokens={row.avg_tokens:.0f} "
+            f"recall={pct(row.retrieval_recall)} citation={pct(row.citation_correctness)} "
+            f"tool_f1={pct(row.tool_selection_f1)}"
         )
     if report.failed_checks:
         print("failed checks:", report.failed_checks)

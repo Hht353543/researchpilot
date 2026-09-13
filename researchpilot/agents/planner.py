@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from researchpilot.agents.base import BaseAgent
 from researchpilot.llm.prompts import PLANNER_SYSTEM, planner_user
@@ -33,8 +33,8 @@ class PlannerAgent(BaseAgent):
         runtime = self.runtime
         iterations = max_iterations or runtime.settings.max_iterations
         with self.span(input={"question": question}) as span:
-            memory_context = runtime.memory.recall_context(question, limit=3)
-            kb_summary = runtime.knowledge_base.stats()
+            memory_context = self._safe(lambda: runtime.memory.recall_context(question, limit=3), "")
+            kb_summary = self._safe(lambda: runtime.knowledge_base.stats(), {"error": "unavailable"})
             runtime.memory.note("user", question)
             attempts = 0
             try:
@@ -71,6 +71,14 @@ class PlannerAgent(BaseAgent):
                 },
             )
         return plan
+
+    def _safe(self, action: Any, fallback: Any) -> Any:
+        """Infrastructure reads must never abort planning (degrade instead)."""
+        try:
+            return action()
+        except Exception as exc:
+            self.runtime.errors.append(f"planner: {type(exc).__name__}: {exc}")
+            return fallback
 
     # -- validation -------------------------------------------------------- #
     def _normalise(self, plan: ResearchPlan, available: list[str], max_iterations: int) -> ResearchPlan:

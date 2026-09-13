@@ -6,13 +6,14 @@ import json
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
 from researchpilot.config import Settings, get_settings
 from researchpilot.rag.embeddings import HashEmbedder
 from researchpilot.rag.vector_store import VectorStore
-from researchpilot.utils import truncate
+from researchpilot.utils import resolve_input_path, truncate
 
 
 class OfflineWebBackend:
@@ -26,9 +27,10 @@ class OfflineWebBackend:
     name = "offline-corpus"
 
     def __init__(self, corpus_dir: str | Path, *, dimension: int = 256) -> None:
-        self.corpus_dir = Path(corpus_dir)
+        self.corpus_dir = resolve_input_path(corpus_dir)
         self.embedder = HashEmbedder(dimension)
         self._store: VectorStore | None = None
+        self.corpus_missing = not self.corpus_dir.exists()
 
     def _ensure_store(self) -> VectorStore:
         if self._store is not None:
@@ -125,12 +127,34 @@ class HttpWebBackend:
 
     name = "http"
 
-    def __init__(self, url: str, *, timeout_s: float = 10.0, api_key: str | None = None) -> None:
+    def __init__(
+        self,
+        url: str,
+        *,
+        timeout_s: float = 10.0,
+        api_key: str | None = None,
+        allowed_hosts: str | list[str] | None = None,
+    ) -> None:
         if not url:
             raise ValueError("RESEARCHPILOT_WEB_SEARCH_URL is required for the http backend")
+        # SSRF hardening: the URL is operator-configured (never model-controlled),
+        # but we still refuse non-HTTP schemes, URL-embedded credentials and hosts
+        # outside an optional allow-list.
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"}:
+            raise ValueError(f"web search URL must be http(s), got scheme {parsed.scheme!r}")
+        if parsed.username or parsed.password:
+            raise ValueError("web search URL must not embed credentials")
+        if not parsed.hostname:
+            raise ValueError("web search URL must include a hostname")
         self.url = url
         self.timeout_s = timeout_s
         self.api_key = api_key
+        self.allowed_hosts = _parse_hosts(allowed_hosts)
+        if self.allowed_hosts and parsed.hostname not in self.allowed_hosts:
+            raise ValueError(
+                f"web search host {parsed.hostname!r} is not in the allow-list {self.allowed_hosts}"
+            )
 
     def search(self, query: str, *, top_k: int = 5, recency_days: int | None = None) -> list[dict[str, Any]]:
         params: dict[str, Any] = {"q": query, "limit": top_k}
@@ -165,8 +189,20 @@ class HttpWebBackend:
 def build_web_backend(settings: Settings | None = None) -> OfflineWebBackend | HttpWebBackend:
     settings = settings or get_settings()
     if settings.web_search_mode == "http":
-        return HttpWebBackend(settings.web_search_url, timeout_s=settings.web_search_timeout_s)
-    return OfflineWebBackend(Path("data") / "web_corpus")
+        return HttpWebBackend(
+            settings.web_search_url,
+            timeout_s=settings.web_search_timeout_s,
+            allowed_hosts=settings.web_search_allowed_hosts,
+        )
+    return OfflineWebBackend(settings.web_corpus_path)
+
+
+def _parse_hosts(value: str | list[str] | None) -> list[str]:
+    if not value:
+        return []
+    if isinstance(value, str):
+        return [host.strip() for host in value.split(",") if host.strip()]
+    return [str(host).strip() for host in value if str(host).strip()]
 
 
 def _parse_date(value: str) -> float | None:

@@ -79,6 +79,10 @@
 | 重排 | `Retriever._rerank_heuristic` / `_rerank_with_llm` | IDF 加权的正文/标题覆盖度 + 召回分数 |
 | 上下文 | `Retriever.format_context` | 带 chunk id 的上下文块，受 `max_context_chars` 约束 |
 
+调用方（agent runtime）可以通过 `KnowledgeBase.search(rerank_strategy=...)` 覆盖重排策略；
+`knowledge_search` 工具始终传入运行时的 `settings.rerank_strategy`，因此「注入一个用别的 Settings
+构建的 KnowledgeBase」不会悄悄改变重排行为。
+
 ### 4.3 可评测性
 
 检索的每一阶段都写入 Trace（`rewritten_query`、`doc_ids`、`hits`、`candidates`），
@@ -97,6 +101,27 @@ Agent ──► ToolRegistry.invoke(name, args, ctx)
               └── TTL 缓存（可选）
 ```
 
+### 5.1 参数策略属于工具，而不是 Agent
+
+早期实现里 `ResearchAgent` 用 `if tool_name == "knowledge_search" / "web_search" / ...` 构造参数。
+现在每个工具实现 `build_arguments(ToolRequestContext) -> dict | None`：
+
+- 新增工具不需要修改任何 Agent；
+- 工具可以表达"我现在无法被调用"（例如 `document_reader` 没有 `doc_id` 时返回 `None`）；
+- 故障注入包装器会转发该策略，因此注入的超时/失败/空结果一定作用在真实调用上；
+- `tests/unit/test_tool_arguments.py` 对全部内置工具与该契约做了断言。
+
+### 5.2 缓存键的完整性
+
+缓存键使用**完整参数**的 SHA-256（而不是写入 Trace 时被截断到 600 字符的副本）。否则两个共享前缀的
+长查询会命中彼此的缓存结果——这是一个真实的正确性 Bug，已有回归测试。
+
+### 5.3 未显式传递 Tracer 时
+
+流水线在 `_execute` 中用 `tracer_scope(tracer)` 把 Tracer 设为上下文变量，
+`ToolRegistry` 在 `ctx.tracer` 为空时回退到 `current_tracer()`。
+因此"只拿到 ToolContext 的嵌套调用"也会产生 span，而不是静默丢失 Trace。
+
 MCP Server 复用同一套 KnowledgeBase / WebBackend，把能力以协议方式暴露；Agent 侧通过
 `mcp_research_context` 工具消费它。三种传输（in-process / stdio / HTTP）共享同一份 `McpServer` 逻辑，
 因此协议行为一致，测试可分别在三种传输上验证。
@@ -113,6 +138,10 @@ MCP Server 复用同一套 KnowledgeBase / WebBackend，把能力以协议方式
 | 低质量来源 | 来源质量评分下降 → `sufficient=false` → 报告显式提示证据不足 |
 | 提示注入 | 外部内容标记为不可信数据；含注入特征的证据被排除出结论并在 limitations 中列出 |
 | 引用编造 | Writer 后置校验剔除不存在的引用，记录 `dropped_citations` |
+| 空知识库 | 回退到 Web/MCP 等其它来源，并把缺口写入 `Bundle.gaps` 与报告 limitations |
+| 所有来源都为空 | 状态标记为 `degraded`（"没有证据"永远不是 `succeeded`），报告显式声明没有可用证据 |
+| 向量库/Embedding 不可用 | 工具层捕获为 tool failure，规划阶段读取 KB 统计的异常也被降级处理，任务继续 |
+| Web 检索 URL 不安全 | 只接受 http/https、拒绝 URL 内嵌凭据、可选 host allow-list（SSRF 加固） |
 
 ## 7. 取舍（Trade-offs）
 
@@ -122,6 +151,19 @@ MCP Server 复用同一套 KnowledgeBase / WebBackend，把能力以协议方式
    代价是无法像人类评审那样理解深层语义（因此真实评测仍是必要的）。
 4. **自带 JSON-RPC MCP 实现**：不引入额外 SDK 依赖、可精确控制错误与超时；代价是需要自己跟进协议演进。
 5. **JSON 持久化**：便于检查与演示；大规模场景应替换为数据库/对象存储（见 Future Work）。
+
+## 7.1 指标诚实性（Evaluation honesty）
+
+早期版本的 `_recall([])` / `_f1([])` 返回 `1.0`，聚合时又对所有任务取平均——没有期望值的任务
+（例如 no-result 场景）会贡献"真空 1.0"，从而抬高 Retrieval / Tool-selection 指标。现在：
+
+- 每个 `TaskJudgement` 记录 `retrieval_applicable` / `citation_applicable` / `tool_selection_applicable`；
+- 聚合只在适用的任务上取平均，并在报告中给出分母（`docs/evaluation.md` 每次运行自动重算）；
+- 分母为 0 时渲染为 `n/a`（而不是 `0%` 或 `100%`）；
+- `Tool Success Rate` 在没有任何工具调用时为 `n/a`。
+
+状态语义同样收紧：`ResearchPipeline._status` 在"没有任何可用证据"时返回 `degraded`，
+避免空结果任务被计入 `succeeded`。
 
 ## 8. 目录职责
 

@@ -114,6 +114,10 @@ class LongTermMemory:
         for _, record in scored[:limit]:
             record.hits += 1
             results.append(record)
+        if results:
+            # Persist hit counts, otherwise the importance/recency ranking loses
+            # its "frequently used" signal on the next process start.
+            self.flush()
         return results
 
     def forget_expired(self, *, now: float | None = None) -> int:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import threading
 import time
@@ -12,6 +13,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from researchpilot.config import Settings, get_settings
+from researchpilot.observability.trace import current_tracer
 from researchpilot.security import detect_injection
 from researchpilot.tools.base import BaseTool, ToolContext, ToolPermission, ToolResult
 
@@ -133,6 +135,9 @@ class ToolRegistry:
         arguments = dict(arguments or {})
         ctx = ctx or ToolContext(settings=self.settings)
         task_id = ctx.task_id
+        # Prefer the explicit context tracer, but fall back to the ambient tracer so
+        # nested calls that only receive a ToolContext are still traced.
+        tracer = ctx.tracer or current_tracer()
 
         try:
             tool = self.get(tool_name)
@@ -155,8 +160,8 @@ class ToolRegistry:
         while attempts <= tool.max_retries:
             attempts += 1
             span = None
-            if ctx.tracer is not None:
-                span = ctx.tracer.start_span(
+            if tracer is not None:
+                span = tracer.start_span(
                     f"tool.{tool_name}",
                     tool.span_kind,
                     agent=str(ctx.scratch.get("agent", "")),
@@ -174,8 +179,8 @@ class ToolRegistry:
                         "attempts": attempts,
                     }
                 )
-                if span is not None and ctx.tracer is not None:
-                    ctx.tracer.end_span(
+                if span is not None and tracer is not None:
+                    tracer.end_span(
                         span,
                         output={
                             "ok": result.ok,
@@ -191,15 +196,15 @@ class ToolRegistry:
                 last_error = result.error or "tool returned an error"
             except ToolTimeoutError:
                 last_error = f"timeout after {tool.timeout_s}s"
-                if span is not None and ctx.tracer is not None:
-                    ctx.tracer.end_span(span, error=last_error)
-                if attempts <= tool.max_retries and ctx.tracer is not None:
-                    with ctx.tracer.span(f"retry.tool.{tool_name}", "retry", tool=tool_name):
+                if span is not None and tracer is not None:
+                    tracer.end_span(span, error=last_error)
+                if attempts <= tool.max_retries and tracer is not None:
+                    with tracer.span(f"retry.tool.{tool_name}", "retry", tool=tool_name):
                         pass
             except Exception as exc:  # tool bug
                 last_error = f"{type(exc).__name__}: {exc}"
-                if span is not None and ctx.tracer is not None:
-                    ctx.tracer.end_span(span, error=last_error)
+                if span is not None and tracer is not None:
+                    tracer.end_span(span, error=last_error)
             if attempts <= tool.max_retries:
                 time.sleep(min(0.05 * attempts, 0.5))
 
@@ -241,16 +246,23 @@ class ToolRegistry:
             error=message,
             data={"injection_signals": detect_injection(json.dumps(safe_args, ensure_ascii=False))},
         )
-        if ctx.tracer is not None:
-            span = ctx.tracer.start_span(
+        tracer = ctx.tracer or current_tracer()
+        if tracer is not None:
+            span = tracer.start_span(
                 f"tool.{tool_name}.error", "tool", tool=tool_name, input={"arguments": safe_args}
             )
-            ctx.tracer.end_span(span, output={"ok": False}, error=message)
+            tracer.end_span(span, output={"ok": False}, error=message)
         return result
 
     # -- cache ------------------------------------------------------------- #
     def _cache_key(self, tool_name: str, arguments: dict[str, Any]) -> str:
-        return f"{tool_name}:{json.dumps(_safe(arguments), sort_keys=True, ensure_ascii=False)}"
+        """Full-fidelity cache key.
+
+        Must NOT use the trace-safe (truncated) copy: two long queries sharing a
+        prefix would otherwise collide and return each other's cached result.
+        """
+        canonical = json.dumps(arguments, sort_keys=True, ensure_ascii=False, default=str)
+        return f"{tool_name}:{hashlib.sha256(canonical.encode('utf-8')).hexdigest()}"
 
     def _cache_get(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult | None:
         if self.cache_ttl_s <= 0:

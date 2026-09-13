@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import httpx
 import pytest
 
@@ -163,3 +165,103 @@ async def test_frontend_is_served(client: httpx.AsyncClient) -> None:
     assert "ResearchPilot" in page.text
     script = await client.get("/static/app.js")
     assert script.status_code == 200
+
+
+@pytest.mark.anyio
+async def test_kb_document_delete_roundtrip(client: httpx.AsyncClient) -> None:
+    created = await client.post(
+        "/kb/documents",
+        json={
+            "title": "待删除文档",
+            "content": "这是一段用于验证删除接口的文档内容，长度足够触发分块。" * 5,
+            "source": "test://deletable",
+            "metadata": {"topic": "delete-me"},
+        },
+    )
+    assert created.status_code == 200
+    documents = (await client.get("/kb/documents")).json()["documents"]
+    target = next(doc for doc in documents if doc["title"] == "待删除文档")
+
+    deleted = await client.delete(f"/kb/documents/{target['doc_id']}")
+    assert deleted.status_code == 200
+    assert deleted.json()["chunks_removed"] >= 1
+    assert (await client.get(f"/kb/documents/{target['doc_id']}")).status_code == 404
+    assert (await client.delete(f"/kb/documents/{target['doc_id']}")).status_code == 404
+
+
+@pytest.mark.anyio
+async def test_reindex_rebuilds_index_from_disk(tmp_path) -> None:
+    """Regression: deleted source files must disappear from the index on reindex."""
+    import shutil
+
+    from researchpilot.api.app import create_app as build_app
+    from researchpilot.config import Settings as ApiSettings
+
+    kb_copy = tmp_path / "kb"
+    shutil.copytree(Path(__file__).resolve().parents[1] / "fixtures" / "kb", kb_copy)
+    settings = ApiSettings(
+        provider="mock",
+        kb_path=str(kb_copy),
+        runs_path=str(tmp_path / "runs"),
+        embedding_dim=64,
+        web_corpus_path=str(tmp_path / "no-corpus"),
+    )
+    app = build_app(settings)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as http:
+        before = (await http.get("/kb/documents")).json()["documents"]
+        assert len(before) == 5
+        (kb_copy / "memory.md").unlink()
+        reindexed = await http.post("/kb/reindex")
+        assert reindexed.status_code == 200
+        assert reindexed.json()["documents"] == 4
+        after = (await http.get("/kb/documents")).json()["documents"]
+        assert len(after) == 4
+        assert all("memory" not in doc["doc_id"] for doc in after)
+
+
+@pytest.mark.anyio
+async def test_runtime_llm_failure_is_reported_in_result(tmp_path) -> None:
+    """Runtime provider failures surface as status=failed instead of a 500 crash."""
+    from researchpilot.api.app import create_app as build_app
+    from researchpilot.config import Settings as ApiSettings
+
+    settings = ApiSettings(
+        provider="openai",
+        api_key="test-key",
+        base_url="http://127.0.0.1:9/v1",  # nothing listens here
+        request_timeout_s=0.2,
+        max_retries=0,
+        kb_path=str(Path(__file__).resolve().parents[1] / "fixtures" / "kb"),
+        runs_path=str(tmp_path / "runs"),
+        embedding_dim=64,
+    )
+    app = build_app(settings)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as http:
+        response = await http.post("/research", json={"question": "工具注册表需要哪些字段？"})
+    assert response.status_code == 200
+    payload = response.json()
+    # Local retrieval still works, so the run degrades into an extractive report
+    # instead of failing outright - but the provider error must be visible.
+    assert payload["status"] in {"degraded", "failed"}
+    assert payload["errors"]
+    assert any("provider" in message or "openai" in message for message in payload["errors"])
+
+
+def test_misconfigured_provider_fails_fast_with_hint() -> None:
+    """Deploy-time misconfiguration must not silently fall back to the mock model."""
+    from researchpilot.api.app import create_app as build_app
+    from researchpilot.config import Settings as ApiSettings
+    from researchpilot.llm.base import LLMConfigError
+
+    with pytest.raises(LLMConfigError) as excinfo:
+        build_app(ApiSettings(provider="openai", api_key=None))
+    assert "API_KEY" in str(excinfo.value)
+
+
+@pytest.mark.anyio
+async def test_evaluation_latest_when_missing(client: httpx.AsyncClient, tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    payload = (await client.get("/evaluation/latest")).json()
+    assert payload["available"] is False

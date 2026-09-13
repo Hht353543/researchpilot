@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from researchpilot.agents.base import BaseAgent
 from researchpilot.llm.prompts import RESEARCHER_SYSTEM, researcher_user
 from researchpilot.schemas import Evidence, EvidenceBundle, ResearchPlan, Subtask
-from researchpilot.tools.base import ToolContext, ToolResult
+from researchpilot.tools.base import ToolContext, ToolRequestContext, ToolResult
 from researchpilot.utils import jaccard, overlap_ratio, truncate
-
-_CALC_RE = re.compile(r"[0-9][0-9\s.+\-*/()%^]{2,}[0-9%]")
 
 
 class ResearchAgent(BaseAgent):
@@ -101,7 +98,20 @@ class ResearchAgent(BaseAgent):
         tools = list(subtask.tools) or (["knowledge_search"] if runtime.tools.has("knowledge_search") else [])
         observations: list[dict[str, Any]] = []
         for tool_name in tools:
-            arguments = self._arguments_for(tool_name, subtask)
+            if not runtime.tools.has(tool_name):
+                continue
+            # Argument policy lives with the tool itself: the agent never needs an
+            # if/elif chain over tool names to know how to call them.
+            arguments = runtime.tools.get(tool_name).build_arguments(
+                ToolRequestContext(
+                    question=subtask.question,
+                    subtask_id=subtask.id,
+                    agent=self.name,
+                    top_k=runtime.settings.top_k,
+                    doc_id_hint=self._doc_id_for(subtask),
+                    settings=runtime.settings,
+                )
+            )
             if arguments is None:
                 continue
             result: ToolResult = runtime.tools.invoke(tool_name, arguments, ctx)
@@ -113,33 +123,6 @@ class ResearchAgent(BaseAgent):
             observations.append(self._observation(tool_name, arguments, result))
             runtime.sources.register_tool_result(result)
         return observations
-
-    def _arguments_for(self, tool_name: str, subtask: Subtask) -> dict[str, Any] | None:
-        top_k = self.runtime.settings.top_k
-        if tool_name == "knowledge_search":
-            return {
-                "query": subtask.question,
-                "top_k": top_k,
-                "strategy": "hybrid",
-                "rewrite": True,
-                "filters": {},
-            }
-        if tool_name == "web_search":
-            return {"query": subtask.question, "top_k": max(top_k - 1, 3)}
-        if tool_name == "mcp_research_context":
-            return {"query": subtask.question, "subtask": subtask.id, "top_k": max(top_k - 1, 3)}
-        if tool_name == "document_reader":
-            doc_id = self._doc_id_for(subtask)
-            return {"doc_id": doc_id, "max_chars": 6000} if doc_id else None
-        if tool_name == "calculator":
-            match = _CALC_RE.search(subtask.question)
-            if not match:
-                return None
-            expression = match.group(0).replace("×", "*").replace("÷", "/")
-            return {"expression": expression}
-        if tool_name == "metadata":
-            return {"subject": "stats"}
-        return None
 
     def _doc_id_for(self, subtask: Subtask) -> str:
         runtime = self.runtime

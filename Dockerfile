@@ -18,7 +18,11 @@ COPY researchpilot ./researchpilot
 COPY configs ./configs
 COPY scripts ./scripts
 
-RUN pip install -e .
+# Install the build backend explicitly, then the project itself. Keeping this as
+# two steps makes the image build fail loudly on packaging problems instead of
+# silently resolving an older setuptools from the base image.
+RUN pip install --no-cache-dir --upgrade "setuptools>=68" wheel \
+    && pip install --no-cache-dir -e .
 
 COPY data ./data
 COPY eval ./eval

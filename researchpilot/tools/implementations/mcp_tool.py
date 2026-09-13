@@ -6,7 +6,14 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from researchpilot.tools.base import BaseTool, ToolContext, ToolItem, ToolPermission, ToolResult
+from researchpilot.tools.base import (
+    BaseTool,
+    ToolContext,
+    ToolItem,
+    ToolPermission,
+    ToolRequestContext,
+    ToolResult,
+)
 
 MCP_TOOL_NAME = "get_research_context"
 
@@ -29,6 +36,13 @@ class McpResearchContextTool(BaseTool):
     tags = ["mcp", "retrieval"]
     span_kind = "mcp"
     args_model = McpArgs
+
+    def build_arguments(self, request: ToolRequestContext) -> dict[str, Any] | None:
+        return {
+            "query": request.question,
+            "subtask": request.subtask_id,
+            "top_k": max(request.top_k - 1, 3),
+        }
 
     def run(self, args: BaseModel, ctx: ToolContext) -> ToolResult:
         assert isinstance(args, McpArgs)

@@ -98,6 +98,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             model=container.provider.model_name(),
             knowledge_base=container.knowledge_base.stats(),
             tools=container.pipeline_tool_names(),
+            mcp_transport=container.mcp_mode,
         )
 
     @app.get("/config", response_model=ModelConfig, tags=["meta"])
@@ -255,6 +256,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def kb_reindex() -> DocumentIngestResponse:
         report = container.reingest()
         return DocumentIngestResponse(**report.model_dump())
+
+    @app.delete("/kb/documents/{doc_id}", tags=["knowledge-base"])
+    def kb_delete(doc_id: str) -> dict[str, Any]:
+        removed = container.delete_document(doc_id)
+        if not removed:
+            raise HTTPException(status_code=404, detail=f"unknown doc_id: {doc_id}")
+        return {"doc_id": doc_id, "chunks_removed": removed, "stats": container.knowledge_base.stats()}
 
     # -- MCP ---------------------------------------------------------------- #
     @app.get("/mcp/tools", tags=["mcp"])

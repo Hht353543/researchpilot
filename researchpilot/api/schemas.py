@@ -17,6 +17,7 @@ class HealthResponse(BaseModel):
     model: str
     knowledge_base: dict[str, Any] = Field(default_factory=dict)
     tools: list[str] = Field(default_factory=list)
+    mcp_transport: str = "inprocess"
 
 
 class ModelConfig(BaseModel):

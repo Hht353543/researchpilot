@@ -22,12 +22,15 @@ LLM → Prompt → Structured Output → Tool Calling → RAG → Knowledge Base
 | RAG 管线 | Loader → Cleaner → Heading-aware Chunker → Embedding → Vector Store → Hybrid Retriever → Reranker → Context |
 | 检索模式 | 语义检索 / BM25 关键词检索 / RRF 混合检索 / 元数据过滤 / 查询改写 / IDF 重排（可选 LLM 重排） |
 | 工具系统 | 统一 Tool Registry：Schema 校验 + 权限分级 + 超时 + 重试 + 缓存 + Trace + 调用预算 |
+| 工具参数策略 | 每个 Tool 自己声明「如何把一个子任务翻译成自己的参数」，Agent 中没有任何 `if tool_name == ...` 分发 |
 | MCP | 自研 MCP Server（JSON-RPC 2.0）：`search_knowledge` / `get_document` / `search_web` / `get_research_context`，支持 in-process、stdio、streamable-HTTP 三种传输 |
-| Memory | 短期（token 预算滚动窗口）/ 工作记忆（计划、子任务、证据、观测）/ 长期记忆（TTL、去重、重要度、来源） |
+| Memory | 短期（token 预算滚动窗口）/ 工作记忆（计划、子任务、证据、观测）/ 长期记忆（TTL、去重、重要度、来源、命中次数持久化） |
 | Evaluation | 35 条 Golden Dataset（12 类场景）+ 确定性判分 + 真实测量指标 + 自动生成 `docs/evaluation.md` |
 | Observability | 统一 Trace：Task → Agent → (LLM / Tool / Retrieval / Retry)，含延迟、token、模型、输入输出、错误 |
-| 服务化 | FastAPI（类型安全、参数校验、错误语义、日志）+ 零依赖前端（时间线 / 报告 / 指标 / 知识库面板） |
-| 工程质量 | 88 个测试（unit / integration / evaluation）、ruff、mypy、Dockerfile、docker-compose、GitHub Actions |
+| 服务化 | FastAPI（类型安全、参数校验、错误语义、日志）+ 零依赖前端（输入 / 模型参数 / 知识库 / 时间线 / 报告 / 指标 / 评测面板） |
+| 知识库管理 | 文档入库、检索、删除（级联删除 chunk）、全量重建索引（磁盘删除的文件不会残留） |
+| LLM 抽象 | 任意 OpenAI 兼容端点（OpenAI / DeepSeek / vLLM / Ollama…）+ 确定性离线 provider；真实 HTTP 链路由本地兼容端点端到端测试覆盖 |
+| 工程质量 | **138 个测试**（unit / integration / evaluation，含真实 HTTP provider 链路）、ruff、mypy、pip check、Dockerfile、docker-compose、GitHub Actions |
 
 ---
 
@@ -225,6 +228,7 @@ python -m researchpilot.cli serve
 | GET | `/research/{task_id}/metrics` | 延迟、token、工具调用、重试 |
 | GET | `/kb/documents`、`/kb/search`、`/kb/documents/{doc_id}` | 知识库浏览与检索 |
 | POST | `/kb/documents`、`/kb/reindex` | 文档入库与重建索引 |
+| DELETE | `/kb/documents/{doc_id}` | 删除文档及其全部 chunk |
 | GET | `/mcp/tools`、POST `/mcp/call` | MCP 工具发现与调用 |
 | GET | `/evaluation/latest` | 最近一次 benchmark 指标 |
 
@@ -246,14 +250,20 @@ docker compose up --build
 ## Testing
 
 ```bash
-python -m pytest -q                       # 单元 + 集成 + 评测（88 个测试）
+python -m pytest -q                       # 单元 + 集成 + 评测（138 个测试）
 python -m pytest -q -m "not evaluation"   # 快速回归
 python -m pytest -q -m evaluation         # 全量 Golden Dataset 冒烟
 ruff check . && ruff format --check . && mypy researchpilot
+python -m pip check                       # 依赖一致性
 ```
 
-测试目录：`tests/unit/`（组件契约）、`tests/integration/`（流水线、API、MCP 三种传输）、
-`tests/evaluation/`（数据集完整性、评测器机制、全量冒烟）、`tests/fixtures/`（样例语料与 mock 数据）。
+测试目录：`tests/unit/`（组件契约、依赖一致性、路径解析、工具参数策略、安全加固）、
+`tests/integration/`（流水线、API、MCP 三种传输、**OpenAI 兼容 HTTP provider 全链路**）、
+`tests/evaluation/`（数据集完整性、评测器机制、全量冒烟）、`tests/fixtures/`（样例语料、mock 数据与本地 OpenAI 兼容端点）。
+
+前端是**零依赖 vanilla JS**（无 npm/构建步骤），因此没有 `npm test/build/lint`；取而代之的是
+`tests/unit/test_config_and_paths.py` 中的前端契约测试：前端调用的每个 URL 必须能在 OpenAPI 路由表中找到，
+且 Settings/面板元素必须存在并被读取。
 
 ---
 
@@ -264,13 +274,13 @@ ruff check . && ruff format --check . && mypy researchpilot
 | 指标 | 结果 |
 | --- | --- |
 | Task Success Rate | **100%** (35/35) |
-| Retrieval Recall@6 | 94.8% |
-| Context Relevance | 38.9% |
-| Citation Correctness | 97.1% |
-| Tool Selection Accuracy / F1 | 100% / 85.9% |
-| Tool Success Rate | 75.2%（含主动注入的超时/失败/预算任务） |
-| Avg / P95 Latency | 0.33s / 1.37s |
-| Tokens (total) / Cost | 658,286 / $0.000000 |
+| Retrieval Recall@6 | 93.9%（分母 30 个含期望来源的任务） |
+| Context Relevance | 28.8%（同一分母） |
+| Citation Correctness | 100%（分母 34 个要求引用的任务） |
+| Tool Selection Accuracy / F1 | 100% / 85.9%（分母 35 个含期望工具的任务） |
+| Tool Success Rate | 74.6%（130 次调用，含主动注入的超时/失败/预算任务） |
+| Avg / P95 Latency | 0.31s / 1.36s |
+| Tokens (total) / Cost | 653,335 / $0.000000 |
 
 > **必须诚实阅读这张表**：离线 `mock` provider 是*确定性脚本模型*，用于验证**工程管线**
 > （检索、工具、校验、引用绑定、追踪、评测、故障恢复），因此这组数字衡量的是**系统管线正确性与回归基线**，
@@ -289,6 +299,15 @@ ruff check . && ruff format --check . && mypy researchpilot
 3. **离线评测 vs 真实模型评测**：离线模式衡量工程管线（可在 CI 稳定回归）；真实模型模式衡量生成质量。
    两者的数字不可混用，报告中始终标注 provider。
 4. **已知不足**：见 [Future Work](#future-work) 与 `docs/development_log.md` 的"仍存在的问题"章节。
+5. **指标分母是显式声明的**：Recall / Context Relevance 只在声明了期望来源的任务上取平均，
+   Citation Correctness 只在要求引用的任务上取平均，Tool Selection 只在声明期望工具的任务上取平均；
+   没有期望值的任务不会贡献"真空 1.0"，`n/a` 不会被渲染成 `0%` 或 `100%`。
+6. **状态语义诚实**：没有任何可用证据的运行会被标记为 `degraded`（而不是 `succeeded`），
+   即使所有工具调用都返回 ok=True；只有至少产生一条可用证据且没有错误时才是 `succeeded`。
+7. **Docker 未在本机执行**：本开发环境没有 docker 引擎（`docker` 不可用），因此
+   `docker build` / `docker compose up` 未实机运行；已做的是静态一致性校验（compose YAML 解析、
+   `COPY` 源文件存在性、镜像内命令与本机可运行的 uvicorn/MCP 命令一致、healthcheck 路径存在、
+   以及 `pip install -e .` 的打包校验）。详见 `docs/development_log.md`。
 
 ---
 

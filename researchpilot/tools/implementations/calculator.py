@@ -5,12 +5,20 @@ from __future__ import annotations
 import ast
 import math
 import operator
+import re
 from collections.abc import Callable
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-from researchpilot.tools.base import BaseTool, ToolContext, ToolItem, ToolPermission, ToolResult
+from researchpilot.tools.base import (
+    BaseTool,
+    ToolContext,
+    ToolItem,
+    ToolPermission,
+    ToolRequestContext,
+    ToolResult,
+)
 
 _BIN_OPS: dict[type[ast.operator], Callable[[float, float], float]] = {
     ast.Add: operator.add,
@@ -37,6 +45,7 @@ _FUNCTIONS: dict[str, Callable[..., float]] = {
     "sum": sum,
 }
 _MAX_EXPRESSION = 300
+_EXPRESSION_RE = re.compile(r"[0-9][0-9\s.+\-*/()%^]{2,}[0-9%]")
 
 
 class CalculatorArgs(BaseModel):
@@ -57,6 +66,14 @@ class CalculatorTool(BaseTool):
     max_retries = 0
     tags = ["compute"]
     args_model = CalculatorArgs
+
+    def build_arguments(self, request: ToolRequestContext) -> dict[str, Any] | None:
+        """Extract an arithmetic expression from the sub-question, if there is one."""
+        match = _EXPRESSION_RE.search(request.question)
+        if match is None:
+            return None
+        expression = match.group(0).replace("×", "*").replace("÷", "/")
+        return {"expression": expression}
 
     def run(self, args: BaseModel, ctx: ToolContext) -> ToolResult:
         assert isinstance(args, CalculatorArgs)

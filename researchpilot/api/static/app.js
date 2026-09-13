@@ -206,11 +206,11 @@ function renderKbDocuments(documents) {
     <div class="list-item">
       <div>${escapeHtml(doc.title)}</div>
       <div class="meta">${doc.doc_id} · ${doc.chunks} chunks · ${doc.source}</div>
+      <button class="ghost tiny" data-delete-doc="${escapeHtml(doc.doc_id)}">delete</button>
     </div>`).join("") || "<p class='hint'>知识库为空。</p>";
 }
 
 function renderKbSearch(result) {
-  renderKbStats({ documents: "-", chunks: "-", characters: 0, avg_chunk_chars: "-", dimension: "-" });
   el("kbResults").innerHTML = `
     <div class="list-item"><div class="meta">query: ${escapeHtml(result.query)} → rewritten: ${escapeHtml(result.rewritten_query)} · ${result.strategy} · ${result.latency_ms} ms</div></div>
     ` + result.hits.map((hit) => `
@@ -219,6 +219,33 @@ function renderKbSearch(result) {
       <div class="meta">${escapeHtml(hit.chunk_id)} · ${escapeHtml(hit.section || "")}</div>
       <div class="meta">${escapeHtml((hit.content || "").slice(0, 180))}…</div>
     </div>`).join("");
+}
+
+function renderEvaluation(payload) {
+  if (!payload || payload.available === false) {
+    el("evaluation").innerHTML = `<p class="hint">${escapeHtml(
+      (payload && payload.message) || "尚未运行 benchmark（python scripts/run_benchmark.py --provider mock）"
+    )}</p>`;
+    return;
+  }
+  const m = payload.metrics || {};
+  const pct = (v) => (typeof v === "number" ? `${(v * 100).toFixed(1)}%` : "n/a");
+  el("evaluation").innerHTML = `
+    <div class="stats">
+      ${chip("provider", escapeHtml(payload.provider || "-"))}
+      ${chip("tasks", m.tasks ?? "-")}
+      ${chip("success", pct(m.task_success_rate))}
+      ${chip("recall", pct(m.retrieval_recall))}
+      ${chip("citation", pct(m.citation_correctness))}
+      ${chip("tool F1", pct(m.tool_selection_f1))}
+      ${chip("avg latency", m.avg_latency_s != null ? `${m.avg_latency_s}s` : "-")}
+    </div>
+    <div class="scroll small">${(payload.categories || []).map((row) => `
+      <div class="list-item">
+        <div>${escapeHtml(row.category)} <span class="meta">${row.passed}/${row.tasks} · ${pct(row.task_success_rate)}</span></div>
+        <div class="meta">latency ${row.avg_latency_s}s · tokens ${Math.round(row.avg_tokens || 0)} · citation ${pct(row.citation_correctness)}</div>
+      </div>`).join("")}</div>
+    <p class="hint">generated_at ${escapeHtml(payload.generated_at || "")} · 离线 mock 数据仅代表工程管线回归，不代表模型质量</p>`;
 }
 
 function renderReport(report) {
@@ -252,6 +279,7 @@ async function runResearch(mode) {
       frequency_penalty: Number(el("frequency").value),
       top_k: Number(el("topk").value),
       max_iterations: Number(el("iterations").value),
+      max_tokens: Number(el("maxtokens").value),
     },
   };
   const model = el("model").value.trim();
@@ -309,6 +337,18 @@ async function boot() {
     renderKbDocuments(docs.documents);
     el("kbResults").innerHTML = `<p class='hint'>reindexed: ${report.documents} docs / ${report.chunks} chunks</p>`;
   });
+  el("kbDocuments").addEventListener("click", async (event) => {
+    const docId = event.target?.dataset?.deleteDoc;
+    if (!docId) return;
+    try {
+      await api(`/kb/documents/${encodeURIComponent(docId)}`, { method: "DELETE" });
+      const documents = await api("/kb/documents");
+      renderKbStats(documents.stats);
+      renderKbDocuments(documents.documents);
+    } catch (error) {
+      el("kbResults").innerHTML = `<p class='hint'>${escapeHtml(error.message)}</p>`;
+    }
+  });
 
   const [config, health, documents] = await Promise.all([
     api("/config"), api("/health"), api("/kb/documents"),
@@ -320,6 +360,7 @@ async function boot() {
   el("frequency").value = config.frequency_penalty;
   el("topk").value = config.top_k;
   el("iterations").value = config.max_iterations;
+  el("maxtokens").value = config.max_tokens;
   el("configHint").textContent =
     `provider=${config.provider} · token_budget=${config.token_budget} · max_tokens=${config.max_tokens} · 模型/温度等参数通过环境变量或此处覆盖`;
   renderKbStats(documents.stats);
@@ -331,6 +372,12 @@ async function boot() {
       <div class="meta">${escapeHtml(tool.description || "")}</div></div>`).join("")
       || "<p class='hint'>MCP 客户端不可用。</p>";
   } catch (error) { el("mcpTools").innerHTML = `<p class='hint'>${escapeHtml(error.message)}</p>`; }
+
+  try {
+    renderEvaluation(await api("/evaluation/latest"));
+  } catch (error) {
+    el("evaluation").innerHTML = `<p class='hint'>${escapeHtml(error.message)}</p>`;
+  }
 
   try {
     const runs = await api("/research?limit=1");

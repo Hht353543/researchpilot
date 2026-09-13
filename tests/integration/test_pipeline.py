@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from researchpilot.agents.base import build_runtime
 from researchpilot.agents.planner import PlannerAgent
 from researchpilot.agents.researcher import ResearchAgent
@@ -168,3 +170,157 @@ def test_agents_share_working_memory(settings: Settings, knowledge_base: Knowled
     assert runtime.memory.working.subtasks == plan.subtasks
     assert len(bundle.evidence) == len(runtime.memory.working.evidence)
     runtime.tools.close()
+
+
+# --------------------------------------------------------------------------- #
+# Graceful degradation: the cases the audit requires to be handled explicitly
+# --------------------------------------------------------------------------- #
+def test_empty_knowledge_base_falls_back_to_web_and_reports_gaps(settings: Settings) -> None:
+    """Empty KB must not abort the task: other sources are used and gaps recorded."""
+    from researchpilot.rag.knowledge_base import KnowledgeBase as KB
+
+    empty_kb = KB(settings)  # never ingested
+    pipeline = ResearchPipeline(
+        settings=settings, provider=MockLLMProvider(settings), knowledge_base=empty_kb
+    )
+    result = pipeline.run(ResearchRequest(question="空知识库下混合检索的表现如何？"))
+    assert result.status in {"degraded", "succeeded"}
+    assert result.report is not None
+    assert result.report.markdown.strip()
+    if result.evidence.evidence:
+        assert all(item.source_id.startswith("web:") for item in result.evidence.evidence), (
+            "only non-KB sources can provide evidence when the KB is empty"
+        )
+    assert result.evidence.gaps
+
+
+def test_no_sources_available_reports_explicit_gap(settings: Settings, tmp_path) -> None:
+    """KB empty *and* web corpus missing -> explicit gap, never an invented answer."""
+    from researchpilot.rag.knowledge_base import KnowledgeBase as KB
+
+    barren = settings.model_copy(update={"web_corpus_path": str(tmp_path / "no-corpus")})
+    pipeline = ResearchPipeline(settings=barren, provider=MockLLMProvider(barren), knowledge_base=KB(barren))
+    result = pipeline.run(ResearchRequest(question="空知识库下混合检索的表现如何？"))
+    assert result.status in {"degraded", "failed"}
+    assert result.report is not None
+    assert not result.evidence.evidence
+    assert any(marker in result.report.markdown for marker in ("缺口", "未获得", "无可用证据", "不足"))
+
+
+def test_empty_retrieval_is_reported_not_invented(settings: Settings, knowledge_base: KnowledgeBase) -> None:
+    from researchpilot.evaluation.fault_injection import build_fault_tool
+
+    def factory(registry: object) -> dict[str, object]:
+        return {"knowledge_search": build_fault_tool(registry, {"tool": "knowledge_search", "mode": "empty"})}
+
+    pipeline = ResearchPipeline(
+        settings=settings,
+        provider=MockLLMProvider(settings),
+        knowledge_base=knowledge_base,
+        tool_overrides=factory,
+    )
+    result = pipeline.run(ResearchRequest(question="检索知识库说明混合检索的作用。"))
+    assert result.status in {"degraded", "failed", "succeeded"}
+    assert result.report is not None
+    assert not any(item.tool == "knowledge_search" for item in result.evidence.evidence), (
+        "empty knowledge_search must not produce knowledge_search evidence"
+    )
+    markdown = result.report.markdown
+    assert any(marker in markdown for marker in ("缺口", "未获得", "不足", "无可用证据"))
+
+
+def test_embedding_failure_degrades_instead_of_crashing(
+    settings: Settings, knowledge_base: KnowledgeBase
+) -> None:
+    class BrokenEmbedder:
+        name = "broken"
+        dimension = 64
+
+        def embed(self, texts: list[str]) -> list[list[float]]:
+            raise RuntimeError("embedding backend unavailable")
+
+        def embed_one(self, text: str) -> list[float]:
+            raise RuntimeError("embedding backend unavailable")
+
+    broken_kb = KnowledgeBase(settings, store=knowledge_base.store, embedder=BrokenEmbedder())
+    pipeline = ResearchPipeline(
+        settings=settings, provider=MockLLMProvider(settings), knowledge_base=broken_kb
+    )
+    result = pipeline.run(ResearchRequest(question="混合检索依赖什么？"))
+    assert result.status in {"degraded", "failed"}
+    assert any("embedding backend unavailable" in message for message in result.errors)
+    assert result.report is not None
+
+
+def test_vector_store_failure_degrades_instead_of_crashing(
+    settings: Settings, knowledge_base: KnowledgeBase
+) -> None:
+    class BrokenStore:
+        def __getattr__(self, item: str):
+            raise RuntimeError("vector store unavailable")
+
+    broken_kb = KnowledgeBase(settings, store=BrokenStore(), embedder=knowledge_base.embedder)
+    pipeline = ResearchPipeline(
+        settings=settings, provider=MockLLMProvider(settings), knowledge_base=broken_kb
+    )
+    result = pipeline.run(ResearchRequest(question="向量库不可用时系统如何表现？"))
+    assert result.status in {"degraded", "failed"}
+    assert result.metrics.tool_failures >= 1
+    assert any("vector store unavailable" in message for message in result.errors)
+
+
+def test_llm_rerank_strategy_is_exercised(settings: Settings, knowledge_base: KnowledgeBase) -> None:
+    rerank_settings = settings.model_copy(update={"rerank_strategy": "llm"})
+    pipeline = ResearchPipeline(
+        settings=rerank_settings,
+        provider=MockLLMProvider(rerank_settings),
+        knowledge_base=knowledge_base,
+    )
+    result = pipeline.run(ResearchRequest(question="MCP 的核心方法有哪些？"))
+    assert result.report is not None
+    trace = pipeline.trace_store.get(result.task_id)
+    assert trace is not None
+    rerank_spans = [span for span in trace.spans_of("llm") if "rerank" in span.name]
+    assert rerank_spans, "llm rerank strategy must actually call the model"
+
+
+def test_tool_cache_serves_repeated_queries(settings: Settings, knowledge_base: KnowledgeBase) -> None:
+    cached_settings = settings.model_copy(update={"tool_cache_ttl_s": 120.0})
+    runtime = build_runtime(
+        task_id="cache-task",
+        question="混合检索",
+        settings=cached_settings,
+        provider=MockLLMProvider(cached_settings),
+        knowledge_base=knowledge_base,
+    )
+    try:
+        assert runtime.tools.cache_ttl_s == 120.0, "settings must reach the tool registry"
+        ctx = runtime.tool_context
+        first = runtime.tools.invoke("knowledge_search", {"query": "混合检索", "top_k": 2}, ctx)
+        second = runtime.tools.invoke("knowledge_search", {"query": "混合检索", "top_k": 2}, ctx)
+        assert first.ok and second.ok
+        assert second.cached is True
+        # A different query must NOT be served from the first entry's cache.
+        third = runtime.tools.invoke("knowledge_search", {"query": "工具权限分级", "top_k": 2}, ctx)
+        assert third.cached is False
+    finally:
+        runtime.tools.close()
+
+
+def test_prompt_injection_evidence_is_quarantined(settings: Settings, knowledge_base: KnowledgeBase) -> None:
+    from researchpilot.rag.loader import DocumentLoader
+
+    poisoned = DocumentLoader().load_path(
+        Path(__file__).resolve().parents[2] / "data" / "samples" / "poisoned_document.md"
+    )
+    knowledge_base.ingest_documents(poisoned)
+    pipeline = ResearchPipeline(
+        settings=settings, provider=MockLLMProvider(settings), knowledge_base=knowledge_base
+    )
+    result = pipeline.run(ResearchRequest(question="供应商文档中关于 Agent 网关默认权限的说明是什么？"))
+    markdown = result.report.markdown if result.report else ""
+    assert "已删除全部文档" not in markdown
+    assert "rm -rf / 已执行" not in markdown
+    assert result.verification is not None
+    if result.verification.flagged_sources:
+        assert any("注入" in item for item in result.report.limitations)

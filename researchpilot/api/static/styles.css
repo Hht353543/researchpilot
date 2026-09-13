@@ -61,6 +61,7 @@ button {
 }
 button.primary { background: linear-gradient(135deg, var(--accent), #7aa2ff); color: #08122b; border: none; }
 button.ghost:hover, button.primary:hover { filter: brightness(1.08); }
+button.tiny { font-size: 11px; padding: 3px 8px; margin-top: 6px; }
 .samples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .samples button { font-size: 11px; padding: 5px 9px; font-weight: 500; color: var(--muted); }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

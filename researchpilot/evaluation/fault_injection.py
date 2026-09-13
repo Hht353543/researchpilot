@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from researchpilot.tools.base import BaseTool, ToolContext, ToolResult
+from researchpilot.tools.base import BaseTool, ToolContext, ToolRequestContext, ToolResult
 
 
 class DelegatingTool(BaseTool):
@@ -33,6 +33,11 @@ class DelegatingTool(BaseTool):
         if self._inner_tool is None:
             raise RuntimeError(f"DelegatingTool needs an existing tool named {self.inner_name!r}")
         return self._inner_tool
+
+    def build_arguments(self, request: ToolRequestContext) -> dict[str, Any] | None:
+        """Fault wrappers keep the real tool's argument policy, so the fault is
+        actually exercised (otherwise the wrapper would be skipped entirely)."""
+        return self._inner().build_arguments(request)
 
     def run(self, args: BaseModel, ctx: ToolContext) -> ToolResult:
         return self._inner().run(args, ctx)

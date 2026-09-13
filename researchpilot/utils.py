@@ -7,7 +7,7 @@ import itertools
 import json
 import re
 import time
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -32,11 +32,6 @@ def estimate_tokens(text: str) -> int:
     return int(cjk + words * 1.3 + other / 6) + 1
 
 
-def count_tokens(text: str) -> int:
-    """Estimate tokens for a string (kept as a named alias for clarity)."""
-    return estimate_tokens(text)
-
-
 def sha1_of(text: str, *, length: int = 16) -> str:
     return hashlib.sha1(text.encode("utf-8")).hexdigest()[:length]
 
@@ -44,10 +39,6 @@ def sha1_of(text: str, *, length: int = 16) -> str:
 def normalize_text(text: str) -> str:
     """Lowercase, collapse whitespace - used for de-duplication and matching."""
     return _WS_RE.sub(" ", text.replace("\r\n", "\n")).strip().lower()
-
-
-def compact_whitespace(text: str) -> str:
-    return _WS_RE.sub(" ", text).strip()
 
 
 def truncate(text: str, limit: int, *, suffix: str = "…") -> str:
@@ -58,6 +49,25 @@ def truncate(text: str, limit: int, *, suffix: str = "…") -> str:
 
 def utc_now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def project_root() -> Path:
+    """Repository root, resolved from this file (independent of the process cwd)."""
+    return Path(__file__).resolve().parents[1]
+
+
+def resolve_input_path(value: str | Path, *, root: Path | None = None) -> Path:
+    """Resolve an *input* path relative to cwd first, then to the project root.
+
+    Entry points (CLI, API, scripts) may run from any working directory. Silently
+    reading an empty knowledge base / web corpus / pricing table because of cwd
+    drift is a real bug, so inputs are looked up in both locations.
+    """
+    path = Path(value)
+    if path.is_absolute() or path.exists():
+        return path
+    candidate = (root or project_root()) / path
+    return candidate if candidate.exists() else path
 
 
 def parse_iso(value: str) -> float | None:
@@ -168,17 +178,6 @@ def _brace_span(text: str) -> str | None:
     return text[start:]
 
 
-def chunked(items: Iterable[Any], size: int) -> Iterator[list[Any]]:
-    batch: list[Any] = []
-    for item in items:
-        batch.append(item)
-        if len(batch) >= size:
-            yield batch
-            batch = []
-    if batch:
-        yield batch
-
-
 def cosine_similarity(a: list[float], b: list[float]) -> float:
     if not a or not b:
         return 0.0
@@ -285,14 +284,3 @@ def overlap_ratio(reference: str, candidate: str) -> float:
     if not ref:
         return 0.0
     return len(ref & token_set(candidate)) / len(ref)
-
-
-def write_json(path: str | Path, payload: Any) -> Path:
-    target = Path(path)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    return target
-
-
-def read_json(path: str | Path) -> Any:
-    return json.loads(Path(path).read_text(encoding="utf-8"))

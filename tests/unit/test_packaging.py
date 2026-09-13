@@ -1,0 +1,52 @@
+"""Dependency hygiene: declared ranges, requirements mirror, compatible pair."""
+
+from __future__ import annotations
+
+import importlib.metadata as md
+import tomllib
+from pathlib import Path
+
+from packaging.requirements import Requirement
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def _pyproject_dependencies() -> list[str]:
+    data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    return list(data["project"]["dependencies"])
+
+
+def test_requirements_txt_mirrors_pyproject() -> None:
+    declared = {Requirement(dep).name for dep in _pyproject_dependencies()}
+    listed = {
+        Requirement(line.split("#")[0].strip()).name
+        for line in (ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    }
+    assert declared <= listed, f"requirements.txt is missing: {declared - listed}"
+
+
+def test_declared_ranges_accept_installed_versions() -> None:
+    """Every runtime dependency must be satisfied by what is actually installed."""
+    for dep in _pyproject_dependencies():
+        requirement = Requirement(dep)
+        installed = md.version(requirement.name)
+        assert requirement.specifier.contains(installed, prereleases=True), (
+            f"{requirement.name} {installed} does not satisfy {requirement.specifier}"
+        )
+
+
+def test_fastapi_and_starlette_are_a_compatible_pair() -> None:
+    """Regression: fastapi 0.110 + starlette 1.x is not importable (Router kwargs)."""
+    fastapi_version = md.version("fastapi")
+    starlette_version = md.version("starlette")
+    fastapi_requires = md.requires("fastapi") or []
+    starlette_req = next(
+        (Requirement(req) for req in fastapi_requires if Requirement(req).name == "starlette"),
+        None,
+    )
+    assert starlette_req is not None, "fastapi should declare its starlette range"
+    assert starlette_req.specifier.contains(starlette_version, prereleases=True), (
+        f"installed starlette {starlette_version} violates fastapi {fastapi_version} "
+        f"({starlette_req.specifier}); pick a compatible pair instead of upgrading blindly"
+    )

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+from pathlib import Path
 
 import httpx
 import pytest
@@ -186,3 +187,94 @@ async def test_http_transport(settings: Settings, knowledge_base: KnowledgeBase)
             ],
         )
         assert len(batch.json()) == 2
+
+
+@pytest.mark.anyio
+async def test_api_container_uses_http_mcp_server_process(tmp_path, monkeypatch) -> None:
+    """The docker-compose topology: API -> HTTP MCP server -> tool -> result."""
+    import os
+    import socket
+    import subprocess
+    import sys
+    import time
+
+    import httpx as httpx_client
+
+    from researchpilot.api.app import create_app
+    from researchpilot.config import Settings as AppSettings
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = int(sock.getsockname()[1])
+    env = {
+        **os.environ,
+        "RESEARCHPILOT_MCP_TRANSPORT": "http",
+        "RESEARCHPILOT_MCP_HOST": "127.0.0.1",
+        "RESEARCHPILOT_MCP_PORT": str(port),
+        "RESEARCHPILOT_KB_PATH": str(Path(__file__).resolve().parents[1] / "fixtures" / "kb"),
+        "RESEARCHPILOT_RUNS_PATH": str(tmp_path / "mcp-runs"),
+        "RESEARCHPILOT_PROVIDER": "mock",
+    }
+    process = subprocess.Popen(
+        [sys.executable, "-m", "researchpilot.mcp_server"],
+        env=env,
+        cwd=str(Path(__file__).resolve().parents[2]),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+    )
+    try:
+        base = f"http://127.0.0.1:{port}"
+        deadline = time.time() + 30
+        ready = False
+        while time.time() < deadline and process.poll() is None:
+            try:
+                if httpx_client.get(f"{base}/health", timeout=2).status_code == 200:
+                    ready = True
+                    break
+            except Exception:
+                time.sleep(0.25)
+        assert ready, "MCP HTTP server did not become healthy"
+
+        settings = AppSettings(
+            provider="mock",
+            mcp_transport="http",
+            mcp_url=f"{base}/mcp",
+            mcp_timeout_s=20,
+            kb_path=str(Path(__file__).resolve().parents[1] / "fixtures" / "kb"),
+            runs_path=str(tmp_path / "runs"),
+            embedding_dim=64,
+            top_k=4,
+            max_iterations=1,
+        )
+        app = create_app(settings)
+        assert app.state.container.mcp_mode == "http"
+
+        transport = httpx_client.ASGITransport(app=app)
+        async with httpx_client.AsyncClient(
+            transport=transport, base_url="http://api", timeout=120
+        ) as client:
+            tools = (await client.get("/mcp/tools")).json()
+            assert tools["transport"] == "http"
+            health = (await client.get("/health")).json()
+            assert health["mcp_transport"] == "http"
+
+            result = (
+                await client.post(
+                    "/research",
+                    json={"question": "如何通过 MCP 网关把知识库复用到多个 Agent？"},
+                )
+            ).json()
+            assert result["status"] in {"succeeded", "degraded"}
+            assert result["metrics"]["mcp_calls"] >= 1
+            assert (
+                any(item["tool"] == "mcp_research_context" for item in result["evidence"]["evidence"])
+                or result["metrics"]["mcp_calls"] >= 1
+            )
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except Exception:  # pragma: no cover
+            process.kill()

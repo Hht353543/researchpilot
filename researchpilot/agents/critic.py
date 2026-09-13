@@ -38,7 +38,7 @@ class CriticAgent(BaseAgent):
                         plan.model_dump(),
                         evidence_dump,
                         verification.model_dump(),
-                        runtime.knowledge_base.topics(),
+                        self._safe_topics(),
                     ),
                     hints={
                         "objective": plan.objective,
@@ -46,7 +46,7 @@ class CriticAgent(BaseAgent):
                         "evidence": evidence_dump,
                         "verification": verification.model_dump(),
                         "subtask_map": subtask_map,
-                        "kb_topics": runtime.knowledge_base.topics(),
+                        "kb_topics": self._safe_topics(),
                     },
                     purpose="critic",
                     max_tokens=1500,
@@ -65,6 +65,13 @@ class CriticAgent(BaseAgent):
                 },
             )
         return report
+
+    def _safe_topics(self) -> list[str]:
+        try:
+            return list(self.runtime.knowledge_base.topics())
+        except Exception as exc:
+            self.runtime.errors.append(f"critic: {type(exc).__name__}: {exc}")
+            return []
 
     def _augment(
         self,

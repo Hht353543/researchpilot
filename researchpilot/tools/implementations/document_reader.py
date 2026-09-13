@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field, model_validator
 
-from researchpilot.tools.base import BaseTool, ToolContext, ToolItem, ToolPermission, ToolResult
+from researchpilot.tools.base import (
+    BaseTool,
+    ToolContext,
+    ToolItem,
+    ToolPermission,
+    ToolRequestContext,
+    ToolResult,
+)
 from researchpilot.utils import truncate
 
 
@@ -32,6 +41,12 @@ class DocumentReaderTool(BaseTool):
     max_retries = 1
     tags = ["document"]
     args_model = DocumentReaderArgs
+
+    def build_arguments(self, request: ToolRequestContext) -> dict[str, Any] | None:
+        """Only callable when the agent already knows which document to read."""
+        if not request.doc_id_hint:
+            return None
+        return {"doc_id": request.doc_id_hint, "max_chars": 6000}
 
     def run(self, args: BaseModel, ctx: ToolContext) -> ToolResult:
         assert isinstance(args, DocumentReaderArgs)

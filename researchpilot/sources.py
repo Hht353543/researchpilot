@@ -67,6 +67,11 @@ class SourceRegistry:
     def has(self, source_id: str) -> bool:
         return source_id in self._sources
 
+    def source_for_doc(self, doc_id: str) -> SourceRef | None:
+        """First source registered for a document (used by document_reader)."""
+        source_id = self._by_doc.get(doc_id)
+        return self._sources.get(source_id) if source_id else None
+
     def register_tool_result(self, result: Any) -> list[SourceRef]:
         registered: list[SourceRef] = []
         for item in getattr(result, "items", []) or []:

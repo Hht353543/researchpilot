@@ -14,7 +14,7 @@ from researchpilot.agents.writer import WriterAgent
 from researchpilot.config import Settings, get_settings
 from researchpilot.llm.base import BudgetExceededError, LLMConfigError, LLMProvider
 from researchpilot.llm.factory import build_provider
-from researchpilot.observability.trace import Tracer, TraceStore
+from researchpilot.observability.trace import Tracer, TraceStore, tracer_scope
 from researchpilot.rag.knowledge_base import KnowledgeBase
 from researchpilot.schemas import (
     EvidenceBundle,
@@ -158,6 +158,14 @@ class ResearchPipeline:
     def _execute(
         self, runtime: ResearchRuntime, request: ResearchRequest, *, tracer: Tracer
     ) -> tuple[Any, EvidenceBundle, Any, Any, Any]:
+        # Make the tracer ambient as well: nested calls that only receive a
+        # ToolContext still produce spans instead of silently losing trace data.
+        with tracer_scope(tracer):
+            return self._run_agents(runtime, request, tracer=tracer)
+
+    def _run_agents(
+        self, runtime: ResearchRuntime, request: ResearchRequest, *, tracer: Tracer
+    ) -> tuple[Any, EvidenceBundle, Any, Any, Any]:
         planner = PlannerAgent(runtime)
         researcher = ResearchAgent(runtime)
         verifier = VerifierAgent(runtime)
@@ -206,9 +214,15 @@ class ResearchPipeline:
 
     @staticmethod
     def _status(runtime: ResearchRuntime, bundle: EvidenceBundle) -> TaskStatus:
+        """Honest status: no evidence is never 'succeeded'.
+
+        A run that produced zero usable evidence is a *degraded* outcome even when
+        every tool technically returned ok=True, otherwise empty-result tasks would
+        inflate the success rate.
+        """
         if not bundle.evidence and runtime.errors:
             return "failed"
-        if runtime.errors:
+        if runtime.errors or not bundle.evidence:
             return "degraded"
         return "succeeded"
 

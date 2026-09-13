@@ -44,6 +44,11 @@ class TaskJudgement(BaseModel):
     retrieval_recall: float = 0.0
     context_relevance: float = 0.0
     citation_correctness: float = 0.0
+    # Applicability flags: a task without expectations must not contribute a
+    # vacuous 1.0 to the aggregate metrics (see docs/evaluation.md methodology).
+    retrieval_applicable: bool = False
+    citation_applicable: bool = False
+    tool_selection_applicable: bool = False
     tool_selection_recall: float = 0.0
     tool_selection_f1: float = 0.0
     tool_calls: int = 0
@@ -78,13 +83,15 @@ def judge_task(
             citation_valid += 1
     citation_correctness = citation_valid / citation_total if citation_total else 0.0
 
-    retrieval_recall = _recall(task.expected_docs, retrieved_docs)
-    context_relevance = _precision(task.expected_docs, retrieved_docs)
-    tool_recall = _recall(task.expected_tools, used_tools)
-    tool_f1 = _f1(task.expected_tools, used_tools)
-
     checks: list[CheckResult] = []
     exp = task.expectations
+    retrieval_applicable = bool(task.expected_docs)
+    tool_selection_applicable = bool(task.expected_tools)
+    citation_applicable = bool(exp.min_citation_integrity or citation_total or task.category == "citation")
+    retrieval_recall = _recall(task.expected_docs, retrieved_docs) if retrieval_applicable else 0.0
+    context_relevance = _precision(task.expected_docs, retrieved_docs) if retrieval_applicable else 0.0
+    tool_recall = _recall(task.expected_tools, used_tools) if tool_selection_applicable else 0.0
+    tool_f1 = _f1(task.expected_tools, used_tools) if tool_selection_applicable else 0.0
     checks.append(
         CheckResult(
             name="report_present",
@@ -189,6 +196,9 @@ def judge_task(
         retrieval_recall=round(retrieval_recall, 4),
         context_relevance=round(context_relevance, 4),
         citation_correctness=round(citation_correctness, 4),
+        retrieval_applicable=retrieval_applicable,
+        citation_applicable=citation_applicable,
+        tool_selection_applicable=tool_selection_applicable,
         tool_selection_recall=round(tool_recall, 4),
         tool_selection_f1=round(tool_f1, 4),
         tool_calls=metrics.tool_calls,
@@ -208,9 +218,7 @@ def _retrieved_docs(trace: Trace | None) -> list[str]:
     if trace is None:
         return []
     docs: list[str] = []
-    for span in trace.spans:
-        if span.kind != "retrieval":
-            continue
+    for span in trace.spans_of("retrieval"):
         for doc_id in span.output.get("doc_ids", []) or []:
             if doc_id not in docs:
                 docs.append(str(doc_id))
@@ -221,8 +229,8 @@ def _used_tools(trace: Trace | None) -> list[str]:
     if trace is None:
         return []
     tools: list[str] = []
-    for span in trace.spans:
-        if span.kind in {"tool", "mcp"} and span.tool and span.tool not in tools:
+    for span in trace.spans_of("tool") + trace.spans_of("mcp"):
+        if span.tool and span.tool not in tools:
             tools.append(span.tool)
     return tools
 

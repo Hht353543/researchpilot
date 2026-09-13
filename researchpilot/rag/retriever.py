@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -95,6 +96,7 @@ class Retriever:
             if tracer
             else None
         )
+        started = time.perf_counter()
         try:
             rewritten = self._rewrite(query, use_llm=rewrite, with_llm=bool(rewrite_with_llm))
             vector = self.embedder.embed_one(rewritten)
@@ -116,6 +118,7 @@ class Retriever:
                 context=context,
                 rerank_strategy=self.rerank_strategy if rerank else "none",
                 candidates=candidates,
+                latency_ms=round((time.perf_counter() - started) * 1000, 3),
             )
             if span is not None:
                 tracer.end_span(  # type: ignore[union-attr]

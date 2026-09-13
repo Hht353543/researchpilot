@@ -6,7 +6,14 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from researchpilot.tools.base import BaseTool, ToolContext, ToolItem, ToolPermission, ToolResult
+from researchpilot.tools.base import (
+    BaseTool,
+    ToolContext,
+    ToolItem,
+    ToolPermission,
+    ToolRequestContext,
+    ToolResult,
+)
 
 
 class WebSearchArgs(BaseModel):
@@ -28,6 +35,9 @@ class WebSearchTool(BaseTool):
     max_retries = 1
     tags = ["web", "search"]
     args_model = WebSearchArgs
+
+    def build_arguments(self, request: ToolRequestContext) -> dict[str, Any] | None:
+        return {"query": request.question, "top_k": max(request.top_k - 1, 3)}
 
     def run(self, args: BaseModel, ctx: ToolContext) -> ToolResult:
         assert isinstance(args, WebSearchArgs)
@@ -83,5 +93,6 @@ class WebSearchTool(BaseTool):
                 "backend": getattr(backend, "name", "unknown"),
                 "query": args.query,
                 "results": len(items),
+                "corpus_missing": bool(getattr(backend, "corpus_missing", False)),
             },
         )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 PROMPT_VERSION = "2026-09-13"
@@ -22,7 +23,11 @@ Safety rules (non-negotiable):
 def _untrusted(label: str, payload: Any) -> str:
     from researchpilot.utils import truncate
 
-    return f'<untrusted source="{label}">\n{truncate(str(payload), 6000)}\n</untrusted>'
+    # Structured payloads must be valid JSON: `str(dict)` produces Python repr
+    # (single quotes, None/True), which real models mis-parse and which downstream
+    # tooling cannot read back with json.loads().
+    rendered = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False, default=str)
+    return f'<untrusted source="{label}">\n{truncate(rendered, 6000)}\n</untrusted>'
 
 
 PLANNER_SYSTEM = f"""You are PlannerAgent in a deep-research system.

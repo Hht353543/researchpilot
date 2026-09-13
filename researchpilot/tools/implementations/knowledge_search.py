@@ -6,7 +6,14 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from researchpilot.tools.base import BaseTool, ToolContext, ToolItem, ToolPermission, ToolResult
+from researchpilot.tools.base import (
+    BaseTool,
+    ToolContext,
+    ToolItem,
+    ToolPermission,
+    ToolRequestContext,
+    ToolResult,
+)
 
 
 class KnowledgeSearchArgs(BaseModel):
@@ -32,6 +39,15 @@ class KnowledgeSearchTool(BaseTool):
     tags = ["rag", "retrieval"]
     args_model = KnowledgeSearchArgs
 
+    def build_arguments(self, request: ToolRequestContext) -> dict[str, Any] | None:
+        return {
+            "query": request.question,
+            "top_k": request.top_k,
+            "strategy": "hybrid",
+            "rewrite": True,
+            "filters": {},
+        }
+
     def run(self, args: BaseModel, ctx: ToolContext) -> ToolResult:
         assert isinstance(args, KnowledgeSearchArgs)
         kb = ctx.require("knowledge_base")
@@ -43,6 +59,7 @@ class KnowledgeSearchTool(BaseTool):
             tracer=ctx.tracer,
             llm_runner=ctx.service("llm_runner"),
             rewrite=args.rewrite,
+            rerank_strategy=ctx.settings.rerank_strategy,
         )
         items = [
             ToolItem(

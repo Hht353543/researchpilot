@@ -14,8 +14,11 @@ from researchpilot.config import Settings, get_settings
 from researchpilot.mcp.protocol import (
     INTERNAL_ERROR,
     INVALID_PARAMS,
+    INVALID_REQUEST,
     METHOD_NOT_FOUND,
+    PARSE_ERROR,
     JsonRpcError,
+    JsonRpcRequest,
     McpToolSpec,
     failure,
     initialize_result,
@@ -107,10 +110,12 @@ class McpServer:
     # -- JSON-RPC surface --------------------------------------------------- #
     def handle(self, message: dict[str, Any]) -> dict[str, Any] | None:
         request_id = message.get("id")
-        method = message.get("method")
-        params = message.get("params") or {}
-        if message.get("jsonrpc") != "2.0" or not isinstance(method, str):
-            return failure(request_id, JsonRpcError(-32600, "invalid JSON-RPC request"))
+        try:
+            request = JsonRpcRequest.model_validate(message)
+        except Exception as exc:
+            return failure(request_id, JsonRpcError(INVALID_REQUEST, f"invalid JSON-RPC request: {exc}"))
+        method = request.method
+        params = request.params
         if request_id is None and method.startswith("notifications/"):
             return None
         try:
@@ -285,7 +290,7 @@ def serve_stdio(server: McpServer | None = None, *, stdin: Any = None, stdout: A
             else:
                 payload = server.handle(message)
         except json.JSONDecodeError as exc:
-            payload = failure(None, JsonRpcError(-32700, f"parse error: {exc}"))
+            payload = failure(None, JsonRpcError(PARSE_ERROR, f"parse error: {exc}"))
         if payload is None:
             continue
         stream_out.write(json.dumps(payload, ensure_ascii=False) + "\n")

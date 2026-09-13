@@ -276,9 +276,6 @@ class Trace(BaseModel):
     def spans_of(self, kind: SpanKind) -> list[Span]:
         return [s for s in self.spans if s.kind == kind]
 
-    def children(self, parent_id: str | None) -> list[Span]:
-        return [s for s in self.spans if s.parent_id == parent_id]
-
 
 # --------------------------------------------------------------------------- #
 # Result envelope

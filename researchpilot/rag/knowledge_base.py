@@ -96,7 +96,20 @@ class KnowledgeBase:
         return self.ingest_documents([document])
 
     def load_default(self) -> IngestReport:
+        """Full rebuild: drop the current index, then ingest the KB directory.
+
+        A rebuild (not a merge) is what makes ``/kb/reindex`` correct when files
+        were deleted or renamed on disk - otherwise stale chunks stay searchable.
+        """
+        self.store.clear()
         return self.ingest_path(self.settings.kb_dir())
+
+    def delete_document(self, doc_id: str) -> int:
+        """Remove a document and all of its chunks; returns the chunks removed."""
+        removed = self.store.remove_document(doc_id)
+        if removed:
+            self.save()
+        return removed
 
     # -- retrieval --------------------------------------------------------- #
     def retriever(
@@ -125,8 +138,11 @@ class KnowledgeBase:
         tracer: Tracer | None = None,
         llm_runner: StructuredLLMRunner | None = None,
         rewrite: bool = True,
+        rerank_strategy: str | None = None,
     ) -> RetrievalResult:
-        retriever = self.retriever(tracer=tracer, llm_runner=llm_runner)
+        # ``rerank_strategy`` lets the caller (agent/runtime) win over the settings
+        # captured when this knowledge base was constructed.
+        retriever = self.retriever(tracer=tracer, llm_runner=llm_runner, rerank_strategy=rerank_strategy)
         return retriever.retrieve(
             query,
             top_k=top_k,

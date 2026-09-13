@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 import threading
+import time
 from typing import Any
 
 from researchpilot.agents.base import ResearchRuntime, build_runtime
@@ -17,6 +19,8 @@ from researchpilot.rag.knowledge_base import KnowledgeBase
 from researchpilot.schemas import ResearchRequest
 from researchpilot.store import ResultStore
 
+logger = logging.getLogger("researchpilot.service")
+
 
 class ServiceContainer:
     """Holds process-wide singletons (KB index, stores, MCP client, pipeline)."""
@@ -29,6 +33,7 @@ class ServiceContainer:
         self.result_store = ResultStore(self.settings.runs_dir())
         self.provider: LLMProvider = build_provider(self.settings)
         self.mcp_server = McpServer(self.settings, knowledge_base=self.knowledge_base)
+        self.mcp_mode = "inprocess"
         self.mcp_client = self._build_mcp_client()
         self.pipeline = ResearchPipeline(
             settings=self.settings,
@@ -40,11 +45,32 @@ class ServiceContainer:
         )
 
     def _build_mcp_client(self) -> Any:
+        """Connect to the configured MCP transport, falling back to in-process.
+
+        The API and the MCP server are separate services in docker-compose; a short
+        retry loop covers container start-up ordering, and ``self.mcp_mode`` records
+        which transport is really in use so /health cannot mislead operators.
+        """
         try:
             if self.settings.mcp_transport == "inprocess":
                 return InProcessMcpClient(self.mcp_server)
-            return build_mcp_client(self.settings)
-        except Exception:
+            last_error: Exception | None = None
+            for attempt in range(3):
+                try:
+                    client = build_mcp_client(self.settings)
+                    self.mcp_mode = getattr(client, "name", self.settings.mcp_transport)
+                    return client
+                except Exception as exc:  # pragma: no cover - startup race
+                    last_error = exc
+                    time.sleep(0.5 * (attempt + 1))
+            raise last_error if last_error else RuntimeError("mcp client unavailable")
+        except Exception as exc:
+            logger.warning(
+                "MCP transport %s unavailable (%s); falling back to in-process",
+                self.settings.mcp_transport,
+                exc,
+            )
+            self.mcp_mode = "inprocess-fallback"
             return InProcessMcpClient(self.mcp_server)
 
     # -- task execution ---------------------------------------------------- #
@@ -60,6 +86,10 @@ class ServiceContainer:
             report = self.knowledge_base.load_default()
             self.knowledge_base.save()
             return report
+
+    def delete_document(self, doc_id: str) -> int:
+        with self._lock:
+            return self.knowledge_base.delete_document(doc_id)
 
     def runtime(self, task_id: str, question: str) -> ResearchRuntime:
         return build_runtime(
@@ -82,6 +112,7 @@ class ServiceContainer:
                 "web_backend": build_web_backend(self.settings),
                 "mcp_client": self.mcp_client,
             },
+            cache_ttl_s=self.settings.tool_cache_ttl_s,
         )
         names = registry.names()
         registry.close()

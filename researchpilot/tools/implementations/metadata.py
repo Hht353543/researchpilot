@@ -7,7 +7,13 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from researchpilot.tools.base import BaseTool, ToolContext, ToolPermission, ToolResult
+from researchpilot.tools.base import (
+    BaseTool,
+    ToolContext,
+    ToolPermission,
+    ToolRequestContext,
+    ToolResult,
+)
 
 
 class MetadataArgs(BaseModel):
@@ -27,6 +33,10 @@ class MetadataTool(BaseTool):
     max_retries = 0
     tags = ["metadata"]
     args_model = MetadataArgs
+
+    def build_arguments(self, request: ToolRequestContext) -> dict[str, Any] | None:
+        """Coverage / metadata lookups default to knowledge-base statistics."""
+        return {"subject": "stats", "limit": 20}
 
     def run(self, args: BaseModel, ctx: ToolContext) -> ToolResult:
         assert isinstance(args, MetadataArgs)

@@ -40,6 +40,7 @@
             <label>frequency_penalty<input id="frequency" type="number" step="0.1" min="-2" max="2" /></label>
             <label>top_k<input id="topk" type="number" min="1" max="20" /></label>
             <label>max_iterations<input id="iterations" type="number" min="1" max="4" /></label>
+            <label>max_tokens<input id="maxtokens" type="number" min="64" max="16000" /></label>
           </div>
           <p class="hint" id="configHint"></p>
         </article>
@@ -72,6 +73,11 @@
           <div class="scroll small" id="sources"></div>
           <h3>MCP tools</h3>
           <div class="scroll small" id="mcpTools"></div>
+        </article>
+
+        <article class="card">
+          <h2>6 · Evaluation (latest benchmark)</h2>
+          <div id="evaluation"></div>
         </article>
       </section>
 

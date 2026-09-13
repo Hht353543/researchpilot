@@ -15,6 +15,10 @@ def _configure_stdout() -> None:
             stream.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
 
 
+def _rate(value: float | None) -> str:
+    return "n/a" if value is None else f"{value:.1%}"
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="researchpilot", description="ResearchPilot CLI")
     parser.add_argument("--version", action="version", version="researchpilot 0.1.0")
@@ -148,7 +152,7 @@ def _run_bench(args: argparse.Namespace) -> int:
         f"tasks={metrics.tasks} passed={metrics.passed} "
         f"success={metrics.task_success_rate:.1%} recall={metrics.retrieval_recall:.1%} "
         f"citation={metrics.citation_correctness:.1%} tool_f1={metrics.tool_selection_f1:.1%} "
-        f"tool_success={metrics.tool_success_rate:.1%} avg_latency={metrics.avg_latency_s:.2f}s "
+        f"tool_success={_rate(metrics.tool_success_rate)} avg_latency={metrics.avg_latency_s:.2f}s "
         f"tokens={metrics.total_tokens} cost=${metrics.total_cost_usd:.6f}"
     )
     for row in report.categories:

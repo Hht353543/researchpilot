@@ -82,6 +82,7 @@ def build_runtime(
                 "mcp_client": mcp_client,
             },
             policy=policy,
+            cache_ttl_s=settings.tool_cache_ttl_s,
         )
     return ResearchRuntime(
         task_id=task_id,

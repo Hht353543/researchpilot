@@ -7,6 +7,14 @@ from pathlib import Path
 from researchpilot.evaluation.runner import EvaluationReport
 
 
+def _rate(value: float | None, *, digits: int = 2) -> str:
+    return "n/a" if value is None else f"{value:.{digits}%}"
+
+
+def _fmt(value: float | None, *, digits: int = 4) -> str:
+    return "n/a" if value is None else f"{value:.{digits}f}"
+
+
 def render_evaluation_markdown(report: EvaluationReport) -> str:
     metrics = report.metrics
     lines: list[str] = [
@@ -55,12 +63,17 @@ def render_evaluation_markdown(report: EvaluationReport) -> str:
         f"| Task Success Rate | **{metrics.task_success_rate:.1%}** "
         f"({metrics.passed}/{metrics.tasks}) | 通过全部硬性判定的任务比例 |",
         f"| Retrieval Recall@{report.environment.get('retrieval_top_k')} | "
-        f"{metrics.retrieval_recall:.1%} | 期望来源文档出现在检索结果中的比例 |",
-        f"| Context Relevance | {metrics.context_relevance:.1%} | 检索结果中相关文档占比 (precision@k) |",
-        f"| Citation Correctness | {metrics.citation_correctness:.1%} | 引用可解析且能支撑结论的比例 |",
-        f"| Tool Selection Accuracy | {metrics.tool_selection_accuracy:.1%} | 期望工具被调用的比例 |",
-        f"| Tool Selection F1 | {metrics.tool_selection_f1:.1%} | 工具集合的 F1 |",
-        f"| Tool Success Rate | {metrics.tool_success_rate:.1%} | 1 - 失败调用 / 总调用 |",
+        f"{metrics.retrieval_recall:.1%} | 期望来源文档出现在检索结果中的比例"
+        f"（分母 {metrics.retrieval_tasks} 个含期望来源的任务） |",
+        f"| Context Relevance | {metrics.context_relevance:.1%} | "
+        f"检索结果中相关文档占比 (precision@k)，同一分母 |",
+        f"| Citation Correctness | {metrics.citation_correctness:.1%} | "
+        f"引用可解析且能支撑结论的比例（分母 {metrics.citation_tasks} 个要求引用的任务） |",
+        f"| Tool Selection Accuracy | {metrics.tool_selection_accuracy:.1%} | "
+        f"期望工具被调用的比例（分母 {metrics.tool_selection_tasks} 个含期望工具的任务） |",
+        f"| Tool Selection F1 | {metrics.tool_selection_f1:.1%} | 工具集合的 F1，同一分母 |",
+        f"| Tool Success Rate | {_rate(metrics.tool_success_rate)} | "
+        f"1 - 失败调用 / 总调用（{metrics.tool_calls} 次调用，含故障注入） |",
         f"| Avg Latency | {metrics.avg_latency_s:.2f}s | 端到端平均耗时 |",
         f"| P50 / P95 Latency | {metrics.p50_latency_s:.2f}s / {metrics.p95_latency_s:.2f}s | 延迟分布 |",
         f"| Token Usage (total) | {metrics.total_tokens:,} | 输入 + 输出 token (估算/上报) |",
@@ -79,9 +92,19 @@ def render_evaluation_markdown(report: EvaluationReport) -> str:
     for row in report.categories:
         lines.append(
             f"| {row.category} | {row.tasks} | {row.passed} | {row.task_success_rate:.1%} | "
-            f"{row.avg_latency_s:.2f}s | {row.avg_tokens:,.0f} | {row.citation_correctness:.1%} | "
-            f"{row.retrieval_recall:.1%} | {row.tool_selection_f1:.1%} |"
+            f"{row.avg_latency_s:.2f}s | {row.avg_tokens:,.0f} | "
+            f"{_rate(row.citation_correctness)} | {_rate(row.retrieval_recall)} | "
+            f"{_rate(row.tool_selection_f1)} |"
         )
+
+    lines += [
+        "",
+        "> 说明：Recall / Context Relevance 仅在「声明了期望来源文档」的任务上取平均"
+        f"（{metrics.retrieval_tasks}/{metrics.tasks} 个任务）；"
+        f"Citation Correctness 仅在要求引用的任务上取平均（{metrics.citation_tasks}/{metrics.tasks}）；"
+        f"Tool Selection 仅在声明了期望工具的任务上取平均（{metrics.tool_selection_tasks}/{metrics.tasks}）。"
+        "没有期望值的任务不再贡献「真空 1.0」，也不会稀释或抬高这些指标。",
+    ]
 
     if report.failed_checks:
         lines += ["", "## 未通过的检查项 (Failed Checks)", "", "| 检查项 | 失败任务数 |", "| --- | --- |"]
@@ -111,11 +134,15 @@ def render_evaluation_markdown(report: EvaluationReport) -> str:
         "",
         "- Task Success Rate：任务通过全部硬性判定（报告存在、关键词覆盖、引用可解析、"
         "无禁用内容、缺口显式声明、故障处理符合预期等）才计为成功。",
-        "- Retrieval Recall@k：期望来源文档出现在 top-k 检索结果中的比例（数据集提供弱标注）。",
+        "- Retrieval Recall@k：期望来源文档出现在 top-k 检索结果中的比例（数据集提供弱标注），"
+        "仅在含期望来源的任务上取平均。",
         "- Context Relevance：top-k 检索结果中属于期望文档集合的比例。",
-        "- Citation Correctness：Markdown 中 `[E#]` 引用能解析到已登记证据、且该证据映射到真实来源的比例。",
-        "- Tool Selection Accuracy / F1：实际调用工具集合与数据集期望工具集合的召回与 F1。",
-        "- Tool Success Rate：1 - 工具失败次数 / 工具调用总次数（故障注入任务会主动制造失败）。",
+        "- Citation Correctness：Markdown 中 `[E#]` 引用能解析到已登记证据、且该证据映射到真实来源的比例"
+        "（分母为要求引用的任务数）。",
+        "- Tool Selection Accuracy / F1：实际调用工具集合与数据集期望工具集合的召回与 F1"
+        "（分母为声明期望工具的任务数）。",
+        "- Tool Success Rate：1 - 工具失败次数 / 工具调用总次数（故障注入任务会主动制造失败）；"
+        "没有任何工具调用时记为 `n/a` 而不是 1.0。",
         "- Latency / Token / Cost：来自统一 Trace 的端到端测量与真实 token 计数/估算，"
         "成本按配置文件价格表计算。",
         "",
@@ -176,7 +203,7 @@ def render_resume_section(report: EvaluationReport) -> str:
                 f"- 实现统一 Tool Registry（Schema 校验 + 权限分级 + 超时 + 重试 + Trace）与独立 MCP Server"
                 f"（JSON-RPC 2.0，stdio/HTTP 双传输，暴露 search_knowledge/get_document/search_web/"
                 f"get_research_context），工具选择召回 {metrics.tool_selection_accuracy:.1%}、"
-                f"工具成功率 {metrics.tool_success_rate:.1%}，"
+                f"工具成功率 {_rate(metrics.tool_success_rate)}，"
                 f"并用故障注入（超时/失败/空结果/调用预算）验证韧性。",
                 f"- 建立真实测量的评测与可观测体系：Golden Dataset 覆盖 12 类场景（含 Prompt Injection、"
                 f"工具滥用、超时恢复、无结果、低质量来源），"
