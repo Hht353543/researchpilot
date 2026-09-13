@@ -8,7 +8,7 @@
 复现入口：
 
 ```bash
-python -m pytest -q                     # 189 个测试（unit / integration / evaluation）
+python -m pytest -q                     # 191 个测试（unit / integration / evaluation）
 node --test "tests/frontend/**/*.test.mjs"   # 9 个前端逻辑测试
 ruff check . && ruff format --check . && mypy researchpilot
 python scripts/run_benchmark.py --provider mock   # 离线回归基线 35/35
@@ -25,7 +25,7 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 | 代码 Bug 审查 | `docs/audit_report.md` BUG 分类 + 逐条修复；31 项发现中 29 项已修复 | ✅ |
 | 架构 Bug 审查 | ADR-0001..0005、`docs/architecture.md`；修复 Planner 崩溃于向量库故障等架构级缺陷 | ✅ |
 | 功能缺失检查 | 新增 KB 删除、全量重建、工具缓存启用、LLM 重排可达、前端 max_tokens/评测面板 | ✅ |
-| 工程质量 | ruff / format / mypy / pip check / 189 pytest + 9 node / CI / Docker 资产测试 | ✅ |
+| 工程质量 | ruff / format / mypy / pip check / 191 pytest + 9 node / CI / Docker 资产测试 | ✅ |
 | AI Agent 特有可靠性 | 注入隔离、工具预算、超时重试、token 预算、无证据降级、引用绑定、修复重试 | ✅ |
 | 发现→定位→修改→补测试→运行→验证→更新文档 闭环 | `docs/development_log.md` 逐条记录（含失败与回退）；每项均有对应测试 | ✅ |
 
@@ -215,7 +215,7 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 | --- | --- | --- |
 | ruff | `ruff check .` → All checks passed；`ruff format --check .` → 136 files formatted | ✅ |
 | mypy | `mypy researchpilot` → Success（69 source files） | ✅ |
-| pytest | 189 passed（+ 9 node 前端测试） | ✅ |
+| pytest | 191 passed（+ 9 node 前端测试） | ✅ |
 | pip check | 本项目依赖对无冲突；其余为环境内无关预装包冲突（逐条说明） | ⚠️ 环境噪声已定位 |
 | 前端 npm test/build/lint | 无 npm 工具链（vanilla JS、无 package.json）→ `node --test`（零依赖 9 项）+ OpenAPI 契约测试等价覆盖 | ⚠️ 等价方案 |
 | 不为绿色而关闭规则 | 仅对中文全角标点关闭 RUF001-003，并在 pyproject 中注明原因 | ✅ |
@@ -226,7 +226,7 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 | --- | --- | --- |
 | docker build | 本机无容器引擎（PATH / 常见安装路径 / podman / buildah / nerdctl / WSL 全部核实）→ 未执行 | ⚠️ |
 | docker compose up（backend/frontend/vector store/MCP） | 未执行；等价验证：`scripts/compose_smoke.py` 用真实 compose 文件起双服务，实测 `mcp_transport=http`、前端 200、研究任务 `mcp_calls=1` | ⚠️ |
-| healthcheck / 环境变量 / network / ports / volume | `tests/unit/test_docker_assets.py`（healthcheck 路由存在、env 名合法、端口/卷声明、`depends_on: service_healthy`） | ✅ |
+| healthcheck / 环境变量 / network / ports / volume | `tests/unit/test_docker_assets.py`（env 名合法、端口/卷声明、`depends_on: service_healthy`）+ `compose_smoke.py` **实际执行 Dockerfile 的 HEALTHCHECK 命令**（exit 0）+ 运行时文件完整性（COPY 覆盖且未被 `.dockerignore` 排除） | ✅ |
 | README 与实际 Docker 配置一致 | README Docker 章节与 `docker-compose.yml` 逐项对齐，并如实说明本机未跑引擎 | ✅ |
 
 ## 十八、第十七阶段（文档一致性）

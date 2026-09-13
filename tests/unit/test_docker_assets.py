@@ -117,3 +117,96 @@ def test_pyproject_and_lockfile_agree_on_python_version() -> None:
     data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert data["project"]["requires-python"].startswith(">=3.11")
     assert "python:3.12" in DOCKERFILE.read_text(encoding="utf-8")
+
+
+# --------------------------------------------------------------------------- #
+# Image completeness: every file the container reads at runtime must be inside
+# the built image (COPY'd and not excluded by .dockerignore).
+# --------------------------------------------------------------------------- #
+RUNTIME_INPUTS = [
+    # setting -> repo-relative path the app reads at runtime
+    "data/knowledge_base/01-agent-architecture.md",
+    "data/web_corpus/items.jsonl",
+    "configs/pricing.yaml",
+    "eval/golden_dataset.jsonl",
+    "researchpilot/api/static/index.html",
+    "researchpilot/api/static/app.js",
+    "researchpilot/api/static/styles.css",
+]
+
+
+def _dockerignore_patterns() -> list[str]:
+    lines = (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
+    return [line.strip() for line in lines if line.strip() and not line.strip().startswith("#")]
+
+
+def _is_ignored(rel_path: str) -> bool:
+    """Docker .dockerignore semantics.
+
+    Docker matches patterns against the path relative to the build-context root
+    using Go's filepath.Match: ``*`` does NOT cross ``/`` (so ``*.md`` matches only
+    root-level markdown) and ``**`` does. Later rules win and ``!`` negates.
+    Python's PurePath.match uses fnmatch semantics where ``*`` crosses ``/``, which
+    produced false positives here - hence this explicit converter.
+    """
+    path = rel_path.lstrip("./")
+    ignored = False
+    for pattern in _dockerignore_patterns():
+        negate = pattern.startswith("!")
+        candidate = (pattern[1:] if negate else pattern).strip().lstrip("/").rstrip("/")
+        if not candidate:
+            continue
+        regex = _dockerignore_regex(candidate)
+        if re.fullmatch(regex, path) or re.fullmatch(f"{regex}/.*", path):
+            ignored = not negate
+    return ignored
+
+
+def _dockerignore_regex(pattern: str) -> str:
+    """Translate a .dockerignore pattern into an anchored regex (Go semantics)."""
+    out: list[str] = []
+    index = 0
+    while index < len(pattern):
+        char = pattern[index]
+        if char == "*":
+            if pattern[index : index + 2] == "**":
+                out.append(".*")
+                index += 2
+                if pattern[index : index + 1] == "/":
+                    index += 1
+                continue
+            out.append("[^/]*")
+        elif char == "?":
+            out.append("[^/]")
+        else:
+            out.append(re.escape(char))
+        index += 1
+    return "".join(out)
+
+
+def test_every_runtime_input_ships_inside_the_image() -> None:
+    copies = [
+        line.split()[1]
+        for line in DOCKERFILE.read_text(encoding="utf-8").splitlines()
+        if line.startswith("COPY ")
+    ]
+    for rel_path in RUNTIME_INPUTS:
+        local = ROOT / rel_path
+        assert local.exists(), f"runtime input missing from the repository: {rel_path}"
+        covered = any(
+            rel_path == source or rel_path.startswith(f"{source.rstrip('/')}/") for source in copies
+        )
+        assert covered, f"{rel_path} is not covered by any Dockerfile COPY entry"
+        assert not _is_ignored(rel_path), f"{rel_path} would be excluded by .dockerignore"
+
+
+def test_dockerignore_semantics_are_sane() -> None:
+    """Sanity-check the matcher so the completeness test cannot silently pass."""
+    assert _is_ignored("researchpilot/__pycache__/x.pyc")
+    assert _is_ignored("benchmarks/latest_mock.json")
+    assert _is_ignored("docs/architecture.md")
+    assert not _is_ignored("README.md")  # negated rule wins
+    # `*.md` is root-anchored in Docker semantics: nested markdown still ships.
+    assert _is_ignored("CHANGELOG.md")
+    assert not _is_ignored("data/knowledge_base/01-agent-architecture.md")
+    assert not _is_ignored("researchpilot/api/static/app.js")

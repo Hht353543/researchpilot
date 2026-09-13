@@ -206,6 +206,15 @@ def main() -> int:
         )
         failures: list[str] = []
 
+        # Run the *image's own* HEALTHCHECK command (from the Dockerfile) against
+        # the live API, so "the healthcheck works" is measured, not assumed.
+        healthcheck = run_dockerfile_healthcheck(api_port)
+        print(f"[compose-smoke] docker HEALTHCHECK command -> exit {healthcheck['code']}")
+        if healthcheck["code"] != 0:
+            failures.append(
+                f"Dockerfile HEALTHCHECK failed (exit {healthcheck['code']}): {healthcheck['output']}"
+            )
+
         if api_health.get("mcp_transport") != "http":
             failures.append(
                 f"api did not use the HTTP MCP transport (got {api_health.get('mcp_transport')!r})"
@@ -273,6 +282,32 @@ def main() -> int:
             shutil.rmtree(log_dir, ignore_errors=True)
         else:
             print(f"[compose-smoke] logs kept in {log_dir}")
+
+
+def run_dockerfile_healthcheck(port: int) -> dict[str, Any]:
+    """Execute the Dockerfile's healthcheck command against a locally running API."""
+    text = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    match = re.search(r"CMD\s+(python\s+-c\s+\".*?\")", text)
+    if match is None:
+        return {"code": 127, "output": "no CMD python -c healthcheck found in the Dockerfile"}
+    command = match.group(1)
+    if "8000" in command:
+        command = command.replace("8000", str(port))
+    completed = subprocess.run(
+        command,
+        shell=True,
+        cwd=str(ROOT),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
+        check=False,
+    )
+    return {
+        "code": completed.returncode,
+        "output": (completed.stdout + completed.stderr).strip()[-300:],
+    }
 
 
 if __name__ == "__main__":

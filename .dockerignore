@@ -2,12 +2,16 @@
 .github
 .venv
 venv
-__pycache__
-*.pyc
-.pytest_cache
-.mypy_cache
-.ruff_cache
+# Docker matches patterns against the build-context root only (Go filepath.Match
+# semantics: '*' does not cross '/'), so nested caches need an explicit '**/'
+# prefix - a bare '__pycache__' would only exclude the root-level directory.
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
 runs
+runs_*/
 benchmarks/*.json
 examples
 docs

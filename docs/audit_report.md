@@ -123,7 +123,7 @@ MCP Server 与 3 种传输；三层记忆；统一 Trace；35 条 Golden Dataset
 
 | 类别 | 条目 |
 | --- | --- |
-| **BUG**（功能存在但实现错误） | `MAX_CONTEXT_CHARS` 配置被 `KnowledgeBase.search` 硬编码忽略；超长结构化 payload 被**字符串截断**（产出非法 JSON 输入给模型）； **存储不可用时 `pipeline.run()` 直接抛异常**（不可写 `runs_path` 导致 API 500；启动阶段索引写入失败也会崩）； 评测基线依赖**未声明**的可选分词依赖 `jieba`（同一份代码在干净环境 30/35、装有 jieba 35/35，A/B 证实）；长期记忆使用进程级默认路径而非注入的 `runs_path`（写失败还会让任务失败）；MCP HTTP 应用的 `/openapi.json` 因函数内导入 `JSONResponse` 抛 `PydanticUserError`；**切换 embedding 提供方后静默复用旧索引向量**（维度不匹配仍照查）；**弱模型返回「schema 合法但无引用」的空报告时仍照原样输出**；缓存键截断导致错误命中；Planner 在向量库不可用时崩溃；reindex 残留已删除文档；UTC 时间被当本地时间（延迟虚高 8h）；MCP 工具在无 client 时仍注册；`/mcp` 的 `Request` 注解被当成查询参数；fastapi/starlette 不兼容 |
+| **BUG**（功能存在但实现错误） | `.dockerignore` 使用裸模式（`__pycache__`/`*.pyc` 等），按 Docker 的 root-anchored 匹配语义**嵌套缓存目录并未被排除**（镜像会夹带缓存）； `MAX_CONTEXT_CHARS` 配置被 `KnowledgeBase.search` 硬编码忽略；超长结构化 payload 被**字符串截断**（产出非法 JSON 输入给模型）； **存储不可用时 `pipeline.run()` 直接抛异常**（不可写 `runs_path` 导致 API 500；启动阶段索引写入失败也会崩）； 评测基线依赖**未声明**的可选分词依赖 `jieba`（同一份代码在干净环境 30/35、装有 jieba 35/35，A/B 证实）；长期记忆使用进程级默认路径而非注入的 `runs_path`（写失败还会让任务失败）；MCP HTTP 应用的 `/openapi.json` 因函数内导入 `JSONResponse` 抛 `PydanticUserError`；**切换 embedding 提供方后静默复用旧索引向量**（维度不匹配仍照查）；**弱模型返回「schema 合法但无引用」的空报告时仍照原样输出**；缓存键截断导致错误命中；Planner 在向量库不可用时崩溃；reindex 残留已删除文档；UTC 时间被当本地时间（延迟虚高 8h）；MCP 工具在无 client 时仍注册；`/mcp` 的 `Request` 注解被当成查询参数；fastapi/starlette 不兼容 |
 | **PARTIAL**（只实现一部分） | 工具缓存未启用；LLM 重排不可触发；KB 删除能力缺失（新增）；前端缺 `max_tokens`/评测面板 |
 | **MISSING**（需求明确但完全缺失） | 真实 HTTP provider 无任何端到端验证；无 `requirements.txt`；无依赖兼容性测试；无前端↔后端契约测试；无 SSRF 防护 |
 | **DEAD CODE** | `_by_doc`、`tracer_scope/current_tracer`、`JsonRpcRequest`、`PARSE_ERROR/INVALID_REQUEST`、`Trace.children`、`utils` 中 5 个未用函数、`VectorStore.remove_document/clear`（后两项改为接入真实功能） |
@@ -139,9 +139,9 @@ MCP Server 与 3 种传输；三层记忆；统一 Trace；35 条 Golden Dataset
 | P0 | 0 | 初始状态可运行 |
 | P1 | 2 | Planner 崩溃于向量库故障；真实 provider 链路未验证 |
 | P2 | 18 | **存储失败未降级**；缓存键/缓存未启用、指标真空 1.0、cwd 依赖路径、Prompt 非 JSON、Agent 内 if/elif、故障注入未生效、无证据仍成功、LLM 重排不可达、reindex 残留、依赖不兼容、长期记忆路径错误、评测指标依赖未声明的 jieba、**embedding 切换后索引未失效**、**弱模型空报告无引用回退缺失** |
-| P3 | 11 | 记忆命中未落盘、死代码、`.env.example` 不同步、前端缺字段/面板、`latency_ms=0`、无 requirements、SSRF、注入检测漏检、MCP 回退不可见、MCP `/openapi.json` 崩溃、校验器可被自洽但未落地的句子骗过 |
+| P3 | 12 | `.dockerignore` 语义错误；记忆命中未落盘、死代码、`.env.example` 不同步、前端缺字段/面板、`latency_ms=0`、无 requirements、SSRF、注入检测漏检、MCP 回退不可见、MCP `/openapi.json` 崩溃、校验器可被自洽但未落地的句子骗过 |
 | P4 | 3 | docker 引擎不可用（已穷尽 PATH/常见安装路径/podman/buildah/nerdctl/WSL 确认）、无 npm 构建链（已用零依赖 node 测试覆盖前端逻辑）、离线指标不代表模型质量（已如实标注） |
-| **合计** | **34**（修复 32 + 环境限制 2） | |
+| **合计** | **35**（修复 33 + 环境限制 2） | |
 
 ---
 
@@ -150,7 +150,7 @@ MCP Server 与 3 种传输；三层记忆；统一 Trace；35 条 Golden Dataset
 | 验证 | 命令 / 方式 | 结果 |
 | --- | --- | --- |
 | 静态检查 | `ruff check .` / `ruff format --check .` / `mypy researchpilot` | 全部通过（0 error） |
-| 测试 | `python -m pytest -q` | **189 passed**（含 unit / integration / evaluation）+ 9 个前端 node 测试 |
+| 测试 | `python -m pytest -q` | **191 passed**（含 unit / integration / evaluation）+ 9 个前端 node 测试 |
 | 依赖一致性 | `python -m pip check` | 本项目 fastapi/starlette 冲突消失；余下为环境内无关预装包 |
 | 干净环境安装 | `python -m venv` + `pip install -e .`（CI 路径用 `.[dev]`） | 成功解析并安装 fastapi 0.112.4 / starlette 0.38.6 / jieba 0.42.1 等；CLI、uvicorn 与 CI 的 lint/mypy/pytest 步骤均在干净环境内跑通 |
 | 指标可复现性 A/B | 同一 venv、同一代码，仅差 `jieba` | 无 jieba：30/35、Citation 87.9%；有 jieba：35/35、Citation 100% → 已将 `jieba` 声明为硬依赖 |
