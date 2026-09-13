@@ -344,3 +344,22 @@ async def test_storage_failure_degrades_instead_of_crashing(tmp_path) -> None:
         )
         assert submitted.status_code == 503
         assert submitted.json()["kind"] == "storage_unavailable"
+
+
+@pytest.mark.anyio
+async def test_cors_allows_frontend_origin(client: httpx.AsyncClient) -> None:
+    """Spec §14: the bundled frontend (served from any origin during dev) must work."""
+    response = await client.get("/health", headers={"Origin": "http://localhost:5173"})
+    assert response.status_code == 200
+    assert response.headers.get("access-control-allow-origin") in {"*", "http://localhost:5173"}
+
+    preflight = await client.options(
+        "/research",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+    assert preflight.status_code in {200, 204}
+    assert preflight.headers.get("access-control-allow-methods")

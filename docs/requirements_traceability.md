@@ -8,7 +8,7 @@
 复现入口：
 
 ```bash
-python -m pytest -q                     # 170 个测试（unit / integration / evaluation）
+python -m pytest -q                     # 177 个测试（unit / integration / evaluation）
 node --test "tests/frontend/**/*.test.mjs"   # 9 个前端逻辑测试
 ruff check . && ruff format --check . && mypy researchpilot
 python scripts/run_benchmark.py --provider mock   # 离线回归基线 35/35
@@ -106,7 +106,8 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 | reranking 真的执行 | heuristic + LLM 两条路径均有测试 | ✅ |
 | query rewrite 真的执行 | retrieval span 记录 `rewritten_query` | ✅ |
 | retrieval 结果进入 Agent Context | `knowledge_search` 返回并写入证据 | ✅ |
-| 空知识库 / 文档不存在 / embedding 失败 / 向量库不可用 / 无结果 的 fallback | 5 个专项测试（`test_pipeline.py`） | ✅ |
+| 空知识库 / 文档不存在 / embedding 失败 / 向量库不可用 / 无结果 的 fallback | 6 个专项测试（`test_pipeline.py`） | ✅ |
+| Context Overflow（§18.7） | `tests/unit/test_context_overflow.py`：context 受 `MAX_CONTEXT_CHARS` 约束、超长结构化 payload 结构化收缩后**仍是合法 JSON**、短期记忆 token 上限 | ✅ |
 
 ## 八、第七阶段（MCP）
 
@@ -117,6 +118,7 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 | 参数验证 / 错误处理 / 超时 | `test_unknown_method_and_tool_errors`、`test_tool_call_returns_structured_content`、客户端超时配置 | ✅ |
 | Agent ↔ MCP 完整闭环 | `test_api_container_uses_http_mcp_server_process` + `scripts/compose_smoke.py` | ✅ |
 | MCP 是否只是"假的" | 否：真实 JSON-RPC 往返 + 双服务 HTTP（mcp span 与 `mcp_calls` 为证） | ✅ |
+| MCP Failure（§18.9） | `test_mcp_failure_degrades_without_crashing`（工具失败被记录、任务降级仍产出报告）+ `test_mcp_transport_falls_back_visibly`（回退可见） | ✅ |
 
 ## 九、第八阶段（Memory）
 
@@ -183,7 +185,7 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 | --- | --- | --- |
 | Research Input / Model Settings（model、temperature、presence、frequency、max_tokens） | `index.html` + `app.js`；`test_frontend_exposes_required_settings_fields` | ✅ |
 | Agent Timeline / Knowledge Base / Final Report / Metrics | 7 个面板；`tests/frontend/app.test.mjs`（9 项） | ✅ |
-| API URL / CORS / 类型 / 参数 / 响应结构 | CORS 中间件 + OpenAPI 契约测试 + 渲染测试 | ✅ |
+| API URL / CORS / 类型 / 参数 / 响应结构 | `test_cors_allows_frontend_origin`（含 preflight）+ OpenAPI 契约测试 + 渲染测试 | ✅ |
 | loading / error / empty state | `setStatus`、`renderTimeline(null)`、`renderSources([])`、`renderMetrics(undefined)` | ✅ |
 | 不调用已变更/不存在的接口 | `test_frontend_calls_only_existing_api_routes` | ✅ |
 
@@ -213,7 +215,7 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 | --- | --- | --- |
 | ruff | `ruff check .` → All checks passed；`ruff format --check .` → 136 files formatted | ✅ |
 | mypy | `mypy researchpilot` → Success（69 source files） | ✅ |
-| pytest | 170 passed（+ 9 node 前端测试） | ✅ |
+| pytest | 177 passed（+ 9 node 前端测试） | ✅ |
 | pip check | 本项目依赖对无冲突；其余为环境内无关预装包冲突（逐条说明） | ⚠️ 环境噪声已定位 |
 | 前端 npm test/build/lint | 无 npm 工具链（vanilla JS、无 package.json）→ `node --test`（零依赖 9 项）+ OpenAPI 契约测试等价覆盖 | ⚠️ 等价方案 |
 | 不为绿色而关闭规则 | 仅对中文全角标点关闭 RUF001-003，并在 pyproject 中注明原因 | ✅ |

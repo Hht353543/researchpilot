@@ -324,3 +324,47 @@ def test_prompt_injection_evidence_is_quarantined(settings: Settings, knowledge_
     assert result.verification is not None
     if result.verification.flagged_sources:
         assert any("注入" in item for item in result.report.limitations)
+
+
+def test_mcp_failure_degrades_without_crashing(settings: Settings, knowledge_base: KnowledgeBase) -> None:
+    """Spec §18.9: an MCP outage must be a recorded tool failure, not a crash."""
+    from researchpilot.mcp.client import McpClientError
+
+    class BrokenMcpClient:
+        name = "broken"
+
+        def call_tool(self, name: str, arguments: dict[str, object]) -> dict[str, object]:
+            raise McpClientError("MCP server unreachable")
+
+        def list_tools(self) -> list[dict[str, object]]:
+            return []
+
+    pipeline = ResearchPipeline(
+        settings=settings,
+        provider=MockLLMProvider(settings),
+        knowledge_base=knowledge_base,
+        mcp_client=BrokenMcpClient(),
+    )
+    result = pipeline.run(ResearchRequest(question="如何通过 MCP 网关复用知识库？"))
+    assert result.status in {"degraded", "succeeded"}
+    assert result.metrics.tool_failures >= 1
+    assert any("mcp" in message.lower() for message in result.errors)
+    assert result.report is not None and result.report.markdown.strip()
+
+
+def test_mcp_transport_falls_back_visibly(tmp_path) -> None:
+    """An unreachable MCP transport falls back to in-process and reports so."""
+    from researchpilot.api.service import ServiceContainer
+
+    settings = Settings(
+        provider="mock",
+        kb_path="tests/fixtures/kb",
+        runs_path=str(tmp_path / "runs"),
+        embedding_dim=64,
+        mcp_transport="http",
+        mcp_url="http://127.0.0.1:9/mcp",  # nothing listens here
+        mcp_timeout_s=1.0,
+    )
+    container = ServiceContainer(settings)
+    assert container.mcp_mode == "inprocess-fallback"
+    assert container.knowledge_base.stats()["documents"] >= 1

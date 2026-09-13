@@ -162,7 +162,9 @@ class KnowledgeBase:
             strategy=strategy,  # type: ignore[arg-type]
             filters=filters,
             rewrite=rewrite,
-            max_context_chars=12_000,
+            # Honour the configured budget instead of a hardcoded 12k, so
+            # RESEARCHPILOT_MAX_CONTEXT_CHARS actually controls context overflow.
+            max_context_chars=self.settings.max_context_chars,
         )
 
     # -- inspection -------------------------------------------------------- #

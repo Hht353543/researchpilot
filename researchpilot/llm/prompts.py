@@ -5,7 +5,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from researchpilot.utils import truncate
+
 PROMPT_VERSION = "2026-09-13"
+UNTRUSTED_BUDGET = 5000
 
 SAFETY_RULES = """\
 Safety rules (non-negotiable):
@@ -21,13 +24,47 @@ Safety rules (non-negotiable):
 
 
 def _untrusted(label: str, payload: Any) -> str:
-    from researchpilot.utils import truncate
-
     # Structured payloads must be valid JSON: `str(dict)` produces Python repr
     # (single quotes, None/True), which real models mis-parse and which downstream
     # tooling cannot read back with json.loads().
-    rendered = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False, default=str)
+    if isinstance(payload, str):
+        rendered = payload
+    else:
+        rendered = json.dumps(_shrink_json(payload, budget=UNTRUSTED_BUDGET), ensure_ascii=False, default=str)
     return f'<untrusted source="{label}">\n{truncate(rendered, 6000)}\n</untrusted>'
+
+
+def _shrink_json(payload: Any, *, budget: int, depth: int = 0) -> Any:
+    """Context-overflow defence that keeps structured payloads *valid JSON*.
+
+    Blind string truncation would cut a JSON document in half (the model then
+    receives invalid input), so oversized payloads are shrunk structurally:
+    long strings are truncated, oversized lists are cut to the leading items and
+    deeply nested values are summarised.
+    """
+    if not isinstance(payload, str | int | float | bool | type(None)):
+        try:
+            size = len(json.dumps(payload, ensure_ascii=False, default=str))
+        except Exception:  # pragma: no cover - defensive
+            return str(payload)[:budget]
+        if size <= budget:
+            return payload
+    if isinstance(payload, str):
+        per_item = max(budget // 4, 200)
+        return truncate(payload, per_item)
+    if isinstance(payload, dict):
+        if depth >= 3:
+            return dict.fromkeys(list(payload)[:8], "…")
+        per_key = max(budget // max(len(payload), 1), 120)
+        return {
+            str(key): _shrink_json(value, budget=per_key, depth=depth + 1) for key, value in payload.items()
+        }
+    if isinstance(payload, list):
+        if depth >= 3:
+            return payload[:2]
+        per_item = max(budget // max(min(len(payload), 8), 1), 120)
+        return [_shrink_json(item, budget=per_item, depth=depth + 1) for item in payload[:8]]
+    return payload
 
 
 PLANNER_SYSTEM = f"""You are PlannerAgent in a deep-research system.
