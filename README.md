@@ -272,7 +272,7 @@ python scripts/verify_fresh_clone.py      # 从干净 clone 复现上述流程
 | Citation Correctness | 100%（分母 34 个要求引用的任务） |
 | Tool Selection Accuracy / F1 | 100% / 85.9%（分母 35 个含期望工具的任务） |
 | Tool Success Rate | 74.6%（130 次调用，含主动注入的超时、失败和预算任务） |
-| Avg / P95 Latency | 0.32s / 1.41s |
+| Avg / P95 Latency | 0.32s / 1.37s |
 | Tokens / Cost | 639,511 / $0.000000 |
 
 离线 `mock` provider 是确定性脚本模型，用来验证工程管线：检索、工具、校验、引用绑定、追踪、评测、故障恢复。这组数字衡量的是管线正确性和回归基线，不代表真实模型的生成质量。真实模型质量用 `python scripts/run_benchmark.py --provider openai` 重新跑，数字会自动覆盖到 `docs/evaluation.md`。

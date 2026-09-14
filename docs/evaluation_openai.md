@@ -1,6 +1,6 @@
 # Evaluation Report
 
-本文件由 `scripts/run_benchmark.py` 在真实运行后自动生成，**所有数字均来自本次运行**，没有任何手工填写的估计值。
+本文件由 `scripts/run_benchmark.py` 在真实运行后自动生成，里面的数字来自本次运行。
 
 ## 运行信息 (Run Metadata)
 
@@ -21,7 +21,7 @@
 
 ## 数据集 (Golden Dataset)
 
-- 任务数：**35**
+- 任务数：35
 - 含期望来源文档的任务：30
 - 含期望工具的任务：35
 - 含故障注入的任务：4
@@ -45,7 +45,7 @@
 
 | 指标 | 值 | 说明 |
 | --- | --- | --- |
-| Task Success Rate | **100.0%** (1/1) | 通过全部硬性判定的任务比例 |
+| Task Success Rate | 100.0% (1/1) | 通过全部硬性判定的任务比例 |
 | Retrieval Recall@6 | 100.0% | 期望来源文档出现在检索结果中的比例（分母 1 个含期望来源的任务） |
 | Context Relevance | 12.5% | 检索结果中相关文档占比 (precision@k)，同一分母 |
 | Citation Correctness | 100.0% | 引用可解析且能支撑结论的比例（分母 1 个要求引用的任务） |
@@ -74,7 +74,7 @@
 
 | 任务 | 类别 | 通过 | 状态 | 延迟 | token | 工具调用/失败 | 引用正确率 | 失败检查 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `fact-01-mcp-protocol` | simple_fact | ✅ | degraded | 410.12s | 71,304 | 5/0 | 100.0% | - |
+| `fact-01-mcp-protocol` | simple_fact | 通过 | degraded | 410.12s | 71,304 | 5/0 | 100.0% | - |
 
 ## 指标定义 (Metric Definitions)
 
@@ -99,8 +99,8 @@ export BASE_URL=https://api.openai.com/v1
 python scripts/run_benchmark.py --provider openai
 ```
 
-## 诚实声明 (Honesty Notes)
+## 数据说明
 
-- 本次运行使用 `openai` provider（live model）。Mock provider 是确定性脚本模型，用于验证工程管线、回归与 CI；它产出的数字衡量的是系统管线（检索、工具、校验、追踪、评测），**不代表前沿模型的生成质量**。
-- `web_search` 在离线模式下检索 `data/web_corpus` 中的**合成示例语料**（元数据标记 `synthetic: true`），用于让系统在无网络环境可完整运行；它不是真实搜索结果。
+- 本次运行使用 `openai` provider（live model）。Mock provider 是确定性脚本模型，用来验证工程管线、回归与 CI；它的数字衡量检索、工具、校验、追踪、评测这些环节，不代表前沿模型的生成质量。
+- `web_search` 在离线模式下检索 `data/web_corpus` 中的合成示例语料（元数据标记 `synthetic: true`），用于让系统在无网络环境可完整运行；它不是真实搜索结果。
 - 使用真实模型时，请用 `--provider openai` 重新运行本脚本，本文件会被覆盖，之前的数字不会被保留或美化。

@@ -20,8 +20,7 @@ def render_evaluation_markdown(report: EvaluationReport) -> str:
     lines: list[str] = [
         "# Evaluation Report",
         "",
-        "本文件由 `scripts/run_benchmark.py` 在真实运行后自动生成，**所有数字均来自本次运行**，"
-        "没有任何手工填写的估计值。",
+        "本文件由 `scripts/run_benchmark.py` 在真实运行后自动生成，里面的数字来自本次运行。",
         "",
         "## 运行信息 (Run Metadata)",
         "",
@@ -43,7 +42,7 @@ def render_evaluation_markdown(report: EvaluationReport) -> str:
         "",
         "## 数据集 (Golden Dataset)",
         "",
-        f"- 任务数：**{report.dataset.get('tasks', 0)}**",
+        f"- 任务数：{report.dataset.get('tasks', 0)}",
         f"- 含期望来源文档的任务：{report.dataset.get('with_expected_docs', 0)}",
         f"- 含期望工具的任务：{report.dataset.get('with_expected_tools', 0)}",
         f"- 含故障注入的任务：{report.dataset.get('fault_injection_tasks', 0)}",
@@ -60,7 +59,7 @@ def render_evaluation_markdown(report: EvaluationReport) -> str:
         "",
         "| 指标 | 值 | 说明 |",
         "| --- | --- | --- |",
-        f"| Task Success Rate | **{metrics.task_success_rate:.1%}** "
+        f"| Task Success Rate | {metrics.task_success_rate:.1%} "
         f"({metrics.passed}/{metrics.tasks}) | 通过全部硬性判定的任务比例 |",
         f"| Retrieval Recall@{report.environment.get('retrieval_top_k')} | "
         f"{metrics.retrieval_recall:.1%} | 期望来源文档出现在检索结果中的比例"
@@ -122,7 +121,7 @@ def render_evaluation_markdown(report: EvaluationReport) -> str:
         failed = ", ".join(check.name for check in judgement.checks if not check.passed) or "-"
         lines.append(
             f"| `{judgement.task_id}` | {judgement.category} | "
-            f"{'✅' if judgement.passed else '❌'} | {judgement.status} | "
+            f"{'通过' if judgement.passed else '失败'} | {judgement.status} | "
             f"{judgement.latency_s:.2f}s | {judgement.tokens:,} | "
             f"{judgement.tool_calls}/{judgement.tool_failures} | "
             f"{judgement.citation_correctness:.1%} | {failed} |"
@@ -159,16 +158,14 @@ def render_evaluation_markdown(report: EvaluationReport) -> str:
         "python scripts/run_benchmark.py --provider openai",
         "```",
         "",
-        "## 诚实声明 (Honesty Notes)",
+        "## 数据说明",
         "",
-        f"- 本次运行使用 `{report.provider}` provider（{report.mode}）。"
-        "Mock provider 是确定性脚本模型，用于验证工程管线、回归与 CI；"
-        "它产出的数字衡量的是系统管线（检索、工具、校验、追踪、评测），**不代表前沿模型的生成质量**。",
-        "- `web_search` 在离线模式下检索 `data/web_corpus` 中的**合成示例语料**"
-        "（元数据标记 `synthetic: true`），"
-        "用于让系统在无网络环境可完整运行；它不是真实搜索结果。",
-        "- 使用真实模型时，请用 `--provider openai` 重新运行本脚本，本文件会被覆盖，"
-        "之前的数字不会被保留或美化。",
+        f"- 本次运行使用 `{report.provider}` provider（{report.mode}）。Mock provider 是确定性脚本模型，"
+        "用来验证工程管线、回归与 CI；它的数字衡量检索、工具、校验、追踪、评测这些环节，"
+        "不代表前沿模型的生成质量。",
+        "- `web_search` 在离线模式下检索 `data/web_corpus` 里的合成示例语料"
+        "（元数据标记 `synthetic: true`），让系统在没有网络时也能跑通；它不是真实搜索结果。",
+        "- 用真实模型（`--provider openai`）重新运行本脚本会覆盖本文件。",
     ]
     return "\n".join(lines).strip() + "\n"
 
@@ -187,7 +184,7 @@ def render_resume_section(report: EvaluationReport) -> str:
                 "",
                 "## 项目名称",
                 "",
-                "**ResearchPilot —— 多 Agent 深度研究与知识库平台**",
+                "ResearchPilot —— 多 Agent 深度研究与知识库平台",
                 "",
                 "## 项目描述（简历 bullet）",
                 "",
@@ -215,11 +212,10 @@ def render_resume_section(report: EvaluationReport) -> str:
                 "",
                 "## 使用说明",
                 "",
-                "- ⚠️ 上表是 **离线确定性 provider（mock）** 的管线回归数据，衡量的是检索/工具/校验/引用绑定/"
-                "追踪/评测等工程质量，**不代表真实模型的生成质量**。写简历或面试时必须说明这一点。",
-                "- 以上数字可被 `docs/evaluation.md` 与 `benchmarks/` 下的原始 JSON 逐条复核。",
-                "- 使用真实模型（`--provider openai`）重跑会生成新的实测数据，请同步替换本文件中的数字，"
-                "不要保留旧数字或手工调高。",
+                "- 上表来自离线确定性 provider（mock），衡量的是检索、工具、校验、引用绑定、追踪、评测"
+                "这些工程环节，不代表真实模型的生成质量。",
+                "- 数字可以对着 `docs/evaluation.md` 和 `benchmarks/` 下的原始 JSON 逐条核对。",
+                "- 用真实模型（`--provider openai`）重跑会生成新数据，本文件会被覆盖。",
             ]
         ).strip()
         + "\n"

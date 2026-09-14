@@ -81,12 +81,21 @@ def test_documented_commands_exist() -> None:
 
 
 def test_traceability_matrix_has_no_unproven_required_row() -> None:
-    """No failed rows, and no stale suite counts."""
+    """Every requirement row carries a status, and none of them is a failure.
+
+    The matrix uses two plain-text statuses: ``已验证`` (reproducible evidence) and
+    ``受限`` (implemented, but only equivalent evidence is available). A row whose
+    status is anything else means a requirement lost its verdict.
+    """
     text = (ROOT / "docs" / "requirements_traceability.md").read_text(encoding="utf-8")
     rows = [line for line in text.splitlines() if line.startswith("| ") and line.count("|") >= 4]
-    status_rows = [line for line in rows if "✅" in line or "⚠️" in line or "❌" in line]
+    statuses = [row.rstrip().rstrip("|").split("|")[-1].strip() for row in rows]
+    status_rows = [status for status in statuses if status.startswith(("已验证", "受限"))]
     assert len(status_rows) >= 40, "traceability matrix lost rows"
-    assert "❌" not in text, "traceability matrix must not contain failed rows"
+    bad = [
+        status for status in statuses if status and not status.startswith(("已验证", "受限", "状态", "---"))
+    ]
+    assert not bad, f"traceability matrix rows without a verdict: {sorted(set(bad))[:5]}"
 
 
 def test_documented_suite_counts_match_reality() -> None:

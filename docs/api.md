@@ -161,7 +161,7 @@ Base URL：`http://127.0.0.1:8000`（`python -m researchpilot.cli serve`）
 
 ### `POST /kb/reindex`
 
-**全量重建**索引：先清空现有 chunk，再重新读取 `RESEARCHPILOT_KB_PATH` 下的全部文档。
+全量重建索引：先清空现有 chunk，再重新读取 `RESEARCHPILOT_KB_PATH` 下的全部文档。
 磁盘上被删除/改名的文件不会残留在索引中（返回入库统计）。
 
 ### `DELETE /kb/documents/{doc_id}`
@@ -187,12 +187,12 @@ Base URL：`http://127.0.0.1:8000`（`python -m researchpilot.cli serve`）
 
 ### MCP STDIO 传输的编码契约
 
-`python -m researchpilot.mcp_server --stdio` 使用**换行分隔的 JSON-RPC 2.0**，编码固定为 **UTF-8**，
+`python -m researchpilot.mcp_server --stdio` 使用换行分隔的 JSON-RPC 2.0，编码固定为 UTF-8，
 与操作系统 locale 无关（Windows 上默认可能是 `cp936`/`gbk`，会导致中文参数与结果损坏）：
 
 - 服务端启动时把 `stdin`/`stdout` 显式重配为 UTF-8（`errors="strict"`，`newline="\n"`），并直接读写底层字节缓冲；
 - 请求行若不是合法 UTF-8，服务端返回 `-32700` PARSE_ERROR 并继续服务（不静默、不崩溃）；
-- 启动横幅与所有日志一律写 **stderr**，stdout 只承载协议消息；
+- 启动横幅与所有日志一律写 stderr，stdout 只承载协议消息；
 - 客户端以 `-X utf8` + `PYTHONIOENCODING=utf-8` 启动子进程，并按 `encoding="utf-8", errors="strict"` 解码。
 
 客户端示例（Python）：

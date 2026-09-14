@@ -37,10 +37,10 @@
 3. `PlannerAgent`：调用 LLM（结构化输出 `ResearchPlan`）→ 代码校验工具可用性、子任务数量、synthesis 子任务
 4. `ResearchAgent`（迭代 1）：逐子任务 → `ToolRegistry.invoke` → 观测结果 → LLM 抽取 `EvidenceBundle`
    - 工具观测同时写入工作记忆（去重）与来源注册表（source_id → SourceRef）
-5. `VerifierAgent`：LLM 给出初判 → **代码复核**（引用存在性、quote 归属性、topical relevance、来源质量）
+5. `VerifierAgent`：LLM 给出初判 → 代码复核（引用存在性、quote 归属性、topical relevance、来源质量）
 6. `CriticAgent`：找缺口 → `needs_more_research` + `follow_up_queries`
 7. 若需要且未超过 `max_iterations`：`ResearchAgent` 补检 → 重新校验与批评
-8. `WriterAgent`：基于可用证据写作 → **引用绑定校验**（剔除不存在的引用、排除含注入特征的证据）
+8. `WriterAgent`：基于可用证据写作 → 引用绑定校验（剔除不存在的引用、排除含注入特征的证据）
 9. 落盘 `runs/{task_id}.result.json` 与 `runs/{task_id}.trace.json`；长期记忆写入主题与高置信结论
 
 ## 3. 关键 Schema（Agent 状态）
@@ -56,7 +56,7 @@
 | `FinalReport` | 最终报告 | `conclusions[]`, `sections[]`, `recommendations[]`, `limitations[]`, `markdown` |
 | `Span` / `Trace` | 可观测性 | `kind`, `agent`, `tool`, `model`, `latency_ms`, `usage`, `input`, `output`, `error` |
 
-设计原则：**Agent 状态不落在自然语言里**。这样才有参数校验、版本演进、重试恢复与自动评测的可能。
+设计原则：Agent 状态不落在自然语言里。这样才有参数校验、版本演进、重试恢复与自动评测的可能。
 
 ## 4. RAG 细节
 
@@ -113,7 +113,7 @@ Agent ──► ToolRegistry.invoke(name, args, ctx)
 
 ### 5.2 缓存键的完整性
 
-缓存键使用**完整参数**的 SHA-256（而不是写入 Trace 时被截断到 600 字符的副本）。否则两个共享前缀的
+缓存键使用完整参数的 SHA-256（而不是写入 Trace 时被截断到 600 字符的副本）。否则两个共享前缀的
 长查询会命中彼此的缓存结果——这是一个真实的正确性 Bug，已有回归测试。
 
 ### 5.3 未显式传递 Tracer 时
@@ -145,12 +145,12 @@ MCP Server 复用同一套 KnowledgeBase / WebBackend，把能力以协议方式
 
 ## 7. 取舍（Trade-offs）
 
-1. **同步执行 + 线程池**：实现简单、可测试；代价是并发受线程池限制。异步并行子任务列入 Future Work。
-2. **默认哈希向量**：离线可运行、确定性、零依赖；代价是语义精度不如真实 embedding（可通过配置替换）。
-3. **代码判定 + LLM 判定分离**：Verifier 的最终结论由代码推导，LLM 只提供初判；可复现、可回归，
+1. 同步执行 + 线程池：实现简单、可测试；代价是并发受线程池限制。异步并行子任务列入 Future Work。
+2. 默认哈希向量：离线可运行、确定性、零依赖；代价是语义精度不如真实 embedding（可通过配置替换）。
+3. 代码判定 + LLM 判定分离：Verifier 的最终结论由代码推导，LLM 只提供初判；可复现、可回归，
    代价是无法像人类评审那样理解深层语义（因此真实评测仍是必要的）。
-4. **自带 JSON-RPC MCP 实现**：不引入额外 SDK 依赖、可精确控制错误与超时；代价是需要自己跟进协议演进。
-5. **JSON 持久化**：便于检查与演示；大规模场景应替换为数据库/对象存储（见 Future Work）。
+4. 自带 JSON-RPC MCP 实现：不引入额外 SDK 依赖、可精确控制错误与超时；代价是需要自己跟进协议演进。
+5. JSON 持久化：便于检查与演示；大规模场景应替换为数据库/对象存储（见 Future Work）。
 
 ## 7.1 指标诚实性（Evaluation honesty）
 
