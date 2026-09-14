@@ -8,7 +8,7 @@
 复现入口：
 
 ```bash
-python -m pytest -q                     # 210 个测试（unit / integration / evaluation）
+python -m pytest -q                     # 224 个测试（unit / integration / evaluation）
 node --test "tests/frontend/**/*.test.mjs"   # 9 个前端逻辑测试
 ruff check . && ruff format --check . && mypy researchpilot
 python scripts/run_benchmark.py --provider mock   # 离线回归基线 35/35
@@ -25,7 +25,7 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 | 代码 Bug 审查 | `docs/audit_report.md` BUG 分类 + 逐条修复；31 项发现中 29 项已修复 | ✅ |
 | 架构 Bug 审查 | ADR-0001..0005、`docs/architecture.md`；修复 Planner 崩溃于向量库故障等架构级缺陷 | ✅ |
 | 功能缺失检查 | 新增 KB 删除、全量重建、工具缓存启用、LLM 重排可达、前端 max_tokens/评测面板 | ✅ |
-| 工程质量 | ruff / format / mypy / pip check / 210 pytest + 9 node / CI / Docker 资产测试 | ✅ |
+| 工程质量 | ruff / format / mypy / pip check / 224 pytest + 9 node / CI / Docker 资产测试 | ✅ |
 | AI Agent 特有可靠性 | 注入隔离、工具预算、超时重试、token 预算、无证据降级、引用绑定、修复重试 | ✅ |
 | 发现→定位→修改→补测试→运行→验证→更新文档 闭环 | `docs/development_log.md` 逐条记录（含失败与回退）；每项均有对应测试 | ✅ |
 
@@ -218,7 +218,7 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 | ruff | `ruff check .` → All checks passed；`ruff format --check .` → 136 files formatted | ✅ |
 | CI 工作流本身可执行 | `scripts/ci_dry_run.py` 解析真实 `.github/workflows/ci.yml` 并逐条执行：lint / typecheck / test / evaluation 共 **9/9 步骤通过**（docker job 需容器引擎，明确跳过并说明原因） | ✅ |
 | mypy | `mypy researchpilot` → Success（69 source files） | ✅ |
-| pytest | 210 passed（+ 9 node 前端测试） | ✅ |
+| pytest | 224 passed（+ 9 node 前端测试） | ✅ |
 | pip check | 本项目依赖对无冲突；其余为环境内无关预装包冲突（逐条说明） | ⚠️ 环境噪声已定位 |
 | 前端 npm test/build/lint | 无 npm 工具链（vanilla JS、无 package.json）→ `node --test`（零依赖 9 项）+ OpenAPI 契约测试等价覆盖 | ⚠️ 等价方案 |
 | 不为绿色而关闭规则 | 仅对中文全角标点关闭 RUF001-003，并在 pyproject 中注明原因 | ✅ |
@@ -227,8 +227,9 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 
 | 要求 | 证据 | 状态 |
 | --- | --- | --- |
-| docker build | 本机无容器引擎（PATH / 常见安装路径 / podman / buildah / nerdctl / WSL 全部核实）→ 未执行 | ⚠️ |
-| docker compose up（backend/frontend/vector store/MCP） | 未执行；等价验证：`scripts/compose_smoke.py` 用真实 compose 文件起双服务，实测 `mcp_transport=http`、前端 200、研究任务 `mcp_calls=1` | ⚠️ |
+| docker build | 本机无容器引擎（PATH / 常见安装路径 / podman / buildah / nerdctl / WSL 全部核实）→ 本机**未执行**；已改为由 CI 承担：`.github/workflows/ci.yml` 的 `docker` job 在 `ubuntu-latest` 上执行 `docker build --file Dockerfile --tag researchpilot:latest .`。**尚未 push，未运行** | ⚠️ 待 CI 执行 |
+| docker compose up（backend/frontend/vector store/MCP） | 同上：CI 中执行 `docker compose --file docker-compose.yml up --detach --wait --wait-timeout 300` + `docker inspect` healthcheck + 主机侧/容器内 smoke；本机等价验证：`scripts/compose_smoke.py` 用真实 compose 文件起双服务，实测 `mcp_transport=http`、前端 200、研究任务 `mcp_calls=1` | ⚠️ 待 CI 执行 |
+| CI 不允许静默跳过 Docker | `tests/unit/test_ci_docker_job.py`（11 项）：每个 job 必须是 Linux runner、`docker` job 不得有 `if`/`continue-on-error`、必须含真实 build/compose up/healthcheck/API+MCP 验证/容器内 smoke、不得使用 podman/nerdctl 等替身；`scripts/ci_dry_run.py --job docker` 在本机无引擎时**退出码 2**而非静默通过 | ✅ |
 | healthcheck / 环境变量 / network / ports / volume | `tests/unit/test_docker_assets.py`（env 名合法、端口/卷声明、`depends_on: service_healthy`）+ `compose_smoke.py` **实际执行 Dockerfile 的 HEALTHCHECK 命令**（exit 0）+ 运行时文件完整性（COPY 覆盖且未被 `.dockerignore` 排除） | ✅ |
 | README 与实际 Docker 配置一致 | README Docker 章节与 `docker-compose.yml` 逐项对齐，并如实说明本机未跑引擎 | ✅ |
 
@@ -277,6 +278,6 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 
 | 项 | 现状 | 解除条件 |
 | --- | --- | --- |
-| `docker build` + `docker compose up` 实机执行 | 本机无任何容器运行时（`docker`/`podman`/`buildah`/`nerdctl` 均缺失，WSL 无发行版）；已用真实 compose 文件的**无引擎拓扑验证**（`scripts/compose_smoke.py`）与 Docker 资产测试覆盖其等价语义 | 在任意一台装有 Docker 的机器上执行 `docker compose up --build`，并 `curl localhost:8000/health`（期望 `mcp_transport: http`） |
+| `docker build` + `docker compose up` 实机执行 | 本机无任何容器运行时（`docker`/`podman`/`buildah`/`nerdctl` 均缺失，WSL 无发行版），本机**从未执行**；已把该动作配置为 CI 的 `docker` job（Linux runner，真实引擎，失败即红，不许静默跳过），并保留无引擎等价验证（`scripts/compose_smoke.py`）与本地真实运行过的 `scripts/container_smoke.py` 门禁测试 | 把仓库 push 到 GitHub 触发 workflow（或在本机修好 Docker Engine 后执行 `python scripts/ci_dry_run.py --with-docker`）；真正的通过判定只看 Actions 页面上该 job 的结果 |
 
 其余 24 个阶段、全部编号要求与交付物均已有可复现证据；该行是唯一需要外部环境的动作。

@@ -15,7 +15,7 @@ LLM → Prompt → Structured Output → Tool Calling → RAG → Knowledge Base
 
 ## Project Overview
 
-> 需求追溯矩阵：规格书每一条要求 → 仓库证据 → 验证状态，见 [`docs/requirements_traceability.md`](docs/requirements_traceability.md)（唯一未验证项为需要 Docker 引擎的 `docker compose up` 实机执行）。
+> 需求追溯矩阵：规格书每一条要求 → 仓库证据 → 验证状态，见 [`docs/requirements_traceability.md`](docs/requirements_traceability.md)。容器实机验收由 CI 承担：`.github/workflows/ci.yml` 的 `docker` job 在 `ubuntu-latest` 上真实执行 `docker build` → `docker compose up --wait` → healthcheck → 容器内 smoke test。**该 job 尚未 push 到 GitHub 运行过，因此本项目不声称容器验证已通过**；本机（无可用 Docker Engine）只能做等价验证，见 [Docker](#docker) 一节。
 
 
 
@@ -38,7 +38,7 @@ LLM → Prompt → Structured Output → Tool Calling → RAG → Knowledge Base
 | 服务化 | FastAPI（类型安全、参数校验、错误语义、日志）+ 零依赖前端（输入 / 模型参数 / 知识库 / 时间线 / 报告 / 指标 / 评测面板） |
 | 知识库管理 | 文档入库、检索、删除（级联删除 chunk）、全量重建索引（磁盘删除的文件不会残留） |
 | LLM 抽象 | 任意 OpenAI 兼容端点（OpenAI / DeepSeek / vLLM / Ollama…）+ 确定性离线 provider；真实 HTTP 链路由本地兼容端点端到端测试覆盖 |
-| 工程质量 | **210 个测试**（unit / integration / evaluation，含真实 HTTP provider 链路）、ruff、mypy、pip check、Dockerfile、docker-compose、GitHub Actions |
+| 工程质量 | **224 个测试**（unit / integration / evaluation，含真实 HTTP provider 链路）、ruff、mypy、pip check、Dockerfile、docker-compose、GitHub Actions |
 
 ---
 
@@ -265,12 +265,44 @@ docker compose up --build
 `docker-compose.yml` 把 API 与 MCP Server 作为**两个独立服务**部署，API 通过 streamable-HTTP
 调用 MCP，体现"协议解耦"的工程价值。
 
-**本机没有容器引擎**（`docker`/`podman`/`buildah`/`nerdctl` 均不存在，WSL 也没有安装发行版），
-因此这里没跑过 `docker compose up`。作为等价验证，仓库提供了**由 compose 文件驱动的无引擎拓扑测试**：
+### 容器验收在 CI（GitHub Actions）上执行
+
+本机 Docker Engine 无法启动（`docker`/`podman`/`buildah`/`nerdctl` 均不存在，WSL 也没有安装发行版），
+所以容器验收交给 CI：`docker` job 跑在 **Linux runner（ubuntu-latest）** 上，步骤是
+
+| 步骤 | 命令 | 覆盖的需求 |
+| --- | --- | --- |
+| 引擎自检 | `docker version` / `docker compose version` | 无引擎时立刻失败，不会静默跳过 |
+| 真实构建 | `docker build --file Dockerfile --tag researchpilot:latest .` | 使用仓库当前 Dockerfile |
+| compose 校验 | `docker compose --file docker-compose.yml config --quiet` | 使用仓库当前 compose 文件 |
+| 真实启动 | `docker compose up --detach --wait --wait-timeout 300` | 真实 `docker compose up`，并等待 healthcheck |
+| 健康检查 | `docker inspect ... '{{.State.Health.Status}}'`（mcp / api 各一次） | 容器 healthcheck |
+| 主机侧验证 | `python3 scripts/container_smoke.py --api-url ... --mcp-url ...` | 经发布端口验证 API + MCP + 前端 + 一次研究任务 |
+| 容器内 smoke | `docker compose exec -T api python scripts/container_smoke.py --in-container` | 在容器环境内跑 smoke test（含镜像内知识库与卷可写） |
+| 失败取证 | `docker compose logs`（`if: failure()`） | 失败可诊断 |
+| 清理 | `docker compose down --volumes --remove-orphans`（`if: always()`） | 不留残留 |
+
+该 job **没有 `if:`、没有 `continue-on-error`、没有 mock 引擎**，容器坏掉会让整个 workflow 变红；
+`tests/unit/test_ci_docker_job.py` 把这些性质固定成回归测试，防止以后被悄悄改掉。
+**状态：尚未 push 到 GitHub，因此这里不写"已通过"**，推送后在 Actions 页面可以看到真实结果。
+
+### 本机能做的等价验证
+
+仓库提供**由 compose 文件驱动的无引擎拓扑测试**，以及**打到运行中服务**的 smoke 脚本：
 
 ```bash
 python scripts/compose_smoke.py      # 也可由 pytest 执行：tests/integration/test_compose_topology.py
+# 容器已经在运行时（CI 的 docker job 就是这么调用的）：
+python scripts/container_smoke.py --api-url http://127.0.0.1:8000 --mcp-url http://127.0.0.1:8765
+# 容器内自检（镜像内容 + 卷可写 + 端到端研究任务）：
+python scripts/container_smoke.py --in-container
 ```
+
+`scripts/container_smoke.py` 只用标准库（`urllib`），因此既能被 CI runner 直接调用，也能在容器内调用；
+它断言 MCP/API `/health`、MCP JSON-RPC（含中文 `tools/call`）、`/mcp/tools` 走 HTTP、前端 200、
+以及一次真实研究任务（状态、`mcp_calls`、证据、来源、报告）。任何一条不满足都会以非 0 退出。
+它的断言逻辑（含"服务不可达时必须失败""镜像缺数据时必须失败"）在本机由
+`tests/integration/test_container_smoke.py` 用真实启动的双服务验证过。
 
 该脚本读取真实的 `docker-compose.yml`（服务、`command`、`ports`、`environment` 的
 `${VAR:-default}` 插值、`depends_on: service_healthy`），先起 `mcp` 并等其 healthcheck，再起 `api`，
@@ -292,7 +324,7 @@ python scripts/compose_smoke.py      # 也可由 pytest 执行：tests/integrati
 ## Testing
 
 ```bash
-python -m pytest -q                       # 单元 + 集成 + 评测（210 个测试）
+python -m pytest -q                       # 单元 + 集成 + 评测（224 个测试）
 python -m pytest -q -m "not evaluation"   # 快速回归
 python -m pytest -q -m evaluation         # 全量 Golden Dataset 冒烟
 ruff check . && ruff format --check . && mypy researchpilot
@@ -373,10 +405,13 @@ Settings/面板元素必须存在并被读取）。CI 中作为独立步骤执�
    没有期望值的任务不会贡献"真空 1.0"，`n/a` 不会被渲染成 `0%` 或 `100%`。
 6. **状态语义诚实**：没有任何可用证据的运行会被标记为 `degraded`（而不是 `succeeded`），
    即使所有工具调用都返回 ok=True；只有至少产生一条可用证据且没有错误时才是 `succeeded`。
-7. **Docker 未在本机执行**：本开发环境没有 docker 引擎（`docker` 不可用），因此
-   `docker build` / `docker compose up` 未实机运行；已做的是静态一致性校验（compose YAML 解析、
-   `COPY` 源文件存在性、镜像内命令与本机可运行的 uvicorn/MCP 命令一致、healthcheck 路径存在、
-   以及 `pip install -e .` 的打包校验）。详见 `docs/development_log.md`。
+7. **Docker 从未在本机执行**：本开发环境没有可用的 docker 引擎，因此 `docker build` /
+   `docker compose up` 未在本机实机运行，本项目也不把容器验证写成"已通过"。容器验收改由 CI 承担
+   （`ubuntu-latest` runner 上的 `docker` job：真实 build → compose up --wait → healthcheck →
+   主机侧 + 容器内 smoke → 失败即红），该 job 尚未 push 运行过；本机已做的是静态一致性校验
+   （compose YAML 解析、`COPY` 源文件存在性、镜像内命令可导入、healthcheck 路径存在、
+   `pip install -e .` 打包校验）、**无引擎等价拓扑验证**，以及本地真实运行过的
+   `container_smoke.py` 正/反用例门禁测试。详见 `docs/development_log.md`。
 
 ---
 

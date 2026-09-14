@@ -140,7 +140,7 @@ MCP Server 与 3 种传输；三层记忆；统一 Trace；35 条 Golden Dataset
 | P1 | 3 | MCP STDIO 在 Windows 下编码不一致（中文参数/结果不可用，UnicodeDecodeError）；Planner 崩溃于向量库故障；真实 provider 链路未验证 |
 | P2 | 18 | **存储失败未降级**；缓存键/缓存未启用、指标真空 1.0、cwd 依赖路径、Prompt 非 JSON、Agent 内 if/elif、故障注入未生效、无证据仍成功、LLM 重排不可达、reindex 残留、依赖不兼容、长期记忆路径错误、评测指标依赖未声明的 jieba、**embedding 切换后索引未失效**、**弱模型空报告无引用回退缺失** |
 | P3 | 13 | CI 命令从未被真正执行（现由 `scripts/ci_dry_run.py` 逐条执行并发现脚本自身 lint 错误）；`.dockerignore` 语义错误；记忆命中未落盘、死代码、`.env.example` 不同步、前端缺字段/面板、`latency_ms=0`、无 requirements、SSRF、注入检测漏检、MCP 回退不可见、MCP `/openapi.json` 崩溃、校验器可被自洽但未落地的句子骗过 |
-| P4 | 3 | docker 引擎不可用（已穷尽 PATH/常见安装路径/podman/buildah/nerdctl/WSL 确认）、无 npm 构建链（已用零依赖 node 测试覆盖前端逻辑）、离线指标不代表模型质量（已如实标注） |
+| P4 | 3 | docker 引擎在本机不可用（已穷尽 PATH/常见安装路径/podman/buildah/nerdctl/WSL 确认）→ 容器验收移交 CI 的 Linux runner 真实执行（尚未 push，不声称通过）、无 npm 构建链（已用零依赖 node 测试覆盖前端逻辑）、离线指标不代表模型质量（已如实标注） |
 | **合计** | **37**（修复 35 + 环境限制 2） | |
 
 ---
@@ -150,9 +150,9 @@ MCP Server 与 3 种传输；三层记忆；统一 Trace；35 条 Golden Dataset
 | 验证 | 命令 / 方式 | 结果 |
 | --- | --- | --- |
 | 静态检查 | `ruff check .` / `ruff format --check .` / `mypy researchpilot` | 全部通过（0 error） |
-| 测试 | `python -m pytest -q` | **210 passed**（含 unit / integration / evaluation）+ 9 个前端 node 测试 |
+| 测试 | `python -m pytest -q` | **224 passed**（含 unit / integration / evaluation）+ 9 个前端 node 测试 |
 | 提交的仓库自洽（全新 clone） | `scripts/verify_fresh_clone.py`：把仓库 clone 到临时目录后执行 CI 干跑；实测 **167 个受版本控制文件、clone 中无 `runs/`**，ruff / mypy / 198 项测试 / 评测 / benchmark / compose 拓扑全部通过 |
-| CI 工作流本身可执行 | `python scripts/ci_dry_run.py`（解析真实 `.github/workflows/ci.yml`） | **9/9 步骤通过**：ruff → mypy → unit+integration(+coverage) → node 前端测试 → Golden Dataset 完整性 → benchmark → evaluation 冒烟 → compose 拓扑；`docker build` job 需引擎，明确跳过并说明 |
+| CI 工作流本身可执行 | `python scripts/ci_dry_run.py`（解析真实 `.github/workflows/ci.yml`） | **9/9 步骤通过**：ruff → mypy → unit+integration(+coverage) → node 前端测试 → Golden Dataset 完整性 → benchmark → evaluation 冒烟 → compose 拓扑。`docker` job 由 GitHub Actions 拥有（本机无引擎）：本机 `--job docker` **退出码 2 并打印原因**，不再是静默跳过；`--list` 可逐条看到该 job 的真实命令 |
 | 依赖一致性 | `python -m pip check` | 本项目 fastapi/starlette 冲突消失；余下为环境内无关预装包 |
 | 干净环境安装 | `python -m venv` + `pip install -e .`（CI 路径用 `.[dev]`） | 成功解析并安装 fastapi 0.112.4 / starlette 0.38.6 / jieba 0.42.1 等；CLI、uvicorn 与 CI 的 lint/mypy/pytest 步骤均在干净环境内跑通 |
 | 指标可复现性 A/B | 同一 venv、同一代码，仅差 `jieba` | 无 jieba：30/35、Citation 87.9%；有 jieba：35/35、Citation 100% → 已将 `jieba` 声明为硬依赖 |
@@ -163,7 +163,7 @@ MCP Server 与 3 种传输；三层记忆；统一 Trace；35 条 Golden Dataset
 | MCP 双服务链路 | 启动 MCP HTTP 服务进程 | API `/health` 显示 `mcp_transport=http`，`/mcp/tools` 走 HTTP，研究任务产生 mcp 调用 |
 | 完整链路 | CLI 真实运行（"分析当前大模型 Agent 在软件开发中的主要应用方向…"） | Planner 3 子任务 → 3 次工具调用 → 9 条证据 → Verifier 9 checks（sufficient=True）→ Critic → Writer 3 节/5 结论 → 9 条引用全部可解析 → Trace{agent:5, llm:7, tool:3, retrieval:1} |
 | 离线 Benchmark | `scripts/run_benchmark.py --provider mock` | 35/35 通过；Recall 93.9%（分母 30）、Context Relevance 28.8%、Citation 100%（分母 34）、Tool F1 85.9%、Tool Success 74.6%、平均延迟 0.31s |
-| Docker 构建 | **未实机执行**（本环境无 docker 引擎，已穷尽 PATH/安装路径/podman/buildah/nerdctl/WSL） | 等价证据：① `tests/unit/test_docker_assets.py` 校验 compose 结构与依赖条件、环境变量名、`COPY` 源与 `.dockerignore`、CMD 可导入、healthcheck 路由；② 干净环境 `pip install -e .` 与镜像内 CMD 实机跑通；③ **`scripts/compose_smoke.py` 用真实 compose 文件起双服务**：MCP 健康 → API `mcp_transport=http` → `/mcp/tools` 走 HTTP → 前端 200 → 研究任务 `mcp_calls=1` |
+| Docker 构建与启动 | 本机**未实机执行**（无 docker 引擎，已穷尽 PATH/安装路径/podman/buildah/nerdctl/WSL）；**已配置为 GitHub Actions 上的真实执行，但尚未 push，因此没有 Actions 运行结果可引用** | CI 侧：`docker` job（ubuntu-latest）真实执行 `docker build --file Dockerfile` → `docker compose up --detach --wait` → `docker inspect` healthcheck → 主机侧 `container_smoke.py` → `docker compose exec` 容器内 `container_smoke.py --in-container` → 失败即红、`if: always()` 清理。本机等价证据：① `tests/unit/test_docker_assets.py`；② 干净环境 `pip install -e .` 与镜像内 CMD 实机跑通；③ `scripts/compose_smoke.py` 用真实 compose 文件起双服务（MCP 健康 → API `mcp_transport=http` → `/mcp/tools` 走 HTTP → 前端 200 → `mcp_calls=1`）；④ `tests/integration/test_container_smoke.py` 用真实启动的双服务验证 `container_smoke.py` 的正例与反例（不可达必须失败、镜像缺数据必须失败） |
 
 ---
 
@@ -176,12 +176,14 @@ MCP Server 与 3 种传输；三层记忆；统一 Trace；35 条 Golden Dataset
    定位到「弱模型返回空报告 → 0 引用」后新增空报告回退，复测同任务**引用正确率 100%**。
    详见 `docs/evaluation_local_model.md`。换成线上有效 Key 只需
    `export API_KEY=sk-... && python scripts/verify_live_model.py --limit 35`。
-2. **Docker 引擎仍缺失，但 compose 拓扑已用真实 compose 文件验证**：本机无 `docker`/`podman`/`buildah`/
-   `nerdctl`，WSL 无发行版，因此 `docker build` / `docker compose up` 无法在此环境执行。
-   新增 `scripts/compose_smoke.py`（+ `tests/integration/test_compose_topology.py` + CI 步骤）：
-   读取真实 `docker-compose.yml`，按 `depends_on: service_healthy` 先起 MCP 再起 API，实测
-   `mcp_transport=http`、`/mcp/tools` 走 HTTP、前端 200、研究任务 `mcp_calls=1`，并在宿主路径映射处打印每条 remap。
-   在有 Docker 的机器上执行 `docker compose up --build` 仍是唯一未做的动作。
+2. **Docker 引擎在本机仍不可用，容器验收已移交 CI（尚未 push，未运行）**：本机无 `docker`/`podman`/
+   `buildah`/`nerdctl`，WSL 无发行版，因此 `docker build` / `docker compose up` **从未在本机执行**。
+   现在 `.github/workflows/ci.yml` 的 `docker` job 在 Linux runner 上真实执行完整容器验收
+   （build → compose up --wait → healthcheck → 主机侧 + 容器内 smoke → 失败即红），并由
+   `tests/unit/test_ci_docker_job.py` 锁定"不得静默跳过/不得 mock/不得删 job"。**该 job 尚未在
+   GitHub 上运行过，因此这里不写"容器验证通过"。** 本机仍保留等价验证：`scripts/compose_smoke.py`
+   （真实 compose 文件起双服务，实测 `mcp_transport=http`、前端 200、`mcp_calls=1`）与
+   `tests/integration/test_container_smoke.py`（对 `scripts/container_smoke.py` 的正/反用例门禁）。
 3. **Context Relevance 28.8%**：哈希向量语义弱，需真实 embedding 与交叉编码器重排。
 4. **串行子任务**、**线程池超时不可中断**、**JSON 单机存储**、**无多租户鉴权/流式输出**：见 Future Work。
 5. **语义类质量控制**仍以代码规则为准，LLM judge 默认关闭以保证可复现。

@@ -79,16 +79,79 @@ jobs:
           path: benchmarks/
 
   docker:
-    name: docker build
+    name: docker build + compose smoke (real engine)
     runs-on: ubuntu-latest
+    # GitHub Actions is the acceptance environment for the container story: this
+    # machine has no working Docker Engine, so the real `docker build` /
+    # `docker compose up` / in-container smoke test only ever runs here. The job is
+    # deliberately unconditional - no `if:`, no `continue-on-error`, no mock
+    # engine - so a broken container fails the whole workflow.
+    timeout-minutes: 30
+    env:
+      COMPOSE_FILE: docker-compose.yml
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - name: build image
-        uses: docker/build-push-action@v6
+
+      - name: engine info (fails loudly if the runner has no engine)
+        run: |
+          set -euo pipefail
+          docker version
+          docker compose version
+
+      - name: build the image from the project Dockerfile
+        run: |
+          set -euo pipefail
+          docker build --file Dockerfile --tag researchpilot:latest .
+          docker image inspect researchpilot:latest --format 'built {{.Id}} cmd={{.Config.Cmd}}'
+
+      - name: validate the project docker-compose.yml
+        run: docker compose --file docker-compose.yml config --quiet
+
+      - name: start the stack (compose up --wait runs every healthcheck)
+        run: |
+          set -euo pipefail
+          docker compose --file docker-compose.yml up --detach --wait --wait-timeout 300
+          docker compose --file docker-compose.yml ps
+
+      - name: container health checks (docker inspect)
+        run: |
+          set -euo pipefail
+          for service in mcp api; do
+            container="$(docker compose --file docker-compose.yml ps --quiet "$service")"
+            test -n "$container" || { echo "::error::compose started no container for $service"; exit 1; }
+            status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container")"
+            echo "$service -> status=$status"
+            if ! docker inspect --format '{{json .State.Health}}' "$container"; then
+              echo "::warning::no health block reported for $service"
+            fi
+            test "$status" = "healthy" || { echo "::error::$service is not healthy ($status)"; exit 1; }
+          done
+
+      - name: smoke test the stack on the published ports
+        run: |
+          set -euo pipefail
+          python3 scripts/container_smoke.py \
+            --api-url http://127.0.0.1:8000 \
+            --mcp-url http://127.0.0.1:8765 \
+            --json-out docker-smoke.json
+
+      - name: smoke test inside the API container
+        run: |
+          set -euo pipefail
+          docker compose exec -T api \
+            python scripts/container_smoke.py --in-container --json-out /tmp/docker-smoke.json
+
+      - name: container logs (on failure)
+        if: failure()
+        run: docker compose --file docker-compose.yml logs --no-color --timestamps
+
+      - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          context: .
-          push: false
-          tags: researchpilot:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          name: docker-smoke
+          path: docker-smoke.json
+          if-no-files-found: warn
+
+      - name: tear down the stack
+        if: always()
+        run: docker compose --file docker-compose.yml down --volumes --remove-orphans
