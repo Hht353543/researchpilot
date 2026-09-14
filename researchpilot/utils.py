@@ -82,9 +82,8 @@ def configure_script_stdio() -> None:
 def resolve_input_path(value: str | Path, *, root: Path | None = None) -> Path:
     """Resolve an *input* path relative to cwd first, then to the project root.
 
-    Entry points (CLI, API, scripts) may run from any working directory. Silently
-    reading an empty knowledge base / web corpus / pricing table because of cwd
-    drift is a real bug, so inputs are looked up in both locations.
+    Entry points (CLI, API, scripts) can run from any working directory, so inputs
+    are looked up in both places.
     """
     path = Path(value)
     if path.is_absolute() or path.exists():

@@ -194,11 +194,11 @@ class KnowledgeBase:
         return self.settings.runs_dir() / "knowledge_base.json"
 
     def save(self, path: str | Path | None = None) -> Path:
-        """Persist the index, tolerating an unwritable runs_path.
+        """Persist the index. An unwritable runs_path is recorded, not raised.
 
-        The in-memory index stays fully usable, so a read-only / full / misconfigured
-        runs_path must not stop the service from starting. The failure is recorded
-        (surfaced via /health) rather than silently swallowed.
+        The in-memory index stays usable, so a read-only or full runs_path does not
+        stop the service from starting. The error is kept in ``persistence_error``
+        and surfaced through /health.
         """
         self.store.fingerprint = self.embedder_fingerprint()
         target = Path(path) if path is not None else self.index_path()
@@ -223,8 +223,7 @@ class KnowledgeBase:
                 kb.store = loaded
                 kb.store.dimension = kb.embedder.dimension
                 return kb
-            # A different embedder makes the stored vectors meaningless for queries
-            # from this embedder: rebuild instead of silently returning garbage.
+            # Vectors from another embedder are meaningless for this one, so rebuild.
             logger.warning(
                 "knowledge base index was built with %r but the configured embedder is %r; "
                 "rebuilding the index",

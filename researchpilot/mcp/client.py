@@ -71,11 +71,9 @@ class StdioMcpClient:
     name = "stdio"
 
     def __init__(self, *, command: list[str] | None = None, timeout_s: float = 20.0) -> None:
-        # `-X utf8` + PYTHONIOENCODING make the child's stdio UTF-8 regardless of
-        # the OS locale (Windows defaults to cp936 here, which corrupts Chinese
-        # arguments in both directions). The server also pins its own streams, so
-        # either side alone is enough - this is defence in depth for a subprocess
-        # we launch ourselves.
+        # A child process inherits the OS locale for its pipes (cp936 here), which
+        # corrupts Chinese arguments in both directions, so pass UTF-8 explicitly.
+        # The server pins its own streams as well; either side alone is enough.
         command = command or [
             sys.executable,
             "-X",

@@ -180,8 +180,8 @@ class ResearchPipeline:
     def _execute(
         self, runtime: ResearchRuntime, request: ResearchRequest, *, tracer: Tracer
     ) -> tuple[Any, EvidenceBundle, Any, Any, Any]:
-        # Make the tracer ambient as well: nested calls that only receive a
-        # ToolContext still produce spans instead of silently losing trace data.
+        # Make the tracer ambient too, so nested calls that only receive a
+        # ToolContext still produce spans.
         with tracer_scope(tracer):
             return self._run_agents(runtime, request, tracer=tracer)
 

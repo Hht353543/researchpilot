@@ -283,12 +283,11 @@ class McpServer:
 def configure_stdio_utf8() -> None:
     """Pin the stdio transport to UTF-8, independent of the OS locale.
 
-    On Windows a Python process whose stdio is a pipe defaults to the *locale*
-    encoding (``cp936``/``gbk`` here) with ``surrogateescape``. The MCP stdio
-    protocol is newline-delimited JSON, i.e. UTF-8 by definition, so a server that
-    inherits the locale encoding corrupts Chinese arguments on the way in and
-    produces undecodable bytes on the way out. Launchers may set
-    ``PYTHONIOENCODING``/``-X utf8``, but the server must not depend on that.
+    On Windows, a Python process whose stdio is a pipe uses the locale encoding
+    (``cp936``/``gbk`` here) with ``surrogateescape``, which corrupts Chinese
+    arguments on the way in and produces undecodable bytes on the way out. The MCP
+    stdio wire format is UTF-8, so the server sets its own streams rather than
+    relying on the launcher's ``PYTHONIOENCODING`` or ``-X utf8``.
     """
     for stream, errors in ((sys.stdin, "strict"), (sys.stdout, "strict")):
         reconfigure = getattr(stream, "reconfigure", None)
@@ -307,8 +306,8 @@ def configure_stdio_utf8() -> None:
 def _iter_utf8_lines(stream: Any) -> Iterator[str]:
     """Yield request lines as ``str``, decoding the raw bytes as UTF-8.
 
-    Reading the binary buffer (when present) bypasses the text layer entirely, so
-    the encoding can never be decided by the OS locale.
+    Reading the binary buffer skips the text layer, so the OS locale does not
+    decide the encoding.
     """
     buffer = getattr(stream, "buffer", None)
     if buffer is None:

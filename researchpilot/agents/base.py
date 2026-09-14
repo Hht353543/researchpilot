@@ -75,9 +75,9 @@ def build_runtime(
     web_backend = build_web_backend(settings)
     llm = build_structured_runner(settings, provider=provider, tracer=tracer)
     if memory is None:
-        # Long-term memory must live under the *task's* runs_path, not under the
-        # process-wide default: otherwise injected settings (tests, a Docker
-        # volume, a read-only home directory) silently write to the wrong place.
+        # Long-term memory goes under the task's runs_path rather than the
+        # process-wide default, so injected settings (tests, a Docker volume) write
+        # where they are configured to.
         memory = MemoryManager(
             task_id=task_id,
             long_term=LongTermMemory(settings.runs_dir() / "long_term_memory.json"),

@@ -5,10 +5,10 @@ workflow file and runs every ``run:`` step of the reproducible jobs (lint,
 typecheck, test, evaluation) in the repository root. ``uses:`` steps (checkout,
 setup-python, upload-artifact) are reported and skipped with an explicit reason.
 
-The ``docker`` job is the one GitHub Actions owns: this machine has no working
-Docker Engine, so the job runs for real on the ``ubuntu-latest`` runner. Locally it
-is *never* silently skipped - asking for it without an engine is a hard error
-(exit 2), and with an engine it is executed like any other job:
+The ``docker`` job belongs to GitHub Actions: this machine has no working Docker
+Engine, so it runs on the ``ubuntu-latest`` runner. Asking for it locally without
+an engine exits 2 instead of reporting a skip; with an engine it runs like any
+other job:
 
     python scripts/ci_dry_run.py                       # reproducible jobs (+ docker notice)
     python scripts/ci_dry_run.py --job test            # a single job
@@ -16,7 +16,7 @@ is *never* silently skipped - asking for it without an engine is a hard error
     python scripts/ci_dry_run.py --require-docker-engine   # fail if no engine is available
     python scripts/ci_dry_run.py --list                # show what would run
 
-Exit code 0 only if every executed step succeeded - the same gate CI enforces.
+Exit code 0 only if every executed step succeeded.
 """
 
 from __future__ import annotations
@@ -198,7 +198,7 @@ def main() -> int:
             print(f"[ci-dry-run] job {name!r} not found in {_ARGS.workflow}")
             return 2
         if name in ENGINE_DEPENDENT_JOBS and not engine_available:
-            # Never silently pass: either run the job for real, or fail loudly.
+            # No engine here: refuse instead of reporting the job as done.
             report_missing_engine(name)
             if explicitly_requested or _ARGS.with_docker or _ARGS.require_docker_engine:
                 print(f"[ci-dry-run] refusing to report job {name!r} as done without an engine")

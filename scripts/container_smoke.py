@@ -1,19 +1,16 @@
 """Smoke test for the *running* ResearchPilot compose stack (real containers).
 
-``scripts/compose_smoke.py`` reproduces the compose topology with local processes
-because this development machine has no container engine. This script is the
-opposite half of the pair: it assumes the stack is already up - in CI that is the
-``docker compose up --wait`` step of the ``docker`` job - and verifies it through
-its real network surface.
+``scripts/compose_smoke.py`` rebuilds the compose topology with local processes for
+machines that have no container engine. This script covers the other half: it
+assumes the stack is already up (in CI, the ``docker compose up --wait`` step of
+the ``docker`` job) and checks it over the network.
 
 It only uses the standard library, so the very same file runs
 
 * on the runner against the published ports (default), and
 * inside the API container via ``docker compose exec -T api`` (``--in-container``),
 
-without installing anything first. Every check is a hard gate: the script exits
-non-zero with the failing reason, so a broken container cannot produce a green
-workflow.
+without installing anything first. A failed check exits non-zero with the reason.
 
     python scripts/container_smoke.py --api-url http://127.0.0.1:8000 --mcp-url http://127.0.0.1:8765
     docker compose exec -T api python scripts/container_smoke.py --in-container

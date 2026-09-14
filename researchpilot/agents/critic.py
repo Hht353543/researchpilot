@@ -80,7 +80,7 @@ class CriticAgent(BaseAgent):
         bundle: EvidenceBundle,
         verification: VerificationReport,
     ) -> CritiqueReport:
-        """Deterministic safety net: gaps found in code are never silently dropped."""
+        """Add the gaps found in code, including ones the model did not report."""
         issues: list[CritiqueIssue] = list(report.issues) if report else []
         covered = {e.subtask_id for e in bundle.evidence}
         uncovered = [q for sid, q in subtask_map.items() if sid not in covered]
