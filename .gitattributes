@@ -1,0 +1,13 @@
+# Normalise line endings: LF in the index and in the working tree, on every OS.
+# (Without this, Windows clones with core.autocrlf=true rewrite every text file.)
+* text=auto eol=lf
+
+# Binary assets must never be line-ending converted.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.pdf binary

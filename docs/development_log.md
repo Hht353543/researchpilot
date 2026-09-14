@@ -11,7 +11,7 @@
 
 ## Phase 1–3 · 仓库分析与架构设计
 
-- 结论：工作区 `C:\Users\22394\Desktop\workflow` 为空目录（无 git、无既有代码），因此这是**全新项目**，
+- 结论：工作区 `<repo>` 为空目录（无 git、无既有代码），因此这是**全新项目**，
   "优先复用已有代码"在本次执行中不适用，未做任何推翻式重写。
 - 技术栈选择（依据本机可用依赖）：Python 3.12 + Pydantic v2 + FastAPI + httpx；
   检索/BM25/MCP 协议等关键模块自行实现，避免引入无必要框架、并保证无网络也能运行。
@@ -139,7 +139,7 @@ avg_latency=0.33s p95=1.37s tokens=658,286 cost=$0.000000
    因此没有自动创建初始提交。请在本地执行：
 
    ```bash
-   cd C:\Users\22394\Desktop\workflow
+   cd <repo>
    git init -b main && git add -A && git commit -m "feat: ResearchPilot initial implementation"
    ```
 
