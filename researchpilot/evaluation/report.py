@@ -102,6 +102,8 @@ def render_evaluation_markdown(report: EvaluationReport) -> str:
         f"| Tool Calls / Failures | {metrics.tool_calls} / {metrics.tool_failures} | 含故障注入任务 |",
         f"| LLM Calls / Retries | {metrics.llm_calls} / {metrics.retries} | 重试来自 Schema 修复与工具重试 |",
         f"| Avg Iterations | {metrics.avg_iterations:.2f} | 研究迭代轮数 |",
+        f"| Writer Fallback Reports | {metrics.writer_fallback_tasks} / {metrics.tasks} | "
+        f"模型报告没有引用绑定，改由确定性抽取器产出；这些任务的引用指标不代表模型写作能力 |",
         "",
         "## 分类指标 (Per-category)",
         "",
@@ -198,6 +200,11 @@ def render_resume_section(report: EvaluationReport) -> str:
         else f"- 上表来自真实模型调用（`{report.provider}`，{mode}），数字是本次运行的实测值；"
         "离线 mock 基线见 `docs/evaluation.md`。"
     )
+    if metrics.writer_fallback_tasks:
+        resumable_note += (
+            f"\n- 其中 {metrics.writer_fallback_tasks} / {metrics.tasks} 条报告由确定性回退写作器产出"
+            "（模型报告没有引用绑定），引用类数字不能算作模型的写作能力。"
+        )
     return (
         "\n".join(
             [

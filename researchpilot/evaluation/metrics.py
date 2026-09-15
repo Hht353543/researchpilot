@@ -7,6 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from researchpilot.agents.writer import WRITER_FALLBACK_MARKER
 from researchpilot.evaluation.judge import TaskJudgement
 
 
@@ -35,6 +36,10 @@ class EvaluationMetrics(BaseModel):
     total_cost_usd: float = 0.0
     avg_cost_usd: float = 0.0
     avg_iterations: float = 0.0
+    # How many reports the model did not write: the writer replaced them with the
+    # deterministic extractive fallback, so citation metrics for those tasks are
+    # not evidence of the model's citation ability.
+    writer_fallback_tasks: int = 0
 
 
 class CategoryMetrics(BaseModel):
@@ -94,6 +99,9 @@ def aggregate(judgements: list[TaskJudgement]) -> EvaluationMetrics:
         total_cost_usd=round(total_cost, 6),
         avg_cost_usd=round(total_cost / count, 6),
         avg_iterations=round(_mean(j.iterations for j in judgements), 3),
+        writer_fallback_tasks=sum(
+            1 for j in judgements if any(WRITER_FALLBACK_MARKER in error for error in j.errors)
+        ),
     )
 
 

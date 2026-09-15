@@ -25,6 +25,10 @@ from researchpilot.utils import truncate
 _CITATION_RE = re.compile(r"[\[【［]\s*(E\d+(?:\s*[,、，]\s*E\d+)*)\s*[\]】］]", re.IGNORECASE)
 _EVIDENCE_ID_RE = re.compile(r"E\d+", re.IGNORECASE)
 
+# Recorded in runtime errors when the model report is replaced; the evaluator
+# counts these, so the report says how many reports the model did not write.
+WRITER_FALLBACK_MARKER = "used the deterministic extractive fallback"
+
 
 def _citations_in_text(text: str) -> list[str]:
     """Evidence ids written inline in a sentence, in order, without duplicates."""
@@ -107,8 +111,7 @@ class WriterAgent(BaseAgent):
                 # every claim stays bound to evidence instead of shipping an
                 # uncited report.
                 runtime.errors.append(
-                    "writer: model returned a report without any citation binding; "
-                    "used the deterministic extractive fallback"
+                    f"writer: model returned a report without any citation binding; {WRITER_FALLBACK_MARKER}"
                 )
                 report = self._fallback_report(plan, usable, verification)
             report = self._bind_citations(report, usable, verification, injection_ids)
