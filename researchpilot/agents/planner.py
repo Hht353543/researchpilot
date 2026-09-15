@@ -2,22 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
 
 from researchpilot.agents.base import BaseAgent
 from researchpilot.llm.prompts import PLANNER_SYSTEM, planner_user
-from researchpilot.schemas import ResearchPlan, Subtask, ToolName
+from researchpilot.schemas import INTENT_VALUES, ResearchPlan, Subtask, ToolName
 from researchpilot.utils import truncate
 
-KNOWN_INTENTS = {
-    "knowledge_search",
-    "web_search",
-    "document_reader",
-    "mcp",
-    "calculation",
-    "synthesis",
-}
-Intent = Literal["knowledge_search", "web_search", "document_reader", "mcp", "calculation", "synthesis"]
+KNOWN_INTENTS = set(INTENT_VALUES)
 _INTENT_TO_TOOL: dict[str, ToolName] = {
     "knowledge_search": "knowledge_search",
     "web_search": "web_search",

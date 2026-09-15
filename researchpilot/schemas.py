@@ -17,6 +17,58 @@ ToolName = Literal[
 SourceKind = Literal["knowledge_base", "document", "web", "mcp", "computation"]
 SpanKind = Literal["task", "agent", "llm", "tool", "retrieval", "retry", "mcp"]
 TaskStatus = Literal["pending", "running", "succeeded", "degraded", "failed"]
+SubtaskIntent = Literal[
+    "knowledge_search",
+    "web_search",
+    "document_reader",
+    "mcp",
+    "calculation",
+    "synthesis",
+]
+INTENT_VALUES: tuple[str, ...] = (
+    "knowledge_search",
+    "web_search",
+    "document_reader",
+    "mcp",
+    "calculation",
+    "synthesis",
+)
+DEFAULT_INTENT: SubtaskIntent = "knowledge_search"
+
+# Checked in order, so a phrase naming two capabilities ("用 MCP 检索知识库")
+# resolves to the more specific one. Real models write the intent as a sentence
+# rather than the enum value, which used to fail validation outright.
+_INTENT_KEYWORDS: tuple[tuple[SubtaskIntent, tuple[str, ...]], ...] = (
+    ("mcp", ("mcp", "model context protocol", "tool gateway", "工具网关")),
+    ("calculation", ("calculat", "compute", "arithmetic", "计算", "算术", "算一下")),
+    (
+        "document_reader",
+        ("document_reader", "document read", "read the document", "读取文档", "原文", "文档读取"),
+    ),
+    ("web_search", ("web", "internet", "online", "search the web", "联网", "网页", "网络搜索")),
+    ("synthesis", ("synthes", "summar", "conclude", "综合", "汇总", "总结", "归纳", "结论")),
+    (
+        "knowledge_search",
+        ("knowledge", "kb", "retriev", "rag", "vector", "知识库", "检索", "内部资料", "档案"),
+    ),
+)
+
+
+def normalize_intent(value: object) -> str:
+    """Map a model-written intent to one of :data:`INTENT_VALUES`.
+
+    Providers return anything from the enum value to a full sentence
+    ("从内部知识库中确认……"), so the raw text is matched against the vocabulary
+    before Pydantic validates it. Unrecognised text falls back to a knowledge
+    search, which is what the planner used to do after the fact.
+    """
+    text = str(value or "").strip().lower()
+    if text in INTENT_VALUES:
+        return text
+    for intent, keywords in _INTENT_KEYWORDS:
+        if any(keyword in text for keyword in keywords):
+            return intent
+    return DEFAULT_INTENT
 
 
 # --------------------------------------------------------------------------- #
@@ -63,18 +115,17 @@ class Subtask(BaseModel):
 
     id: str
     question: str
-    intent: Literal[
-        "knowledge_search",
-        "web_search",
-        "document_reader",
-        "mcp",
-        "calculation",
-        "synthesis",
-    ]
+    intent: SubtaskIntent
     tools: list[ToolName] = Field(default_factory=list)
     expected_output: str
     priority: int = Field(default=1, ge=1, le=5)
     depends_on: list[str] = Field(default_factory=list)
+
+    @field_validator("intent", mode="before")
+    @classmethod
+    def _normalise_intent(cls, value: object) -> object:
+        """Accept the free-text intent a real model writes, not just the enum."""
+        return normalize_intent(value)
 
 
 class ResearchPlan(BaseModel):

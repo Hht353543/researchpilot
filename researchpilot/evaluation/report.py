@@ -15,6 +15,25 @@ def _fmt(value: float | None, *, digits: int = 4) -> str:
     return "n/a" if value is None else f"{value:.{digits}f}"
 
 
+def _is_mock_run(report: EvaluationReport) -> bool:
+    """True when the numbers came from the offline deterministic provider."""
+    return report.provider.strip().lower() == "mock"
+
+
+def _provider_note(report: EvaluationReport) -> str:
+    """One line saying where the numbers came from, for the eval report."""
+    if _is_mock_run(report):
+        return (
+            f"- 本次运行使用 `{report.provider}` provider（{report.mode}）。Mock provider 是确定性脚本模型，"
+            "用来验证工程管线、回归与 CI；它的数字衡量检索、工具、校验、追踪、评测这些环节，"
+            "不代表前沿模型的生成质量。"
+        )
+    return (
+        f"- 本次运行使用 `{report.provider}` provider（{report.mode}），数字来自真实模型调用"
+        f"（{report.model}），不是 mock 基线的复述。"
+    )
+
+
 def render_evaluation_markdown(report: EvaluationReport) -> str:
     metrics = report.metrics
     lines: list[str] = [
@@ -160,9 +179,7 @@ def render_evaluation_markdown(report: EvaluationReport) -> str:
         "",
         "## 数据说明",
         "",
-        f"- 本次运行使用 `{report.provider}` provider（{report.mode}）。Mock provider 是确定性脚本模型，"
-        "用来验证工程管线、回归与 CI；它的数字衡量检索、工具、校验、追踪、评测这些环节，"
-        "不代表前沿模型的生成质量。",
+        _provider_note(report),
         "- `web_search` 在离线模式下检索 `data/web_corpus` 里的合成示例语料"
         "（元数据标记 `synthetic: true`），让系统在没有网络时也能跑通；它不是真实搜索结果。",
         "- 用真实模型（`--provider openai`）重新运行本脚本会覆盖本文件。",
@@ -173,6 +190,13 @@ def render_evaluation_markdown(report: EvaluationReport) -> str:
 def render_resume_section(report: EvaluationReport) -> str:
     metrics = report.metrics
     mode = "离线确定性模式（mock provider）" if report.provider == "mock" else f"{report.model}"
+    resumable_note = (
+        "- 上表来自离线确定性 provider（mock），衡量的是检索、工具、校验、引用绑定、追踪、评测"
+        "这些工程环节，不代表真实模型的生成质量。"
+        if _is_mock_run(report)
+        else f"- 上表来自真实模型调用（`{report.provider}`，{mode}），数字是本次运行的实测值；"
+        "离线 mock 基线见 `docs/evaluation.md`。"
+    )
     return (
         "\n".join(
             [
@@ -212,8 +236,7 @@ def render_resume_section(report: EvaluationReport) -> str:
                 "",
                 "## 使用说明",
                 "",
-                "- 上表来自离线确定性 provider（mock），衡量的是检索、工具、校验、引用绑定、追踪、评测"
-                "这些工程环节，不代表真实模型的生成质量。",
+                resumable_note,
                 "- 数字可以对着 `docs/evaluation.md` 和 `benchmarks/` 下的原始 JSON 逐条核对。",
                 "- 用真实模型（`--provider openai`）重跑会生成新数据，本文件会被覆盖。",
             ]
