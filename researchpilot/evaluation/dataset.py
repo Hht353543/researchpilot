@@ -44,6 +44,10 @@ class Expectations(BaseModel):
     max_tool_failures: int | None = None
     status_in: list[str] = Field(default_factory=list)
     max_latency_s: float | None = None
+    # A real model cannot meet an offline regression budget (the fastest task in the
+    # 2026-09-15 deepseek run took 61.1s), so live runs read a separate budget and
+    # the offline gate keeps its original number.
+    max_latency_s_live: float | None = None
 
 
 class GoldenTask(BaseModel):

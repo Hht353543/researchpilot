@@ -178,7 +178,13 @@ class EvaluationRunner:
         result = pipeline.run(request)
         latency = time.perf_counter() - started
         trace = trace_store.get(result.task_id)
-        judgement = judge_task(task, result, trace, latency_s=latency)
+        judgement = judge_task(
+            task,
+            result,
+            trace,
+            latency_s=latency,
+            live_model=self.provider_name != "mock",
+        )
         judgement.notes = task.notes or judgement.notes
         return judgement
 

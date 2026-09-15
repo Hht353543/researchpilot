@@ -6,7 +6,7 @@ import re
 
 from pydantic import BaseModel, Field
 
-from researchpilot.evaluation.dataset import GoldenTask
+from researchpilot.evaluation.dataset import Expectations, GoldenTask
 from researchpilot.schemas import ResearchResult, Trace
 from researchpilot.utils import normalize_text
 
@@ -63,8 +63,26 @@ class TaskJudgement(BaseModel):
     notes: str = ""
 
 
+def latency_budget_for(exp: Expectations, *, live_model: bool) -> float | None:
+    """Pick the latency gate for this run.
+
+    ``max_latency_s`` is an offline regression budget. A real model cannot meet it
+    (the fastest task in the 2026-09-15 deepseek run took 61.1s against a 60s
+    budget), so live runs read ``max_latency_s_live`` when the task declares one
+    and fall back to the offline value otherwise.
+    """
+    if live_model and exp.max_latency_s_live:
+        return exp.max_latency_s_live
+    return exp.max_latency_s
+
+
 def judge_task(
-    task: GoldenTask, result: ResearchResult, trace: Trace | None, *, latency_s: float
+    task: GoldenTask,
+    result: ResearchResult,
+    trace: Trace | None,
+    *,
+    latency_s: float,
+    live_model: bool = False,
 ) -> TaskJudgement:
     markdown = result.report.markdown if result.report else ""
     {e.id for e in result.evidence.evidence}
@@ -174,12 +192,13 @@ def judge_task(
                 detail=f"{metrics.tool_failures} <= {exp.max_tool_failures}",
             )
         )
-    if exp.max_latency_s:
+    latency_budget = latency_budget_for(exp, live_model=live_model)
+    if latency_budget:
         checks.append(
             CheckResult(
                 name="latency_budget",
-                passed=latency_s <= exp.max_latency_s,
-                detail=f"{latency_s:.2f}s <= {exp.max_latency_s:.2f}s",
+                passed=latency_s <= latency_budget,
+                detail=f"{latency_s:.2f}s <= {latency_budget:.2f}s",
             )
         )
 

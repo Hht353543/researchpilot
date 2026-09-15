@@ -106,4 +106,5 @@ async def test_config_endpoint_matches_settings(settings: Settings) -> None:
     assert payload["top_k"] == settings.top_k
     assert payload["max_iterations"] == settings.max_iterations
     assert payload["token_budget"] == settings.token_budget
+    assert payload["token_budget_live"] == settings.token_budget_live
     assert payload["default_model"] == app.state.container.provider.model_name()

@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     request_timeout_s: float = 60.0
     max_retries: int = 2
     token_budget: int = 80_000
+    # Real models spend far more per task than the offline mock (58.9k average,
+    # 79.7k worst case in the 2026-09-15 deepseek run), so live runs get their own
+    # ceiling. The offline budget keeps its value, which is what CI regresses on.
+    token_budget_live: int = 160_000
 
     # --- Embeddings ----------------------------------------------------------
     embedding_provider: EmbeddingProviderName = "hash"

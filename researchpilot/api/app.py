@@ -127,6 +127,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             top_k=settings.top_k,
             max_iterations=settings.max_iterations,
             token_budget=settings.token_budget,
+            token_budget_live=settings.token_budget_live,
             embedding_provider=settings.embedding_provider,
             mcp_transport=settings.mcp_transport,
             web_search_mode=settings.web_search_mode,

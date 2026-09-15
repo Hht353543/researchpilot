@@ -31,6 +31,7 @@ class ModelConfig(BaseModel):
     top_k: int
     max_iterations: int
     token_budget: int
+    token_budget_live: int
     embedding_provider: str
     mcp_transport: str
     web_search_mode: str
