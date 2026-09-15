@@ -245,7 +245,7 @@ def render_resume_section(report: EvaluationReport) -> str:
                 "## 使用说明",
                 "",
                 resumable_note,
-                "- 数字可以对着 `docs/evaluation.md` 和 `benchmarks/` 下的原始 JSON 逐条核对。",
+                "- 数字可以对着 `benchmarks/` 下的原始 JSON 逐条核对（离线基线在 `docs/evaluation.md`）。",
                 "- 用真实模型（`--provider openai`）重跑会生成新数据，本文件会被覆盖。",
             ]
         ).strip()

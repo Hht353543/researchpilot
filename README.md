@@ -10,6 +10,8 @@ LLM → Prompt → Structured Output → Tool Calling → RAG → Knowledge Base
 文档入口：
 
 - 需求逐条对照：[`docs/requirements_traceability.md`](docs/requirements_traceability.md)
+- 上手使用：[`docs/usage.md`](docs/usage.md)
+- 面试要点与实现方法：[`docs/interview_notes.md`](docs/interview_notes.md)
 - 设计与决策： [`docs/architecture.md`](docs/architecture.md)、[`docs/adr/`](docs/adr/)
 - 代码审查与修复记录：[`docs/audit_report.md`](docs/audit_report.md)、[`docs/development_log.md`](docs/development_log.md)
 - 实测指标（脚本生成）：[`docs/evaluation.md`](docs/evaluation.md)、[`docs/resume.md`](docs/resume.md)
@@ -276,6 +278,27 @@ python scripts/verify_fresh_clone.py      # 从干净 clone 复现上述流程
 | Tokens / Cost | 639,511 / $0.000000 |
 
 离线 `mock` provider 是确定性脚本模型，用来验证工程管线：检索、工具、校验、引用绑定、追踪、评测、故障恢复。这组数字衡量的是管线正确性和回归基线，不代表真实模型的生成质量。真实模型质量用 `python scripts/run_benchmark.py --provider openai` 重新跑，数字会自动覆盖到 `docs/evaluation.md`。
+
+### 真实模型对照（deepseek-chat，2026-09-15）
+
+同一套用例、同一套判分，真实模型跑过两轮：修复前，以及修掉「结构化输出契约、状态语义、写作器引用回收」
+三处缺陷之后。两轮结果都提交在仓库里，逐任务原始数据在 `benchmarks/`。
+
+| 指标 | 修复前 | 修复后 |
+| --- | --- | --- |
+| Task Success | 25/35 (71.4%) | 24/35 (68.6%) |
+| Recall@6 / Context Relevance | 91.7% / 28.8% | 90.6% / 9.2% |
+| Citation Correctness | 90.3% | 72.7% |
+| Tool Success | 74.6% | 88.1% |
+| 回退写作器产出 | 24/35 | 17/35 |
+| 状态分布 | degraded 28 / failed 7 | degraded 28 / succeeded 7 |
+| 平均延迟 / 成本 | 111.1s / $1.16 | 184.6s / $1.75 |
+
+修复后分数没有变高，这是预期内的：修复前 35/35 任务的计划走了确定性回退、24/35 的报告由回退写作器产出，
+分数里有相当一部分不属于模型。修完之后管线第一次真正使用模型自己的计划与报告，指标也随之落到模型的真实水平，
+瓶颈因此可以定位到模型的计划质量与引用纪律，而不是管线主体。完整报告见
+[`docs/evaluation_live_deepseek.md`](docs/evaluation_live_deepseek.md) 与
+[`docs/resume_live_deepseek.md`](docs/resume_live_deepseek.md)。
 
 ## 真实模型验证
 
