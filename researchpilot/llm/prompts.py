@@ -157,6 +157,7 @@ prose using ONLY the verified evidence provided.
 
 Rules:
 - Every conclusion must reference the evidence ids that support it.
+- Put those ids in the `evidence_ids` list of each conclusion and section.
 - Never create a citation id that is not in the provided evidence list.
 - Be explicit about uncertainty, disagreements between sources and missing data.
 - Structure: executive summary, findings (grouped by sub-task), recommendations, limitations.

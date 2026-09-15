@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from researchpilot.agents.base import BaseAgent
@@ -18,6 +19,22 @@ from researchpilot.schemas import (
 )
 from researchpilot.security import detect_injection
 from researchpilot.utils import truncate
+
+# Citation markers a model may write into the prose instead of the evidence_ids
+# arrays: [E1], 【E1】, ［E1］, and comma/、-separated lists such as [E1, E2].
+_CITATION_RE = re.compile(r"[\[【［]\s*(E\d+(?:\s*[,、，]\s*E\d+)*)\s*[\]】］]", re.IGNORECASE)
+_EVIDENCE_ID_RE = re.compile(r"E\d+", re.IGNORECASE)
+
+
+def _citations_in_text(text: str) -> list[str]:
+    """Evidence ids written inline in a sentence, in order, without duplicates."""
+    found: list[str] = []
+    for match in _CITATION_RE.finditer(text or ""):
+        for evidence_id in _EVIDENCE_ID_RE.findall(match.group(1)):
+            upper = evidence_id.upper()
+            if upper not in found:
+                found.append(upper)
+    return found
 
 
 class WriterAgent(BaseAgent):
@@ -75,6 +92,8 @@ class WriterAgent(BaseAgent):
                     report = result.value
                 except Exception as exc:
                     runtime.errors.append(f"writer: {type(exc).__name__}: {exc}")
+            if report is not None:
+                report = self._recover_citations(report, {e.id for e in usable})
             if report is None:
                 report = self._fallback_report(plan, usable, verification)
             elif (
@@ -110,6 +129,29 @@ class WriterAgent(BaseAgent):
         return report
 
     # -- citation binding --------------------------------------------------- #
+    def _recover_citations(self, report: FinalReport, allowed: set[str]) -> FinalReport:
+        """Fill empty ``evidence_ids`` from the citations the model wrote inline.
+
+        Weak models often leave the arrays empty and put ``[E1]`` in the prose.
+        Recovering them keeps the model's report; a report that genuinely cites
+        nothing still fails the check in :meth:`run` and falls back. Unknown ids
+        are ignored here and dropped for real by :meth:`_bind_citations`.
+        """
+        lookup = {evidence_id.upper(): evidence_id for evidence_id in allowed}
+
+        def recover(text: str) -> list[str]:
+            return [lookup[citation] for citation in _citations_in_text(text) if citation in lookup]
+
+        conclusions = [
+            claim.model_copy(update={"evidence_ids": claim.evidence_ids or recover(claim.statement)})
+            for claim in report.conclusions
+        ]
+        sections = [
+            section.model_copy(update={"evidence_ids": section.evidence_ids or recover(section.body)})
+            for section in report.sections
+        ]
+        return report.model_copy(update={"conclusions": conclusions, "sections": sections})
+
     def _bind_citations(
         self,
         report: FinalReport,
