@@ -97,7 +97,8 @@ def render_evaluation_markdown(report: EvaluationReport) -> str:
         f"| Token Usage (total) | {metrics.total_tokens:,} | 输入 + 输出 token (估算/上报) |",
         f"| Avg Tokens / Task | {metrics.avg_tokens:,.1f} | 单任务平均 token |",
         f"| Cost (total) | ${metrics.total_cost_usd:.6f} | 按 `configs/pricing.yaml` 计价 |",
-        f"| Avg Cost / Task | ${metrics.avg_cost_usd:.6f} | 离线 mock provider 成本为 0 |",
+        f"| Avg Cost / Task | ${metrics.avg_cost_usd:.6f} | "
+        f"{'离线 mock provider 成本为 0' if _is_mock_run(report) else '按 `configs/pricing.yaml` 计价'} |",
         f"| Tool Calls / Failures | {metrics.tool_calls} / {metrics.tool_failures} | 含故障注入任务 |",
         f"| LLM Calls / Retries | {metrics.llm_calls} / {metrics.retries} | 重试来自 Schema 修复与工具重试 |",
         f"| Avg Iterations | {metrics.avg_iterations:.2f} | 研究迭代轮数 |",

@@ -41,3 +41,20 @@ def test_live_run_never_claims_the_numbers_are_from_mock() -> None:
     assert "真实模型调用" in resume
     assert MOCK_EVAL_CLAIM not in evaluation
     assert "真实模型调用" in evaluation
+
+
+def test_live_run_does_not_call_its_cost_free() -> None:
+    """The cost row described every run as a free offline mock run."""
+    report = _report("openai", "live model", "deepseek-chat")
+    report.metrics.total_cost_usd = 1.164265
+    report.metrics.avg_cost_usd = 0.033265
+    evaluation = render_evaluation_markdown(report)
+    assert "$0.033265" in evaluation
+    assert "离线 mock provider 成本为 0" not in evaluation
+    assert "按 `configs/pricing.yaml` 计价" in evaluation
+
+
+def test_mock_run_still_says_its_cost_is_zero() -> None:
+    report = _report("mock", "offline", "mock-research-model")
+    evaluation = render_evaluation_markdown(report)
+    assert "离线 mock provider 成本为 0" in evaluation
