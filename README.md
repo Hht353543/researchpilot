@@ -31,7 +31,7 @@ LLM → Prompt → Structured Output → Tool Calling → RAG → Knowledge Base
 | 服务化 | FastAPI 加零依赖前端：研究输入、模型参数、知识库、Agent 时间线、报告、指标、评测面板 |
 | 知识库管理 | 入库、检索、删除（级联删 chunk）、全量重建索引 |
 | LLM 抽象 | 任意 OpenAI 兼容端点（OpenAI / DeepSeek / vLLM / Ollama 等）加确定性离线 provider；真实 HTTP 链路由本地兼容端点端到端测试覆盖 |
-| 工程质量 | 253 个测试（unit / integration / evaluation，含真实 HTTP provider 链路）、ruff、mypy、pip check、Dockerfile、docker-compose、GitHub Actions |
+| 工程质量 | 259 个测试（unit / integration / evaluation，含真实 HTTP provider 链路）、ruff、mypy、pip check、Dockerfile、docker-compose、GitHub Actions |
 
 ## Architecture
 
@@ -247,7 +247,7 @@ python scripts/container_smoke.py --in-container
 ## Testing
 
 ```bash
-python -m pytest -q                       # 单元 + 集成 + 评测（253 个测试）
+python -m pytest -q                       # 单元 + 集成 + 评测（259 个测试）
 python -m pytest -q -m "not evaluation"   # 快速回归
 python -m pytest -q -m evaluation         # 全量 Golden Dataset 冒烟
 ruff check . && ruff format --check . && mypy researchpilot
@@ -272,7 +272,7 @@ python scripts/verify_fresh_clone.py      # 从干净 clone 复现上述流程
 | Citation Correctness | 100%（分母 34 个要求引用的任务） |
 | Tool Selection Accuracy / F1 | 100% / 85.9%（分母 35 个含期望工具的任务） |
 | Tool Success Rate | 74.6%（130 次调用，含主动注入的超时、失败和预算任务） |
-| Avg / P95 Latency | 0.32s / 1.37s |
+| Avg / P95 Latency | 0.32s / 1.38s |
 | Tokens / Cost | 639,511 / $0.000000 |
 
 离线 `mock` provider 是确定性脚本模型，用来验证工程管线：检索、工具、校验、引用绑定、追踪、评测、故障恢复。这组数字衡量的是管线正确性和回归基线，不代表真实模型的生成质量。真实模型质量用 `python scripts/run_benchmark.py --provider openai` 重新跑，数字会自动覆盖到 `docs/evaluation.md`。

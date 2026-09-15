@@ -240,10 +240,13 @@ class ResearchPipeline:
 
         A run that produced zero usable evidence is a *degraded* outcome even when
         every tool technically returned ok=True, otherwise empty-result tasks would
-        inflate the success rate.
+        inflate the success rate. The same holds when the run recorded non-fatal
+        errors (a tool timeout, a retried LLM call, a planner repair): the pipeline
+        still finished and produced a report, so the task is degraded, not failed.
+        ``failed`` is reserved for runs that did not get that far - see the
+        exception handlers in :meth:`run`, which mark a crash or a provider
+        misconfiguration.
         """
-        if not bundle.evidence and runtime.errors:
-            return "failed"
         if runtime.errors or not bundle.evidence:
             return "degraded"
         return "succeeded"
