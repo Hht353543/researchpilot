@@ -300,6 +300,15 @@ python scripts/verify_fresh_clone.py      # 从干净 clone 复现上述流程
 [`docs/evaluation_live_deepseek.md`](docs/evaluation_live_deepseek.md) 与
 [`docs/resume_live_deepseek.md`](docs/resume_live_deepseek.md)。
 
+注意：上表"修复后"一列跑在**写作器字段别名修复之前**。那次运行里模型的报告用
+`findings[].narrative` 命名章节，而 schema 要求 `sections[].body`，未知字段被静默丢弃，
+报告因此被判为空、改由抽取式回退写作器产出——引用数字既被回退链抬高、也被它掩盖。
+在受影响的 9 条引用失败任务上重测（别名修复后，分两批：3 条 + 6 条）：`writer_fallback_tasks`
+从 9/9 降到 **0/9**，引用正确率从 0% 升到 **100%**，8/9 通过（余下 1 条只差一项关键词覆盖，
+与引用无关），报告全部由模型自己撰写。
+原始数据：`benchmarks/live_deepseek_citation_verify_10tasks.json`（暴露问题的那一次）与
+`benchmarks/live_deepseek_alias_verify_{3,6}tasks.json`（别名修复后）。
+
 ## 真实模型验证
 
 除了离线 provider，这个仓库也用本地真实模型跑通过整条链路，不需要厂商 Key 和外网：

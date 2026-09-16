@@ -1,0 +1,596 @@
+{
+  "run_id": "eval_53c98d1b93df",
+  "generated_at": "2026-09-16T16:49:03Z",
+  "provider": "openai",
+  "model": "deepseek-chat",
+  "mode": "live model",
+  "dataset_path": "eval\\golden_dataset.jsonl",
+  "dataset": {
+    "tasks": 35,
+    "categories": {
+      "bad_source": 2,
+      "citation": 3,
+      "mcp": 3,
+      "multi_agent": 3,
+      "multi_step": 3,
+      "no_result": 3,
+      "prompt_injection": 3,
+      "rag": 3,
+      "simple_fact": 3,
+      "timeout_recovery": 2,
+      "tool_abuse": 4,
+      "tool_calling": 3
+    },
+    "with_expected_docs": 30,
+    "with_expected_tools": 35,
+    "fault_injection_tasks": 4
+  },
+  "metrics": {
+    "tasks": 6,
+    "passed": 5,
+    "task_success_rate": 0.8333,
+    "retrieval_tasks": 6,
+    "citation_tasks": 6,
+    "tool_selection_tasks": 6,
+    "retrieval_recall": 1.0,
+    "context_relevance": 0.0614,
+    "citation_correctness": 1.0,
+    "tool_selection_accuracy": 1.0,
+    "tool_selection_f1": 0.4746,
+    "tool_success_rate": 0.9824,
+    "tool_calls": 170,
+    "tool_failures": 3,
+    "retries": 29,
+    "llm_calls": 176,
+    "avg_latency_s": 173.153,
+    "p50_latency_s": 166.841,
+    "p95_latency_s": 212.41,
+    "total_tokens": 627777,
+    "avg_tokens": 104629.5,
+    "total_cost_usd": 0.350456,
+    "avg_cost_usd": 0.058409,
+    "avg_iterations": 2.0,
+    "writer_fallback_tasks": 0
+  },
+  "categories": [
+    {
+      "category": "citation",
+      "tasks": 1,
+      "passed": 1,
+      "task_success_rate": 1.0,
+      "avg_latency_s": 219.116,
+      "avg_tokens": 101604.0,
+      "retrieval_tasks": 1,
+      "tool_selection_tasks": 1,
+      "citation_correctness": 1.0,
+      "retrieval_recall": 1.0,
+      "context_relevance": 0.0588,
+      "tool_selection_f1": 0.5714
+    },
+    {
+      "category": "mcp",
+      "tasks": 2,
+      "passed": 2,
+      "task_success_rate": 1.0,
+      "avg_latency_s": 166.171,
+      "avg_tokens": 105141.0,
+      "retrieval_tasks": 2,
+      "tool_selection_tasks": 2,
+      "citation_correctness": 1.0,
+      "retrieval_recall": 1.0,
+      "context_relevance": 0.059,
+      "tool_selection_f1": 0.5714
+    },
+    {
+      "category": "multi_step",
+      "tasks": 2,
+      "passed": 1,
+      "task_success_rate": 0.5,
+      "avg_latency_s": 166.231,
+      "avg_tokens": 103265.0,
+      "retrieval_tasks": 2,
+      "tool_selection_tasks": 2,
+      "citation_correctness": 1.0,
+      "retrieval_recall": 1.0,
+      "context_relevance": 0.0625,
+      "tool_selection_f1": 0.3667
+    },
+    {
+      "category": "tool_calling",
+      "tasks": 1,
+      "passed": 1,
+      "task_success_rate": 1.0,
+      "avg_latency_s": 154.996,
+      "avg_tokens": 109361.0,
+      "retrieval_tasks": 1,
+      "tool_selection_tasks": 1,
+      "citation_correctness": 1.0,
+      "retrieval_recall": 1.0,
+      "context_relevance": 0.0667,
+      "tool_selection_f1": 0.4
+    }
+  ],
+  "judgements": [
+    {
+      "task_id": "multi-02-enterprise-blockers",
+      "category": "multi_step",
+      "passed": true,
+      "status": "degraded",
+      "checks": [
+        {
+          "name": "report_present",
+          "passed": true,
+          "detail": "report=yes chars=13344"
+        },
+        {
+          "name": "required_any_1",
+          "passed": true,
+          "detail": "matched='瓶颈' group=['瓶颈', '阻碍']"
+        },
+        {
+          "name": "citation_integrity",
+          "passed": true,
+          "detail": "1.00 >= 0.90 (77/77)"
+        }
+      ],
+      "retrieved_docs": [
+        "kb-enterprise-adoption",
+        "kb-evaluation-observability",
+        "kb-agent-architecture",
+        "web_007",
+        "web_006",
+        "web_001",
+        "web_002",
+        "web_009",
+        "kb-platforms-projects",
+        "kb-tool-calling-mcp",
+        "kb-glossary",
+        "web_004",
+        "web_000",
+        "kb-security-guardrails",
+        "kb-memory-context",
+        "kb-cost-latency"
+      ],
+      "expected_docs": [
+        "kb-enterprise-adoption"
+      ],
+      "used_tools": [
+        "knowledge_search",
+        "document_reader",
+        "web_search",
+        "mcp_research_context"
+      ],
+      "expected_tools": [
+        "knowledge_search"
+      ],
+      "retrieval_recall": 1.0,
+      "context_relevance": 0.0625,
+      "citation_correctness": 1.0,
+      "retrieval_applicable": true,
+      "citation_applicable": true,
+      "tool_selection_applicable": true,
+      "tool_selection_recall": 1.0,
+      "tool_selection_f1": 0.4,
+      "tool_calls": 28,
+      "tool_failures": 0,
+      "llm_calls": 30,
+      "retries": 6,
+      "iterations": 2,
+      "latency_s": 178.685,
+      "tokens": 110742,
+      "cost_usd": 0.06368466,
+      "errors": [
+        "researcher[S4]: StructuredOutputError: EvidenceBundle validation failed after 3 attempts: attempt 3: ValidationError: 3 validation errors for EvidenceBundle\nevidence.21.claim\n  Field required [type=missing, input_value={'id': ''}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.21.quote\n  Field required [type=missing, input_value={'id': ''}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.21.source_id\n  Field required [type=missing, input_value={'id': ''}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing"
+      ],
+      "notes": "组织与采购视角的多点研究。"
+    },
+    {
+      "task_id": "multi-03-orchestration-topology",
+      "category": "multi_step",
+      "passed": false,
+      "status": "succeeded",
+      "checks": [
+        {
+          "name": "report_present",
+          "passed": true,
+          "detail": "report=yes chars=9158"
+        },
+        {
+          "name": "required_any_1",
+          "passed": true,
+          "detail": "matched='拓扑' group=['拓扑']"
+        },
+        {
+          "name": "required_any_2",
+          "passed": false,
+          "detail": "matched=None group=['优缺点', '优点与缺点']"
+        },
+        {
+          "name": "citation_integrity",
+          "passed": true,
+          "detail": "1.00 >= 0.90 (77/77)"
+        }
+      ],
+      "retrieved_docs": [
+        "kb-evaluation-observability",
+        "kb-agent-architecture",
+        "kb-rag-enterprise",
+        "kb-security-guardrails",
+        "web_006",
+        "web_001",
+        "web_008",
+        "web_002",
+        "web_009",
+        "kb-glossary",
+        "kb-cost-latency",
+        "web_004",
+        "kb-tool-calling-mcp",
+        "kb-enterprise-adoption",
+        "web_003",
+        "web_000"
+      ],
+      "expected_docs": [
+        "kb-agent-architecture"
+      ],
+      "used_tools": [
+        "knowledge_search",
+        "document_reader",
+        "metadata",
+        "web_search",
+        "mcp_research_context"
+      ],
+      "expected_tools": [
+        "knowledge_search"
+      ],
+      "retrieval_recall": 1.0,
+      "context_relevance": 0.0625,
+      "citation_correctness": 1.0,
+      "retrieval_applicable": true,
+      "citation_applicable": true,
+      "tool_selection_applicable": true,
+      "tool_selection_recall": 1.0,
+      "tool_selection_f1": 0.3333,
+      "tool_calls": 22,
+      "tool_failures": 0,
+      "llm_calls": 22,
+      "retries": 4,
+      "iterations": 2,
+      "latency_s": 153.776,
+      "tokens": 95788,
+      "cost_usd": 0.05517836,
+      "errors": [],
+      "notes": "编排拓扑对比。"
+    },
+    {
+      "task_id": "tool-01-registry-fields",
+      "category": "tool_calling",
+      "passed": true,
+      "status": "succeeded",
+      "checks": [
+        {
+          "name": "report_present",
+          "passed": true,
+          "detail": "report=yes chars=8338"
+        },
+        {
+          "name": "required_any_1",
+          "passed": true,
+          "detail": "matched='超时' group=['超时', 'timeout']"
+        },
+        {
+          "name": "citation_integrity",
+          "passed": true,
+          "detail": "1.00 >= 0.90 (109/109)"
+        },
+        {
+          "name": "retrieval_recall",
+          "passed": true,
+          "detail": "1.00 >= 1.00"
+        }
+      ],
+      "retrieved_docs": [
+        "kb-enterprise-adoption",
+        "kb-tool-calling-mcp",
+        "kb-glossary",
+        "web_003",
+        "web_007",
+        "web_002",
+        "web_000",
+        "web_005",
+        "kb-agent-architecture",
+        "kb-security-guardrails",
+        "kb-evaluation-observability",
+        "web_004",
+        "web_009",
+        "web_006",
+        "kb-platforms-projects"
+      ],
+      "expected_docs": [
+        "kb-tool-calling-mcp"
+      ],
+      "used_tools": [
+        "knowledge_search",
+        "document_reader",
+        "web_search",
+        "mcp_research_context"
+      ],
+      "expected_tools": [
+        "knowledge_search"
+      ],
+      "retrieval_recall": 1.0,
+      "context_relevance": 0.0667,
+      "citation_correctness": 1.0,
+      "retrieval_applicable": true,
+      "citation_applicable": true,
+      "tool_selection_applicable": true,
+      "tool_selection_recall": 1.0,
+      "tool_selection_f1": 0.4,
+      "tool_calls": 24,
+      "tool_failures": 0,
+      "llm_calls": 28,
+      "retries": 5,
+      "iterations": 2,
+      "latency_s": 154.996,
+      "tokens": 109361,
+      "cost_usd": 0.05875509,
+      "errors": [],
+      "notes": "Tool Registry 契约字段。"
+    },
+    {
+      "task_id": "mcp-02-gateway-reuse",
+      "category": "mcp",
+      "passed": true,
+      "status": "degraded",
+      "checks": [
+        {
+          "name": "report_present",
+          "passed": true,
+          "detail": "report=yes chars=7218"
+        },
+        {
+          "name": "required_any_1",
+          "passed": true,
+          "detail": "matched='复用' group=['复用', '多个']"
+        },
+        {
+          "name": "citation_integrity",
+          "passed": true,
+          "detail": "1.00 >= 0.85 (62/62)"
+        }
+      ],
+      "retrieved_docs": [
+        "kb-tool-calling-mcp",
+        "kb-platforms-projects",
+        "kb-glossary",
+        "kb-enterprise-adoption",
+        "kb-evaluation-observability",
+        "kb-security-guardrails",
+        "kb-rag-enterprise",
+        "kb-agent-architecture",
+        "kb-memory-context",
+        "web_002",
+        "web_006",
+        "web_000",
+        "web_008",
+        "web_001",
+        "web_004",
+        "web_003",
+        "web_009",
+        "web_005"
+      ],
+      "expected_docs": [
+        "kb-tool-calling-mcp"
+      ],
+      "used_tools": [
+        "knowledge_search",
+        "document_reader",
+        "metadata",
+        "web_search",
+        "mcp_research_context"
+      ],
+      "expected_tools": [
+        "knowledge_search",
+        "mcp_research_context"
+      ],
+      "retrieval_recall": 1.0,
+      "context_relevance": 0.0556,
+      "citation_correctness": 1.0,
+      "retrieval_applicable": true,
+      "citation_applicable": true,
+      "tool_selection_applicable": true,
+      "tool_selection_recall": 1.0,
+      "tool_selection_f1": 0.5714,
+      "tool_calls": 32,
+      "tool_failures": 0,
+      "llm_calls": 34,
+      "retries": 5,
+      "iterations": 2,
+      "latency_s": 192.291,
+      "tokens": 117518,
+      "cost_usd": 0.06938198,
+      "errors": [
+        "researcher[S6]: StructuredOutputError: EvidenceBundle validation failed after 3 attempts: attempt 3: ValidationError: 2 validation errors for EvidenceBundle\nevidence.18.claim\n  Field required [type=missing, input_value={'id': 'E19', 'source_id': ''}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nevidence.18.quote\n  Field required [type=missing, input_value={'id': 'E19', 'source_id': ''}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing"
+      ],
+      "notes": "MCP 网关复用。"
+    },
+    {
+      "task_id": "mcp-03-transports",
+      "category": "mcp",
+      "passed": true,
+      "status": "succeeded",
+      "checks": [
+        {
+          "name": "report_present",
+          "passed": true,
+          "detail": "report=yes chars=7058"
+        },
+        {
+          "name": "required_any_1",
+          "passed": true,
+          "detail": "matched='stdio' group=['stdio']"
+        },
+        {
+          "name": "citation_integrity",
+          "passed": true,
+          "detail": "1.00 >= 0.85 (60/60)"
+        },
+        {
+          "name": "retrieval_recall",
+          "passed": true,
+          "detail": "1.00 >= 1.00"
+        }
+      ],
+      "retrieved_docs": [
+        "kb-tool-calling-mcp",
+        "kb-evaluation-observability",
+        "kb-enterprise-adoption",
+        "kb-glossary",
+        "kb-platforms-projects",
+        "kb-security-guardrails",
+        "web_002",
+        "web_000",
+        "web_004",
+        "web_003",
+        "web_005",
+        "web_008",
+        "web_007",
+        "web_001",
+        "web_009",
+        "web_006"
+      ],
+      "expected_docs": [
+        "kb-tool-calling-mcp"
+      ],
+      "used_tools": [
+        "knowledge_search",
+        "document_reader",
+        "web_search",
+        "metadata",
+        "mcp_research_context"
+      ],
+      "expected_tools": [
+        "knowledge_search",
+        "mcp_research_context"
+      ],
+      "retrieval_recall": 1.0,
+      "context_relevance": 0.0625,
+      "citation_correctness": 1.0,
+      "retrieval_applicable": true,
+      "citation_applicable": true,
+      "tool_selection_applicable": true,
+      "tool_selection_recall": 1.0,
+      "tool_selection_f1": 0.5714,
+      "tool_calls": 36,
+      "tool_failures": 0,
+      "llm_calls": 29,
+      "retries": 3,
+      "iterations": 2,
+      "latency_s": 140.052,
+      "tokens": 92764,
+      "cost_usd": 0.04921505,
+      "errors": [],
+      "notes": "MCP 传输层差异。"
+    },
+    {
+      "task_id": "cite-02-project-sources",
+      "category": "citation",
+      "passed": true,
+      "status": "degraded",
+      "checks": [
+        {
+          "name": "report_present",
+          "passed": true,
+          "detail": "report=yes chars=9193"
+        },
+        {
+          "name": "required_any_1",
+          "passed": true,
+          "detail": "matched='LangGraph' group=['LangGraph', 'AutoGen', 'CrewAI']"
+        },
+        {
+          "name": "citation_integrity",
+          "passed": true,
+          "detail": "1.00 >= 0.95 (102/102)"
+        },
+        {
+          "name": "retrieval_recall",
+          "passed": true,
+          "detail": "1.00 >= 1.00"
+        }
+      ],
+      "retrieved_docs": [
+        "kb-platforms-projects",
+        "kb-evaluation-observability",
+        "kb-enterprise-adoption",
+        "kb-rag-enterprise",
+        "kb-security-guardrails",
+        "kb-glossary",
+        "kb-tool-calling-mcp",
+        "web_006",
+        "web_003",
+        "web_004",
+        "web_008",
+        "web_009",
+        "web_000",
+        "web_007",
+        "web_002",
+        "kb-agent-architecture",
+        "web_001"
+      ],
+      "expected_docs": [
+        "kb-platforms-projects"
+      ],
+      "used_tools": [
+        "knowledge_search",
+        "metadata",
+        "document_reader",
+        "web_search",
+        "mcp_research_context"
+      ],
+      "expected_tools": [
+        "knowledge_search",
+        "document_reader"
+      ],
+      "retrieval_recall": 1.0,
+      "context_relevance": 0.0588,
+      "citation_correctness": 1.0,
+      "retrieval_applicable": true,
+      "citation_applicable": true,
+      "tool_selection_applicable": true,
+      "tool_selection_recall": 1.0,
+      "tool_selection_f1": 0.5714,
+      "tool_calls": 28,
+      "tool_failures": 3,
+      "llm_calls": 33,
+      "retries": 6,
+      "iterations": 2,
+      "latency_s": 219.116,
+      "tokens": 101604,
+      "cost_usd": 0.05424042,
+      "errors": [
+        "tool knowledge_search failed after 1 attempt(s): timeout after 15.0s"
+      ],
+      "notes": "代表项目与出处。"
+    }
+  ],
+  "failed_checks": {
+    "required_any_2": 1
+  },
+  "environment": {
+    "python": "3.12.2",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "embedding_provider": "hash",
+    "embedding_dim": 384,
+    "retrieval_top_k": 6,
+    "max_iterations": 2,
+    "web_search_mode": "offline",
+    "mcp_transport": "inprocess"
+  },
+  "duration_s": 1038.929,
+  "settings_snapshot": {
+    "temperature": 0.2,
+    "max_tokens": 1200,
+    "token_budget": 80000,
+    "rerank_strategy": "heuristic"
+  }
+}

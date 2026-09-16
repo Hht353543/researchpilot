@@ -29,3 +29,4 @@ benchmarks/*.json
 !benchmarks/real_llm_3tasks_before_writer_fallback.json
 !benchmarks/live_deepseek_citation_verify_10tasks.json
 !benchmarks/live_deepseek_alias_verify_3tasks.json
+!benchmarks/live_deepseek_alias_verify_6tasks.json
