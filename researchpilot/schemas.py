@@ -6,6 +6,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from researchpilot.utils import truncate
+
 ToolName = Literal[
     "web_search",
     "knowledge_search",
@@ -284,23 +286,39 @@ class FinalReport(BaseModel):
         sections = list(data.get("sections") or [])
         if sections:
             return data
+        supplied_conclusions = bool(data.get("conclusions"))
+        conclusions = list(data.get("conclusions") or [])
         for item in findings:
             if not isinstance(item, dict):
                 continue
             body = str(item.get("narrative") or item.get("body") or item.get("statement") or "").strip()
             if not body:
                 continue
+            heading = str(item.get("heading") or item.get("title") or "分析").strip()
+            evidence_ids = list(item.get("evidence_ids") or [])
             sections.append(
                 {
-                    "heading": str(item.get("heading") or item.get("title") or "分析").strip(),
+                    "heading": heading,
                     "body": body,
-                    "evidence_ids": list(item.get("evidence_ids") or []),
+                    "evidence_ids": evidence_ids,
                 }
             )
+            if not supplied_conclusions:
+                # The model wrote its claims as findings; without this the report
+                # renders no conclusions at all and the executive view is lost.
+                conclusions.append(
+                    {
+                        "statement": truncate(body, 400),
+                        "evidence_ids": evidence_ids,
+                        "confidence": float(item.get("confidence") or 0.5),
+                    }
+                )
         if not sections:
             return data
         merged = dict(data)
         merged["sections"] = sections
+        if conclusions:
+            merged["conclusions"] = conclusions
         merged.pop("findings", None)
         return merged
 

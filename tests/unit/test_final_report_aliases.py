@@ -57,6 +57,26 @@ def test_findings_are_folded_into_sections() -> None:
     assert "findings" not in report.model_dump()
 
 
+def test_findings_become_conclusions_too() -> None:
+    """Otherwise the rendered report has no executive conclusions at all."""
+    report = FinalReport.model_validate(FINDINGS_PAYLOAD)
+    assert len(report.conclusions) == 2
+    assert report.conclusions[0].evidence_ids == ["E1"]
+    assert "切断语义" in report.conclusions[0].statement
+    assert report.conclusions[1].confidence == 0.5
+
+
+def test_long_findings_are_truncated_for_the_conclusion_bullet() -> None:
+    payload = {
+        "title": "t",
+        "executive_summary": "s",
+        "findings": [{"heading": "h", "narrative": "很长的段落。" * 200, "evidence_ids": ["E1"]}],
+    }
+    report = FinalReport.model_validate(payload)
+    assert len(report.conclusions[0].statement) <= 400
+    assert report.conclusions[0].statement.endswith("…")
+
+
 def test_explicit_sections_win_over_findings() -> None:
     payload = dict(FINDINGS_PAYLOAD)
     payload["sections"] = [{"heading": "已给出", "body": "正文 [E3]", "evidence_ids": ["E3"]}]
