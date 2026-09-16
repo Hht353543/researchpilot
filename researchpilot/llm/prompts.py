@@ -158,6 +158,11 @@ prose using ONLY the verified evidence provided.
 Rules:
 - Every conclusion must reference the evidence ids that support it.
 - Put those ids in the `evidence_ids` list of each conclusion and section.
+- Write the same ids inline in the sentence, so a reader can follow the claim. A
+  bound conclusion looks like
+  {{"statement": "混合检索优于单路检索 [E2]", "evidence_ids": ["E2"], "confidence": 0.7}}.
+- Prefer fewer, well-bound conclusions over many loose ones; a claim with no
+  available evidence id belongs in `limitations` instead.
 - Never create a citation id that is not in the provided evidence list.
 - Be explicit about uncertainty, disagreements between sources and missing data.
 - Structure: executive summary, findings (grouped by sub-task), recommendations, limitations.

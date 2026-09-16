@@ -21,6 +21,19 @@ from researchpilot.utils import estimate_tokens, extract_json_block
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
+# A generic "match the schema" repair message is not enough when the recurring
+# failure is one specific empty field. The live deepseek run left the writer's
+# `evidence_ids` lists empty and the whole report was rejected, so the retry spells
+# out the expected shape next to the validation error.
+_REPAIR_HINTS: dict[str, str] = {
+    "writer": (
+        "Every conclusion and every section needs its supporting ids in `evidence_ids`, "
+        'for example {"statement": "混合检索优于单路检索 [E2]", "evidence_ids": ["E2"]}. '
+        "Use only ids from the provided evidence list, and move a claim that has no "
+        "available id into `limitations` instead of leaving it unbound."
+    ),
+}
+
 
 @dataclass
 class StructuredCallResult(Generic[ModelT]):
@@ -160,8 +173,8 @@ class StructuredLLMRunner:
                         role="user",
                         content=(
                             "Your previous answer was rejected: "
-                            f"{errors[-1][:600]}\nReturn ONLY a corrected JSON object that matches "
-                            f"{schema.__name__}."
+                            f"{errors[-1][:600]}\n{_REPAIR_HINTS.get(purpose, '')}"
+                            f"\nReturn ONLY a corrected JSON object that matches {schema.__name__}."
                         ),
                     ),
                 ]
