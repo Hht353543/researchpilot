@@ -1,0 +1,350 @@
+{
+  "run_id": "eval_30b4a833c887",
+  "generated_at": "2026-09-16T16:22:47Z",
+  "provider": "openai",
+  "model": "deepseek-chat",
+  "mode": "live model",
+  "dataset_path": "eval\\golden_dataset.jsonl",
+  "dataset": {
+    "tasks": 35,
+    "categories": {
+      "bad_source": 2,
+      "citation": 3,
+      "mcp": 3,
+      "multi_agent": 3,
+      "multi_step": 3,
+      "no_result": 3,
+      "prompt_injection": 3,
+      "rag": 3,
+      "simple_fact": 3,
+      "timeout_recovery": 2,
+      "tool_abuse": 4,
+      "tool_calling": 3
+    },
+    "with_expected_docs": 30,
+    "with_expected_tools": 35,
+    "fault_injection_tasks": 4
+  },
+  "metrics": {
+    "tasks": 3,
+    "passed": 3,
+    "task_success_rate": 1.0,
+    "retrieval_tasks": 3,
+    "citation_tasks": 3,
+    "tool_selection_tasks": 3,
+    "retrieval_recall": 1.0,
+    "context_relevance": 0.0625,
+    "citation_correctness": 1.0,
+    "tool_selection_accuracy": 1.0,
+    "tool_selection_f1": 0.4349,
+    "tool_success_rate": 1.0,
+    "tool_calls": 94,
+    "tool_failures": 0,
+    "retries": 13,
+    "llm_calls": 98,
+    "avg_latency_s": 165.509,
+    "p50_latency_s": 164.034,
+    "p95_latency_s": 175.704,
+    "total_tokens": 308661,
+    "avg_tokens": 102887.0,
+    "total_cost_usd": 0.174155,
+    "avg_cost_usd": 0.058052,
+    "avg_iterations": 2.0,
+    "writer_fallback_tasks": 0
+  },
+  "categories": [
+    {
+      "category": "mcp",
+      "tasks": 1,
+      "passed": 1,
+      "task_success_rate": 1.0,
+      "avg_latency_s": 164.034,
+      "avg_tokens": 104433.0,
+      "retrieval_tasks": 1,
+      "tool_selection_tasks": 1,
+      "citation_correctness": 1.0,
+      "retrieval_recall": 1.0,
+      "context_relevance": 0.0625,
+      "tool_selection_f1": 0.5714
+    },
+    {
+      "category": "rag",
+      "tasks": 1,
+      "passed": 1,
+      "task_success_rate": 1.0,
+      "avg_latency_s": 155.491,
+      "avg_tokens": 94537.0,
+      "retrieval_tasks": 1,
+      "tool_selection_tasks": 1,
+      "citation_correctness": 1.0,
+      "retrieval_recall": 1.0,
+      "context_relevance": 0.0625,
+      "tool_selection_f1": 0.4
+    },
+    {
+      "category": "simple_fact",
+      "tasks": 1,
+      "passed": 1,
+      "task_success_rate": 1.0,
+      "avg_latency_s": 177.001,
+      "avg_tokens": 109691.0,
+      "retrieval_tasks": 1,
+      "tool_selection_tasks": 1,
+      "citation_correctness": 1.0,
+      "retrieval_recall": 1.0,
+      "context_relevance": 0.0625,
+      "tool_selection_f1": 0.3333
+    }
+  ],
+  "judgements": [
+    {
+      "task_id": "fact-02-agent-control-flow",
+      "category": "simple_fact",
+      "passed": true,
+      "status": "succeeded",
+      "checks": [
+        {
+          "name": "report_present",
+          "passed": true,
+          "detail": "report=yes chars=8575"
+        },
+        {
+          "name": "required_any_1",
+          "passed": true,
+          "detail": "matched='ReAct' group=['ReAct']"
+        },
+        {
+          "name": "required_any_2",
+          "passed": true,
+          "detail": "matched='Plan-and-Execute' group=['Plan-and-Execute', 'Plan and Execute']"
+        },
+        {
+          "name": "required_any_3",
+          "passed": true,
+          "detail": "matched='Reflection' group=['Reflection', '反思']"
+        },
+        {
+          "name": "citation_integrity",
+          "passed": true,
+          "detail": "1.00 >= 0.90 (114/114)"
+        }
+      ],
+      "retrieved_docs": [
+        "kb-agent-architecture",
+        "kb-tool-calling-mcp",
+        "kb-enterprise-adoption",
+        "kb-evaluation-observability",
+        "kb-security-guardrails",
+        "web_006",
+        "web_009",
+        "web_007",
+        "web_001",
+        "web_000",
+        "web_002",
+        "web_004",
+        "kb-platforms-projects",
+        "kb-memory-context",
+        "web_003",
+        "web_008"
+      ],
+      "expected_docs": [
+        "kb-agent-architecture"
+      ],
+      "used_tools": [
+        "knowledge_search",
+        "document_reader",
+        "metadata",
+        "web_search",
+        "mcp_research_context"
+      ],
+      "expected_tools": [
+        "knowledge_search"
+      ],
+      "retrieval_recall": 1.0,
+      "context_relevance": 0.0625,
+      "citation_correctness": 1.0,
+      "retrieval_applicable": true,
+      "citation_applicable": true,
+      "tool_selection_applicable": true,
+      "tool_selection_recall": 1.0,
+      "tool_selection_f1": 0.3333,
+      "tool_calls": 30,
+      "tool_failures": 0,
+      "llm_calls": 34,
+      "retries": 5,
+      "iterations": 2,
+      "latency_s": 177.001,
+      "tokens": 109691,
+      "cost_usd": 0.06151596,
+      "errors": [],
+      "notes": "概念类事实，验证术语召回。"
+    },
+    {
+      "task_id": "rag-01-chunking",
+      "category": "rag",
+      "passed": true,
+      "status": "succeeded",
+      "checks": [
+        {
+          "name": "report_present",
+          "passed": true,
+          "detail": "report=yes chars=4709"
+        },
+        {
+          "name": "citation_integrity",
+          "passed": true,
+          "detail": "1.00 >= 0.90 (37/37)"
+        },
+        {
+          "name": "retrieval_recall",
+          "passed": true,
+          "detail": "1.00 >= 1.00"
+        }
+      ],
+      "retrieved_docs": [
+        "kb-rag-enterprise",
+        "kb-evaluation-observability",
+        "kb-glossary",
+        "kb-platforms-projects",
+        "kb-agent-architecture",
+        "web_003",
+        "web_004",
+        "web_009",
+        "web_008",
+        "web_002",
+        "web_006",
+        "web_000",
+        "web_007",
+        "web_005",
+        "web_001",
+        "kb-memory-context"
+      ],
+      "expected_docs": [
+        "kb-rag-enterprise"
+      ],
+      "used_tools": [
+        "knowledge_search",
+        "document_reader",
+        "web_search",
+        "mcp_research_context"
+      ],
+      "expected_tools": [
+        "knowledge_search"
+      ],
+      "retrieval_recall": 1.0,
+      "context_relevance": 0.0625,
+      "citation_correctness": 1.0,
+      "retrieval_applicable": true,
+      "citation_applicable": true,
+      "tool_selection_applicable": true,
+      "tool_selection_recall": 1.0,
+      "tool_selection_f1": 0.4,
+      "tool_calls": 34,
+      "tool_failures": 0,
+      "llm_calls": 33,
+      "retries": 3,
+      "iterations": 2,
+      "latency_s": 155.491,
+      "tokens": 94537,
+      "cost_usd": 0.05293906,
+      "errors": [],
+      "notes": "分块策略检索。"
+    },
+    {
+      "task_id": "mcp-01-decoupling",
+      "category": "mcp",
+      "passed": true,
+      "status": "succeeded",
+      "checks": [
+        {
+          "name": "report_present",
+          "passed": true,
+          "detail": "report=yes chars=16277"
+        },
+        {
+          "name": "required_any_1",
+          "passed": true,
+          "detail": "matched='解耦' group=['解耦', '独立']"
+        },
+        {
+          "name": "citation_integrity",
+          "passed": true,
+          "detail": "1.00 >= 0.85 (71/71)"
+        },
+        {
+          "name": "retrieval_recall",
+          "passed": true,
+          "detail": "1.00 >= 1.00"
+        }
+      ],
+      "retrieved_docs": [
+        "kb-tool-calling-mcp",
+        "kb-agent-architecture",
+        "kb-glossary",
+        "kb-enterprise-adoption",
+        "kb-evaluation-observability",
+        "web_002",
+        "web_004",
+        "web_000",
+        "web_003",
+        "web_006",
+        "kb-cost-latency",
+        "kb-security-guardrails",
+        "web_007",
+        "kb-platforms-projects",
+        "web_001",
+        "web_005"
+      ],
+      "expected_docs": [
+        "kb-tool-calling-mcp"
+      ],
+      "used_tools": [
+        "knowledge_search",
+        "document_reader",
+        "metadata",
+        "web_search",
+        "mcp_research_context"
+      ],
+      "expected_tools": [
+        "knowledge_search",
+        "mcp_research_context"
+      ],
+      "retrieval_recall": 1.0,
+      "context_relevance": 0.0625,
+      "citation_correctness": 1.0,
+      "retrieval_applicable": true,
+      "citation_applicable": true,
+      "tool_selection_applicable": true,
+      "tool_selection_recall": 1.0,
+      "tool_selection_f1": 0.5714,
+      "tool_calls": 30,
+      "tool_failures": 0,
+      "llm_calls": 31,
+      "retries": 5,
+      "iterations": 2,
+      "latency_s": 164.034,
+      "tokens": 104433,
+      "cost_usd": 0.05969956,
+      "errors": [],
+      "notes": "MCP 解耦价值。"
+    }
+  ],
+  "failed_checks": {},
+  "environment": {
+    "python": "3.12.2",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "embedding_provider": "hash",
+    "embedding_dim": 384,
+    "retrieval_top_k": 6,
+    "max_iterations": 2,
+    "web_search_mode": "offline",
+    "mcp_transport": "inprocess"
+  },
+  "duration_s": 496.533,
+  "settings_snapshot": {
+    "temperature": 0.2,
+    "max_tokens": 1200,
+    "token_budget": 80000,
+    "rerank_strategy": "heuristic"
+  }
+}

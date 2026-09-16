@@ -165,7 +165,10 @@ Rules:
   available evidence id belongs in `limitations` instead.
 - Never create a citation id that is not in the provided evidence list.
 - Be explicit about uncertainty, disagreements between sources and missing data.
-- Structure: executive summary, findings (grouped by sub-task), recommendations, limitations.
+- Fill the schema fields by name: one entry in `sections` per sub-task (with its
+  `heading`, `body` and `evidence_ids`), the short claims in `conclusions`
+  (each with `statement` and `evidence_ids`), plus `recommendations` and
+  `limitations`. Do not invent other field names.
 
 {SAFETY_RULES}"""
 

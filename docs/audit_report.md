@@ -150,7 +150,7 @@ MCP Server 与 3 种传输；三层记忆；统一 Trace；35 条 Golden Dataset
 | 验证 | 命令 / 方式 | 结果 |
 | --- | --- | --- |
 | 静态检查 | `ruff check .` / `ruff format --check .` / `mypy researchpilot` | 全部通过（0 error） |
-| 测试 | `python -m pytest -q` | 289 passed（含 unit / integration / evaluation）+ 9 个前端 node 测试 |
+| 测试 | `python -m pytest -q` | 294 passed（含 unit / integration / evaluation）+ 9 个前端 node 测试 |
 | 提交的仓库自洽（全新 clone） | `scripts/verify_fresh_clone.py`：把仓库 clone 到临时目录后执行 CI 干跑；实测 167 个受版本控制文件、clone 中无 `runs/`，ruff / mypy / 198 项测试 / 评测 / benchmark / compose 拓扑全部通过 |
 | CI 工作流本身可执行 | `python scripts/ci_dry_run.py`（解析真实 `.github/workflows/ci.yml`） | 9/9 步骤通过：ruff → mypy → unit+integration(+coverage) → node 前端测试 → Golden Dataset 完整性 → benchmark → evaluation 冒烟 → compose 拓扑。`docker` job 由 GitHub Actions 拥有（本机无引擎）：本机 `--job docker` 退出码 2 并打印原因，不再是静默跳过；`--list` 可逐条看到该 job 的真实命令 |
 | 依赖一致性 | `python -m pip check` | 本项目 fastapi/starlette 冲突消失；余下为环境内无关预装包 |

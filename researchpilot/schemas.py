@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 ToolName = Literal[
     "web_search",
@@ -263,6 +263,46 @@ class FinalReport(BaseModel):
     limitations: list[str] = Field(default_factory=list)
     dropped_citations: list[str] = Field(default_factory=list)
     markdown: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_findings_sections(cls, data: Any) -> Any:
+        """Accept the section shape a real model writes.
+
+        deepseek-chat answered with ``findings[].narrative`` (its reading of the
+        prompt's "findings" structure) while the schema expects ``sections``.
+        Pydantic drops unknown keys and keeps the defaults, so the report validated
+        with empty lists and the writer replaced it with the extractive fallback.
+        Here the findings are folded into ``sections``, which keeps the model's own
+        text and its citation ids.
+        """
+        if not isinstance(data, dict):
+            return data
+        findings = data.get("findings")
+        if not isinstance(findings, list) or not findings:
+            return data
+        sections = list(data.get("sections") or [])
+        if sections:
+            return data
+        for item in findings:
+            if not isinstance(item, dict):
+                continue
+            body = str(item.get("narrative") or item.get("body") or item.get("statement") or "").strip()
+            if not body:
+                continue
+            sections.append(
+                {
+                    "heading": str(item.get("heading") or item.get("title") or "分析").strip(),
+                    "body": body,
+                    "evidence_ids": list(item.get("evidence_ids") or []),
+                }
+            )
+        if not sections:
+            return data
+        merged = dict(data)
+        merged["sections"] = sections
+        merged.pop("findings", None)
+        return merged
 
 
 # --------------------------------------------------------------------------- #
