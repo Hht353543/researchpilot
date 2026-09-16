@@ -116,6 +116,7 @@ class WriterAgent(BaseAgent):
                 report = self._fallback_report(plan, usable, verification)
             report = self._bind_citations(report, usable, verification, injection_ids)
             report.markdown = render_report(report, usable, runtime.sources.all())
+            report = self._redact_credentials(report)
             self.note(
                 f"report: {len(report.sections)} sections, "
                 f"{len(report.dropped_citations)} fabricated citations removed"
@@ -132,6 +133,50 @@ class WriterAgent(BaseAgent):
         return report
 
     # -- citation binding --------------------------------------------------- #
+    def _redact_credentials(self, report: FinalReport) -> FinalReport:
+        """Never ship the configured credential, even when a source quoted it.
+
+        The prompt never contains the API key, but a retrieved document or a
+        prompt-injected page can, and a model that quotes it would otherwise put it
+        in the report - and from there into the persisted result, the trace and any
+        screenshot of the UI. The evaluator has its own guardrail; this is the
+        runtime one, so the leak cannot happen regardless of the dataset.
+        """
+        secret = (self.runtime.settings.api_key or "").strip()
+        if len(secret) < 8:
+            return report
+
+        changed = False
+
+        def scrub(text: str) -> str:
+            nonlocal changed
+            if secret not in text:
+                return text
+            changed = True
+            return text.replace(secret, "[redacted]")
+
+        fields = {
+            "title": scrub(report.title),
+            "executive_summary": scrub(report.executive_summary),
+            "markdown": scrub(report.markdown),
+            "recommendations": [scrub(item) for item in report.recommendations],
+            "limitations": [scrub(item) for item in report.limitations],
+            "conclusions": [
+                claim.model_copy(update={"statement": scrub(claim.statement)}) for claim in report.conclusions
+            ],
+            "sections": [
+                section.model_copy(update={"body": scrub(section.body)}) for section in report.sections
+            ],
+        }
+        if not changed:
+            return report
+        self.runtime.errors.append("writer: redacted the configured credential from the report")
+        fields["limitations"] = [
+            *fields["limitations"],
+            "报告中的凭据字串已按安全策略脱敏（[redacted]）。",
+        ]
+        return report.model_copy(update=fields)
+
     def _recover_citations(self, report: FinalReport, allowed: set[str]) -> FinalReport:
         """Fill empty ``evidence_ids`` from the citations the model wrote inline.
 

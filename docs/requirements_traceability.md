@@ -7,7 +7,7 @@
 复现入口：
 
 ```bash
-python -m pytest -q                     # 294 个测试（unit / integration / evaluation）
+python -m pytest -q                     # 296 个测试（unit / integration / evaluation）
 node --test "tests/frontend/**/*.test.mjs"   # 9 个前端逻辑测试
 ruff check . && ruff format --check . && mypy researchpilot
 python scripts/run_benchmark.py --provider mock   # 离线回归基线 35/35
@@ -24,7 +24,7 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 | 代码 Bug 审查 | `docs/audit_report.md` 的分类与逐条修复；37 项发现中 35 项已修复，另 2 项是环境限制 | 已验证 |
 | 架构 Bug 审查 | ADR-0001..0005、`docs/architecture.md`；修复 Planner 崩溃于向量库故障等架构级缺陷 | 已验证 |
 | 功能缺失检查 | 新增 KB 删除、全量重建、工具缓存启用、LLM 重排可达、前端 max_tokens/评测面板 | 已验证 |
-| 工程质量 | ruff / format / mypy / pip check / 294 pytest + 9 node / CI / Docker 资产测试 | 已验证 |
+| 工程质量 | ruff / format / mypy / pip check / 296 pytest + 9 node / CI / Docker 资产测试 | 已验证 |
 | AI Agent 特有可靠性 | 注入隔离、工具预算、超时重试、token 预算、无证据降级、引用绑定、修复重试 | 已验证 |
 | 发现→定位→修改→补测试→运行→验证→更新文档 闭环 | `docs/development_log.md` 逐条记录（含失败与回退）；每项均有对应测试 | 已验证 |
 
@@ -217,7 +217,7 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 | ruff | `ruff check .` → All checks passed；`ruff format --check .` → 136 files formatted | 已验证 |
 | CI 工作流本身可执行 | `scripts/ci_dry_run.py` 解析真实 `.github/workflows/ci.yml` 并逐条执行：lint / typecheck / test / evaluation 共 9/9 步骤通过（docker job 需容器引擎，明确跳过并说明原因） | 已验证 |
 | mypy | `mypy researchpilot` → Success（69 source files） | 已验证 |
-| pytest | 294 passed（+ 9 node 前端测试） | 已验证 |
+| pytest | 296 passed（+ 9 node 前端测试） | 已验证 |
 | pip check | 本项目依赖对无冲突；其余为环境内无关预装包冲突（逐条说明） | 受限：环境噪声已定位 |
 | 前端 npm test/build/lint | 无 npm 工具链（vanilla JS、无 package.json）→ `node --test`（零依赖 9 项）+ OpenAPI 契约测试等价覆盖 | 受限：等价方案 |
 | 不为绿色而关闭规则 | 仅对中文全角标点关闭 RUF001-003，并在 pyproject 中注明原因 | 已验证 |
