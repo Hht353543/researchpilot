@@ -95,7 +95,23 @@ class EvaluationRunner:
         if limit:
             dataset = dataset[:limit]
 
+        owns_provider = self.provider is None
         provider = self.provider or build_provider(self.settings, self.provider_name)
+        try:
+            return self._run_dataset(dataset, provider, persist=persist)
+        finally:
+            if owns_provider:
+                close = getattr(provider, "close", None)
+                if callable(close):
+                    close()
+
+    def _run_dataset(
+        self,
+        dataset: list[GoldenTask],
+        provider: LLMProvider,
+        *,
+        persist: bool,
+    ) -> EvaluationReport:
         started = time.perf_counter()
         judgements: list[TaskJudgement] = []
         for task in dataset:

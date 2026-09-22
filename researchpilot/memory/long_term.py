@@ -9,6 +9,14 @@ from pathlib import Path
 
 from researchpilot.config import get_settings
 from researchpilot.memory.models import MemoryKind, MemoryRecord
+from researchpilot.persistence import (
+    PersistenceCorruptionError,
+    PersistenceError,
+    StorageSignature,
+    atomic_write_text,
+    serialized_file_update,
+    storage_signature,
+)
 from researchpilot.utils import jaccard, normalize_text, parse_iso, sha1_of, utc_now_iso
 
 
@@ -20,27 +28,56 @@ class LongTermMemory:
         self.path = base
         self.dedup_threshold = dedup_threshold
         self._records: dict[str, MemoryRecord] = {}
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
+        self._storage_signature: StorageSignature | None = None
         self._load()
 
     # -- persistence -------------------------------------------------------- #
-    def _load(self) -> None:
+    def _read_records(self) -> dict[str, MemoryRecord]:
         if not self.path.exists():
-            return
+            return {}
         try:
-            payload = json.loads(self.path.read_text(encoding="utf-8"))
-        except Exception:  # pragma: no cover - corrupted file
-            return
-        for item in payload.get("records", []):
-            record = MemoryRecord.model_validate(item)
-            self._records[record.id] = record
-        self.forget_expired()
+            raw = self.path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise PersistenceError("long-term memory could not be read") from exc
+        try:
+            payload = json.loads(raw)
+            if not isinstance(payload, dict) or not isinstance(payload.get("records"), list):
+                raise TypeError("records must be an array")
+            records = [MemoryRecord.model_validate(item) for item in payload["records"]]
+        except (json.JSONDecodeError, UnicodeError, TypeError, ValueError) as exc:
+            raise PersistenceCorruptionError("long-term memory is corrupted") from exc
+        if len({record.id for record in records}) != len(records):
+            raise PersistenceCorruptionError("long-term memory is corrupted")
+        return {record.id: record for record in records}
+
+    def _load(self) -> None:
+        records = self._read_records()
+        self._records = records
+        self._storage_signature = storage_signature(self.path)
+
+    def _refresh_if_changed(self) -> None:
+        if storage_signature(self.path) != self._storage_signature:
+            self._load()
+
+    def _commit_records_unlocked(self, records: dict[str, MemoryRecord]) -> Path:
+        payload = {"records": [record.model_dump() for record in records.values()]}
+        try:
+            saved = atomic_write_text(
+                self.path,
+                json.dumps(payload, ensure_ascii=False, indent=2),
+            )
+        except Exception as exc:
+            raise PersistenceError("long-term memory update could not be committed") from exc
+        self._records = records
+        self._storage_signature = storage_signature(self.path)
+        return saved
 
     def flush(self) -> Path:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"records": [r.model_dump() for r in self._records.values()]}
-        self.path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        return self.path
+        """Synchronize and rewrite the latest durable snapshot atomically."""
+        with self._lock, serialized_file_update(self.path):
+            records = self._read_records()
+            return self._commit_records_unlocked(records)
 
     # -- write -------------------------------------------------------------- #
     def remember(
@@ -56,15 +93,18 @@ class LongTermMemory:
         content = content.strip()
         if not content:
             raise ValueError("memory content must not be empty")
-        with self._lock:
-            existing = self._find_duplicate(content)
+        with self._lock, serialized_file_update(self.path):
+            # Every mutation starts from the last committed snapshot. This is
+            # what prevents a stale process instance from overwriting peers.
+            records = self._read_records()
+            existing = self._find_duplicate(records, content)
             if existing is not None:
                 existing.hits += 1
                 if importance >= existing.importance:
                     existing.content = content
                     existing.importance = round(min(max(importance, existing.importance), 1.0), 3)
                     existing.created_at = utc_now_iso()
-                self.flush()
+                self._commit_records_unlocked(records)
                 return existing
             record = MemoryRecord(
                 id=f"mem_{sha1_of(normalize_text(content))}",
@@ -80,13 +120,13 @@ class LongTermMemory:
                 ),
                 metadata=dict(metadata or {}),
             )
-            self._records[record.id] = record
-            self.flush()
+            records[record.id] = record
+            self._commit_records_unlocked(records)
             return record
 
-    def _find_duplicate(self, content: str) -> MemoryRecord | None:
+    def _find_duplicate(self, records: dict[str, MemoryRecord], content: str) -> MemoryRecord | None:
         normalized = normalize_text(content)
-        for record in self._records.values():
+        for record in records.values():
             other = normalize_text(record.content)
             if other == normalized or jaccard(other, normalized) >= self.dedup_threshold:
                 return record
@@ -96,57 +136,73 @@ class LongTermMemory:
     def recall(
         self, query: str = "", *, limit: int = 5, kind: MemoryKind | None = None
     ) -> list[MemoryRecord]:
-        now = time.time()
-        self.forget_expired(now=now)
-        scored: list[tuple[float, MemoryRecord]] = []
-        for record in self._records.values():
-            if kind and record.kind != kind:
-                continue
-            similarity = jaccard(query, record.content) if query else 1.0
-            recency = 1.0 / (1.0 + _age_days(record.created_at, now) / 30.0)
-            hits = min(record.hits / 5.0, 1.0)
-            score = 0.45 * record.importance + 0.25 * recency + 0.2 * similarity + 0.1 * hits
-            if query and similarity == 0.0:
-                score *= 0.5
-            scored.append((score, record))
-        scored.sort(key=lambda item: item[0], reverse=True)
-        results: list[MemoryRecord] = []
-        for _, record in scored[:limit]:
-            record.hits += 1
-            results.append(record)
-        if results:
-            # Persist hit counts, otherwise the importance/recency ranking loses
-            # its "frequently used" signal on the next process start.
-            self.flush()
-        return results
+        with self._lock, serialized_file_update(self.path):
+            records = self._read_records()
+            now = time.time()
+            changed = self._forget_expired_unlocked(records, now)
+            scored: list[tuple[float, MemoryRecord]] = []
+            for record in records.values():
+                if kind and record.kind != kind:
+                    continue
+                similarity = jaccard(query, record.content) if query else 1.0
+                recency = 1.0 / (1.0 + _age_days(record.created_at, now) / 30.0)
+                hits = min(record.hits / 5.0, 1.0)
+                score = 0.45 * record.importance + 0.25 * recency + 0.2 * similarity + 0.1 * hits
+                if query and similarity == 0.0:
+                    score *= 0.5
+                scored.append((score, record))
+            scored.sort(key=lambda item: item[0], reverse=True)
+            results: list[MemoryRecord] = []
+            for _, record in scored[:limit]:
+                record.hits += 1
+                results.append(record)
+            if results or changed:
+                self._commit_records_unlocked(records)
+            else:
+                self._records = records
+                self._storage_signature = storage_signature(self.path)
+            return results
 
     def forget_expired(self, *, now: float | None = None) -> int:
-        moment = now if now is not None else time.time()
-        expired = [rid for rid, record in self._records.items() if record.is_expired(now=moment)]
+        with self._lock, serialized_file_update(self.path):
+            records = self._read_records()
+            expired = self._forget_expired_unlocked(records, now if now is not None else time.time())
+            if expired:
+                self._commit_records_unlocked(records)
+            else:
+                self._records = records
+                self._storage_signature = storage_signature(self.path)
+            return expired
+
+    def _forget_expired_unlocked(self, records: dict[str, MemoryRecord], moment: float) -> int:
+        expired = [rid for rid, record in records.items() if record.is_expired(now=moment)]
         for rid in expired:
-            del self._records[rid]
-        if expired:
-            self.flush()
+            del records[rid]
         return len(expired)
 
     def all(self) -> list[MemoryRecord]:
-        return list(self._records.values())
+        with self._lock:
+            self._refresh_if_changed()
+            return list(self._records.values())
 
     def stats(self) -> dict[str, object]:
-        return {
-            "records": len(self._records),
-            "by_kind": {
-                kind: sum(1 for r in self._records.values() if r.kind == kind)
-                for kind in {r.kind for r in self._records.values()}
-            },
-            "avg_importance": round(
-                sum(r.importance for r in self._records.values()) / max(len(self._records), 1), 3
-            ),
-        }
+        with self._lock:
+            self._refresh_if_changed()
+            return {
+                "records": len(self._records),
+                "by_kind": {
+                    kind: sum(1 for r in self._records.values() if r.kind == kind)
+                    for kind in {r.kind for r in self._records.values()}
+                },
+                "avg_importance": round(
+                    sum(r.importance for r in self._records.values()) / max(len(self._records), 1), 3
+                ),
+            }
 
     def clear(self) -> None:
-        self._records.clear()
-        self.flush()
+        with self._lock, serialized_file_update(self.path):
+            self._read_records()  # corruption must stop a destructive overwrite
+            self._commit_records_unlocked({})
 
 
 def _age_days(created_at: str, now: float) -> float:

@@ -218,7 +218,7 @@ def verify_stack(
     check(
         failures,
         "research status",
-        result.get("status") in {"succeeded", "degraded"},
+        result.get("status") == "completed" and result.get("quality") in {"succeeded", "degraded"},
         f"{result.get('status')}",
     )
     check(

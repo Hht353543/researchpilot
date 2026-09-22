@@ -135,6 +135,7 @@ class ToolRegistry:
         arguments = dict(arguments or {})
         ctx = ctx or ToolContext(settings=self.settings)
         task_id = ctx.task_id
+        ctx.checkpoint()
         # Prefer the explicit context tracer, but fall back to the ambient tracer so
         # nested calls that only receive a ToolContext are still traced.
         tracer = ctx.tracer or current_tracer()
@@ -158,6 +159,7 @@ class ToolRegistry:
         attempts = 0
         last_error: str | None = None
         while attempts <= tool.max_retries:
+            ctx.checkpoint()
             attempts += 1
             span = None
             if tracer is not None:
@@ -171,6 +173,7 @@ class ToolRegistry:
             started = time.perf_counter()
             try:
                 result = self._run_with_timeout(tool, args, ctx)
+                ctx.checkpoint()
                 result = result.model_copy(
                     update={
                         "tool": tool_name,
@@ -206,17 +209,40 @@ class ToolRegistry:
                 if span is not None and tracer is not None:
                     tracer.end_span(span, error=last_error)
             if attempts <= tool.max_retries:
-                time.sleep(min(0.05 * attempts, 0.5))
+                delay = min(0.05 * attempts, 0.5)
+                deadline = time.monotonic() + delay
+                while time.monotonic() < deadline:
+                    ctx.checkpoint()
+                    remaining_delay = deadline - time.monotonic()
+                    if remaining_delay <= 0:
+                        break
+                    time.sleep(min(0.05, remaining_delay))
 
         return self._failure(tool_name, arguments, last_error or "tool failed", ctx, raise_on_error)
 
     def _run_with_timeout(self, tool: BaseTool, args: Any, ctx: ToolContext) -> ToolResult:
         future: Future[ToolResult] = self._pool.submit(tool.run, args, ctx)
+        deadline = time.monotonic() + tool.timeout_s
         try:
-            return future.result(timeout=tool.timeout_s)
-        except FutureTimeout as exc:
-            future.cancel()
-            raise ToolTimeoutError(f"tool '{tool.name}' timed out after {tool.timeout_s}s") from exc
+            while True:
+                ctx.checkpoint()
+                remaining = deadline - time.monotonic()
+                task_remaining = ctx.remaining()
+                if task_remaining is not None:
+                    remaining = min(remaining, task_remaining)
+                if remaining <= 0:
+                    ctx.checkpoint()
+                    raise ToolTimeoutError(f"tool '{tool.name}' timed out after {tool.timeout_s}s")
+                try:
+                    return future.result(timeout=min(0.05, remaining))
+                except FutureTimeout:
+                    if time.monotonic() >= deadline:
+                        raise ToolTimeoutError(
+                            f"tool '{tool.name}' timed out after {tool.timeout_s}s"
+                        ) from None
+        finally:
+            if not future.done():
+                future.cancel()
 
     def _account(self, task_id: str, tool_name: str) -> None:
         with self._lock:

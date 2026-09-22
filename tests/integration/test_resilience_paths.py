@@ -92,7 +92,8 @@ async def test_tool_timeout_surfaces_through_the_api(tmp_path) -> None:
 
     assert response.status_code == 200, response.text
     payload = response.json()
-    assert payload["status"] in {"degraded", "failed"}
+    assert payload["status"] == "completed"
+    assert payload["quality"] == "degraded"
     assert payload["metrics"]["tool_failures"] >= 1
     assert any("timeout" in message.lower() for message in payload["errors"]), payload["errors"]
     assert payload["report"] is not None
@@ -111,7 +112,8 @@ def test_unparseable_llm_output_degrades_without_fabricating(settings: Settings,
     )
     result = pipeline.run(ResearchRequest(question="工具注册表需要声明哪些字段？"))
 
-    assert result.status in {"degraded", "failed"}
+    assert result.status == "completed"
+    assert result.quality == "degraded"
     assert result.errors, "garbage output must be recorded as an error"
     # Deterministic fallbacks still produce a structured plan and a report.
     assert result.plan is not None and result.plan.subtasks

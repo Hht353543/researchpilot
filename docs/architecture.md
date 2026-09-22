@@ -41,7 +41,7 @@
 6. `CriticAgent`：找缺口 → `needs_more_research` + `follow_up_queries`
 7. 若需要且未超过 `max_iterations`：`ResearchAgent` 补检 → 重新校验与批评
 8. `WriterAgent`：基于可用证据写作 → 引用绑定校验（剔除不存在的引用、排除含注入特征的证据）
-9. 落盘 `runs/{task_id}.result.json` 与 `runs/{task_id}.trace.json`；长期记忆写入主题与高置信结论
+9. 先落盘 result/trace 产物，最后提交 `runs/{task_id}.task.json` 终态；长期记忆写入主题与高置信结论
 
 ## 3. 关键 Schema（Agent 状态）
 
@@ -128,18 +128,39 @@ MCP Server 复用同一套 KnowledgeBase / WebBackend，把能力以协议方式
 
 ## 6. 失败处理
 
+任务生命周期由进程内 `ResearchPipeline` 统一管理：API 同步请求和异步提交都进入同一受管 worker 路径，
+每个任务拥有 `TaskLifecycle` cancellation/deadline token、一个 worker 引用和一个 deadline timer。
+合法主路径是 `pending → running → completed|failed|cancelled|timed_out`；terminal transition 在锁内提交，
+因此 cancel/timeout/complete/failure 竞争时只有第一个成功转换者能发布结果和释放 capacity slot。
+
+资源所有权保持显式：ServiceContainer 创建的 provider 与 MCP client 属于应用，由 FastAPI lifespan shutdown
+关闭；请求覆盖模型时创建的 provider、默认 ToolRegistry 及其 executor 属于任务，由 worker 的 `finally`
+关闭；注入的共享 provider、MCP client 和 registry 不会被单个任务关闭。stdio client 拥有其子进程与 reader
+thread，RPC 超时或 close 时执行 terminate、短暂等待、必要时 kill，并关闭三条 pipe。
+
+`runs/{task_id}.task.json` 是生命周期事实源，记录 created/started/finished/updated 时间、owner PID 与实例 id、
+错误摘要以及 result/trace 的引用和提交状态。worker 定期刷新 `updated_at`。服务启动时在逐任务跨进程锁内扫描
+`pending/running`：活跃且租约新鲜的 owner 保持不变，失联或租约过期的任务收敛为 `failed`。多个实例同时
+启动时只有一个能完成该 compare-and-swap 恢复。
+启动扫描也会为旧版本仅有 `.result.json` 的任务补建 task record；旧的 `pending/running` 结果随后按同一规则
+收敛，避免升级后遗留永久僵尸任务。
+
+终态采用“产物优先、任务记录最后”的提交顺序。`completed` 只有在 result 已持久化后才能提交；trace 失败
+允许任务以 `completed/degraded` 收敛，并在 task record 中标为 `unavailable`。result 提交失败会把执行收敛
+为 `failed`。如果最后的 task record 提交失败，调用方收到明确存储失败，磁盘上的非终态由下次启动恢复。
+
 | 失败 | 处理 |
 | --- | --- |
 | LLM 输出非 JSON / 不符合 Schema | 结构化运行器带修复重试（上限 `max_retries`），失败后走确定性回退 |
-| LLM 提供商不可用 | Planner 回退到确定性计划；其余 Agent 回退到抽取式结果；状态标记 `degraded` |
-| 工具超时 | Registry 记录失败 + retry span，Agent 继续其它工具，状态 `degraded` |
+| LLM 提供商不可用 | Planner 回退到确定性计划；其余 Agent 回退到抽取式结果；任务 `completed`、质量 `degraded` |
+| 工具超时 | Registry 记录失败 + retry span，Agent 继续其它工具；任务 `completed`、质量 `degraded` |
 | 工具预算耗尽 | 拒绝调用并记录，报告仍产出且显式标注缺口 |
 | 无检索结果 | Verifier 判定证据不足 → Critic 要求补检 → Writer 在 limitations 声明缺口 |
 | 低质量来源 | 来源质量评分下降 → `sufficient=false` → 报告显式提示证据不足 |
 | 提示注入 | 外部内容标记为不可信数据；含注入特征的证据被排除出结论并在 limitations 中列出 |
 | 引用编造 | Writer 后置校验剔除不存在的引用，记录 `dropped_citations` |
 | 空知识库 | 回退到 Web/MCP 等其它来源，并把缺口写入 `Bundle.gaps` 与报告 limitations |
-| 所有来源都为空 | 状态标记为 `degraded`（"没有证据"永远不是 `succeeded`），报告显式声明没有可用证据 |
+| 所有来源都为空 | 生命周期为 `completed`、质量为 `degraded`，报告显式声明没有可用证据 |
 | 向量库/Embedding 不可用 | 工具层捕获为 tool failure，规划阶段读取 KB 统计的异常也被降级处理，任务继续 |
 | Web 检索 URL 不安全 | 只接受 http/https、拒绝 URL 内嵌凭据、可选 host allow-list（SSRF 加固） |
 
@@ -162,8 +183,9 @@ MCP Server 复用同一套 KnowledgeBase / WebBackend，把能力以协议方式
 - 分母为 0 时渲染为 `n/a`（而不是 `0%` 或 `100%`）；
 - `Tool Success Rate` 在没有任何工具调用时为 `n/a`。
 
-状态语义同样收紧：`ResearchPipeline._status` 在"没有任何可用证据"时返回 `degraded`，
-避免空结果任务被计入 `succeeded`。
+生命周期由 `pending → running → completed|failed|cancelled|timed_out` 状态机管理；结果质量单独由
+`ResearchPipeline._quality` 计算。取消 token 和 wall-clock deadline 会在 Agent、模型、工具、迭代边界检查，
+首次 terminal transition 获胜，late completion 不会覆盖已提交终态。
 
 ## 8. 目录职责
 

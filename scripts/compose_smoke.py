@@ -127,6 +127,15 @@ def resolve_environment(raw: dict[str, str] | list[str] | None, environ: dict[st
     return result
 
 
+def published_port(value: object, environ: dict[str, str]) -> int:
+    """Read HOST:CONTAINER and IP:HOST:CONTAINER compose port forms."""
+    resolved = interpolate(str(value), environ)
+    parts = resolved.rsplit(":", 2)
+    if len(parts) < 2:
+        raise ValueError(f"invalid compose port mapping: {resolved}")
+    return int(parts[-2])
+
+
 def main() -> int:
     configure_script_stdio()
     parser = argparse.ArgumentParser(description="Run the compose topology without a container engine")
@@ -143,8 +152,8 @@ def main() -> int:
     log_dir.mkdir(parents=True, exist_ok=True)
 
     # --- resolve ports ------------------------------------------------------ #
-    mcp_port = free_port(int(str(services["mcp"]["ports"][0]).split(":")[0]))
-    api_port = free_port(int(str(services["api"]["ports"][0]).split(":")[0]))
+    mcp_port = free_port(published_port(services["mcp"]["ports"][0], environ))
+    api_port = free_port(published_port(services["api"]["ports"][0], environ))
     print(f"[compose-smoke] host ports -> mcp={mcp_port} api={api_port}")
 
     remaps = {
@@ -180,7 +189,9 @@ def main() -> int:
         {"RESEARCHPILOT_MCP_TRANSPORT": "http", "RESEARCHPILOT_MCP_URL": f"http://127.0.0.1:{mcp_port}/mcp"}
     )
 
-    python = shutil.which("python") or sys.executable
+    # Child services must use the exact interpreter that launched this smoke
+    # test; PATH may point at a polluted global environment even inside a venv.
+    python = sys.executable
     processes: list[tuple[str, subprocess.Popen[str]]] = []
     try:
         # --- mcp service (started first: api depends_on service_healthy) ----- #
@@ -253,7 +264,10 @@ def main() -> int:
         )
         if mcp_calls < 1:
             failures.append("research run did not call MCP over HTTP")
-        if research.get("status") not in {"succeeded", "degraded"}:
+        if research.get("status") != "completed" or research.get("quality") not in {
+            "succeeded",
+            "degraded",
+        }:
             failures.append(f"unexpected research status: {research.get('status')}")
 
         if failures:

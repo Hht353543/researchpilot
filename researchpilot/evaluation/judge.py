@@ -103,6 +103,7 @@ def judge_task(
 
     checks: list[CheckResult] = []
     exp = task.expectations
+    outcome = result.quality or result.status
     retrieval_applicable = bool(task.expected_docs)
     tool_selection_applicable = bool(task.expected_tools)
     citation_applicable = bool(exp.min_citation_integrity or citation_total or task.category == "citation")
@@ -121,8 +122,8 @@ def judge_task(
         checks.append(
             CheckResult(
                 name="status",
-                passed=result.status in exp.status_in,
-                detail=f"status={result.status} expected={exp.status_in}",
+                passed=outcome in exp.status_in,
+                detail=f"outcome={outcome} lifecycle={result.status} expected={exp.status_in}",
             )
         )
     for index, group in enumerate(exp.required_any, start=1):
@@ -206,7 +207,7 @@ def judge_task(
         task_id=task.id,
         category=task.category,
         passed=all(check.passed for check in checks),
-        status=result.status,
+        status=outcome,
         checks=checks,
         retrieved_docs=retrieved_docs,
         expected_docs=list(task.expected_docs),

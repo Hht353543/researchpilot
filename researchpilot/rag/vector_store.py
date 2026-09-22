@@ -11,6 +11,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+from researchpilot.persistence import PersistenceCorruptionError, PersistenceError, atomic_write_text
 from researchpilot.rag.models import Chunk, Document, DocumentSummary, RetrievedChunk
 from researchpilot.utils import cosine_similarity, normalize_text
 
@@ -77,6 +78,7 @@ class VectorStore:
         # Identifies which embedder produced the stored vectors: loading an index
         # built by a different embedder would compare incompatible vectors.
         self.fingerprint: str = ""
+        self.generation: int = 0
         self._chunks: dict[str, Chunk] = {}
         self._documents: dict[str, Document] = {}
         self._bm25: BM25Index | None = None
@@ -266,25 +268,63 @@ class VectorStore:
         return {
             "dimension": self.dimension,
             "fingerprint": self.fingerprint,
+            "generation": self.generation,
             "documents": [d.model_dump() for d in self._documents.values()],
             "chunks": [c.model_dump() for c in self._chunks.values()],
         }
 
     def save(self, path: str | Path) -> Path:
         target = Path(path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(json.dumps(self.to_dict(), ensure_ascii=False), encoding="utf-8")
-        return target
+        try:
+            return atomic_write_text(target, json.dumps(self.to_dict(), ensure_ascii=False))
+        except Exception as exc:
+            raise PersistenceError("knowledge base index could not be committed") from exc
+
+    @classmethod
+    def from_dict(cls, payload: Any) -> VectorStore:
+        try:
+            if not isinstance(payload, dict):
+                raise TypeError("root must be an object")
+            documents = payload.get("documents")
+            chunks = payload.get("chunks")
+            if not isinstance(documents, list) or not isinstance(chunks, list):
+                raise TypeError("documents and chunks must be arrays")
+            dimension = payload.get("dimension", 384)
+            generation = payload.get("generation", 0)
+            fingerprint = payload.get("fingerprint", "")
+            if isinstance(dimension, bool) or not isinstance(dimension, int) or dimension <= 0:
+                raise TypeError("dimension must be a positive integer")
+            if isinstance(generation, bool) or not isinstance(generation, int) or generation < 0:
+                raise TypeError("generation must be a non-negative integer")
+            if not isinstance(fingerprint, str):
+                raise TypeError("fingerprint must be a string")
+
+            store = cls(dimension=dimension)
+            store.fingerprint = fingerprint
+            store.generation = generation
+            for doc in documents:
+                store.upsert_document(Document.model_validate(doc))
+            store.add_chunks([Chunk.model_validate(chunk) for chunk in chunks])
+            return store
+        except PersistenceCorruptionError:
+            raise
+        except Exception as exc:
+            raise PersistenceCorruptionError("knowledge base index is corrupted") from exc
+
+    def clone(self) -> VectorStore:
+        return self.from_dict(self.to_dict())
 
     @classmethod
     def load(cls, path: str | Path) -> VectorStore:
-        payload = json.loads(Path(path).read_text(encoding="utf-8"))
-        store = cls(dimension=int(payload.get("dimension", 384)))
-        store.fingerprint = str(payload.get("fingerprint", ""))
-        for doc in payload.get("documents", []):
-            store.upsert_document(Document.model_validate(doc))
-        store.add_chunks([Chunk.model_validate(c) for c in payload.get("chunks", [])])
-        return store
+        try:
+            raw = Path(path).read_text(encoding="utf-8")
+        except OSError as exc:
+            raise PersistenceError("knowledge base index could not be read") from exc
+        try:
+            payload = json.loads(raw)
+        except (json.JSONDecodeError, UnicodeError) as exc:
+            raise PersistenceCorruptionError("knowledge base index is corrupted") from exc
+        return cls.from_dict(payload)
 
 
 def _matches(chunk: Chunk, filters: dict[str, Any] | None) -> bool:

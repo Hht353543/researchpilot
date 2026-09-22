@@ -13,7 +13,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml README.md ./
+COPY pyproject.toml constraints.txt README.md LICENSE ./
 COPY researchpilot ./researchpilot
 COPY configs ./configs
 COPY scripts ./scripts
@@ -21,8 +21,8 @@ COPY scripts ./scripts
 # Install the build backend explicitly, then the project itself. Keeping this as
 # two steps makes the image build fail loudly on packaging problems instead of
 # silently resolving an older setuptools from the base image.
-RUN pip install --no-cache-dir --upgrade "setuptools>=68" wheel \
-    && pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir --upgrade "setuptools>=77" "wheel>=0.43,<1" \
+    && pip install --no-cache-dir -c constraints.txt .
 
 COPY data ./data
 COPY eval ./eval

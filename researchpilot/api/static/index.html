@@ -41,6 +41,11 @@
             <label>top_k<input id="topk" type="number" min="1" max="20" /></label>
             <label>max_iterations<input id="iterations" type="number" min="1" max="4" /></label>
             <label>max_tokens<input id="maxtokens" type="number" min="64" max="16000" /></label>
+            <label>API access token<input id="accessToken" type="password" autocomplete="off" /></label>
+          </div>
+          <div class="row">
+            <button id="applyAccessToken" class="ghost">Apply access token</button>
+            <span class="hint">仅共享部署需要；保存在当前浏览器标签页。</span>
           </div>
           <p class="hint" id="configHint"></p>
         </article>

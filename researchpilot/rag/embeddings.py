@@ -24,6 +24,10 @@ class Embedder(ABC):
     def embed_one(self, text: str) -> list[float]:
         return self.embed([text])[0]
 
+    def close(self) -> None:
+        """Release client/model resources owned by this embedder."""
+        return None
+
 
 class HashEmbedder(Embedder):
     """Feature-hashing embedder (unigrams + CJK bigrams + char trigrams).
@@ -97,6 +101,9 @@ class OpenAIEmbedder(Embedder):
         if vectors:
             self.dimension = len(vectors[0])
         return vectors
+
+    def close(self) -> None:
+        self._client.close()
 
 
 class SentenceTransformerEmbedder(Embedder):  # pragma: no cover - optional heavy extra

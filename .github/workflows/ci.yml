@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -e ".[dev]"
+      - run: pip install -c constraints.txt -e ".[dev]"
       - run: ruff check .
       - run: ruff format --check .
 
@@ -32,7 +32,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -e ".[dev]"
+      - run: pip install -c constraints.txt -e ".[dev]"
       - run: mypy researchpilot
 
   test:
@@ -44,7 +44,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -e ".[dev]"
+      - run: pip install -c constraints.txt -e ".[dev]"
       - run: python -m pytest tests/unit tests/integration -q --cov=researchpilot --cov-report=term-missing --cov-report=xml
       - name: frontend logic tests (node, no npm dependencies)
         run: node --test "tests/frontend/**/*.test.mjs"
@@ -63,7 +63,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -e ".[dev]"
+      - run: pip install -c constraints.txt -e ".[dev]"
       - name: golden dataset integrity
         run: python -m pytest tests/evaluation -q -m "not evaluation"
       - name: run benchmark (mock provider, deterministic)
@@ -77,6 +77,29 @@ jobs:
         with:
           name: benchmark
           path: benchmarks/
+
+  package:
+    name: build + installed wheel smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -c constraints.txt "build>=1.2,<2"
+      - run: python -m build
+      - name: install wheel into a second clean environment
+        run: |
+          python -m venv /tmp/researchpilot-wheel
+          /tmp/researchpilot-wheel/bin/python -m pip install \
+            -c "$GITHUB_WORKSPACE/constraints.txt" "$GITHUB_WORKSPACE"/dist/*.whl
+      - name: smoke test the installed package outside the checkout
+        run: cd /tmp && /tmp/researchpilot-wheel/bin/python "$GITHUB_WORKSPACE/scripts/installed_package_smoke.py"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-distributions
+          path: dist/
 
   docker:
     name: docker build + compose smoke (real engine)

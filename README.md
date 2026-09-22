@@ -33,7 +33,7 @@ LLM → Prompt → Structured Output → Tool Calling → RAG → Knowledge Base
 | 服务化 | FastAPI 加零依赖前端：研究输入、模型参数、知识库、Agent 时间线、报告、指标、评测面板 |
 | 知识库管理 | 入库、检索、删除（级联删 chunk）、全量重建索引 |
 | LLM 抽象 | 任意 OpenAI 兼容端点（OpenAI / DeepSeek / vLLM / Ollama 等）加确定性离线 provider；真实 HTTP 链路由本地兼容端点端到端测试覆盖 |
-| 工程质量 | 298 个测试（unit / integration / evaluation，含真实 HTTP provider 链路）、ruff、mypy、pip check、Dockerfile、docker-compose、GitHub Actions |
+| 工程质量 | 401 个 pytest + 10 个前端测试（含真实 HTTP provider 链路）、ruff、mypy、pip check、Dockerfile、docker-compose、GitHub Actions |
 
 ## Architecture
 
@@ -157,19 +157,36 @@ Task
 
 Trace 落到 `runs/{task_id}.trace.json`，通过 `GET /research/{task_id}/trace` 暴露，前端按时间线渲染。评测指标也从 Trace 里算，比如工具选择和检索命中的 doc_ids。
 
-## Installation
+## Recommended Development Setup
 
 ```bash
-# 安装（Python 3.11+；默认哈希向量和 mock provider 都能离线跑）
-pip install -e ".[dev]"
+# 1. 获取代码并创建不继承全局包的 Python 3.11+ 环境
+git clone <repository-url> researchpilot
+cd researchpilot
+python -m venv .venv
 
-# 建知识库索引，跑一次研究
-python -m researchpilot.cli ingest
-python -m researchpilot.cli research "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。"
+# 2. 激活环境（Windows PowerShell）
+.\.venv\Scripts\Activate.ps1
+# macOS / Linux 使用：source .venv/bin/activate
 
-# 起服务，前端在 http://127.0.0.1:8000/
-python -m researchpilot.cli serve
+# 3. 按团队验证过的核心版本安装运行与开发依赖
+python -m pip install -c constraints.txt -e ".[dev]"
+python -m pip check
+
+# 4. 验证代码基线
+python -m pytest -q
+
+# 5. 建索引并用默认 mock provider 完成一次离线研究
+researchpilot ingest
+researchpilot research "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。"
+
+# 6. 启动 API 与前端：http://127.0.0.1:8000/
+researchpilot serve
 ```
+
+这是本地开发的唯一推荐路径。`constraints.txt` 只固定经过验证的 FastAPI、Starlette、Pydantic、
+Uvicorn 和 HTTPX 核心组合；依赖声明仍以 `pyproject.toml` 为准。真实模型、可选 embedding 和手动
+MCP 传输配置属于高级用法，基础安装不需要 API Key 或外部服务。
 
 ## Configuration
 
@@ -178,6 +195,13 @@ python -m researchpilot.cli serve
 | 变量 | 说明 | 默认 |
 | --- | --- | --- |
 | `RESEARCHPILOT_PROVIDER` | `mock`（离线确定性）或 `openai`（任意 OpenAI 兼容端点） | `mock` |
+| `RESEARCHPILOT_BIND_HOST` / `API_PORT` | API 对宿主机的监听地址 / 端口 | `127.0.0.1` / `8000` |
+| `RESEARCHPILOT_ALLOW_REMOTE_ACCESS` | 是否明确允许非回环地址；开启时必须同时配置访问 token | `false` |
+| `RESEARCHPILOT_ACCESS_TOKEN` | API Bearer token；为空时仅适合本机开发 | 空 |
+| `RESEARCHPILOT_MAX_REQUEST_BODY_BYTES` / `MAX_CONCURRENT_TASKS` | HTTP 请求体上限 / 单进程并发研究任务上限 | 1048576 / 4 |
+| `RESEARCHPILOT_RESEARCH_TASK_TIMEOUT_S` | 单个研究任务的 wall-clock deadline | 300 |
+| `RESEARCHPILOT_SHUTDOWN_TIMEOUT_S` | 关闭时等待受管 worker 清理的上限 | 5 |
+| `RESEARCHPILOT_TASK_HEARTBEAT_INTERVAL_S` / `RECOVERY_STALE_AFTER_S` | 持久化任务心跳间隔 / 活跃 owner 租约失效窗口 | 5 / 30 |
 | `MODEL` / `API_KEY` / `BASE_URL` | 模型、密钥、端点；DeepSeek、vLLM、Ollama 等兼容端点同样适用 | `gpt-4o-mini` / 空 / 官方地址 |
 | `TEMPERATURE` / `PRESENCE_PENALTY` / `FREQUENCY_PENALTY` / `MAX_TOKENS` | 生成参数，前四项前端可覆盖 | 0.2 / 0 / 0 / 1200 |
 | `RESEARCHPILOT_TOP_K` / `RETRIEVE_K` | 最终上下文条数 / 召回候选数 | 6 / 12 |
@@ -187,6 +211,37 @@ python -m researchpilot.cli serve
 | `RESEARCHPILOT_WEB_SEARCH_MODE` / `WEB_SEARCH_URL` | `offline`（内置语料）或 `http`（真实搜索 API） | offline |
 | `RESEARCHPILOT_KB_PATH` / `RUNS_PATH` | 知识库目录 / 运行产物目录 | `data/knowledge_base` / `runs` |
 
+### Local development 与 shared deployment
+
+本地开发是默认模式：CLI 和 Compose 都只发布到 `127.0.0.1`，访问 token 可以留空。若要让 API
+监听非回环地址，必须同时显式打开远程访问并配置至少 16 个字符的 token，否则配置校验会拒绝启动：
+
+```bash
+export RESEARCHPILOT_BIND_HOST=0.0.0.0
+export RESEARCHPILOT_ALLOW_REMOTE_ACCESS=true
+export RESEARCHPILOT_ACCESS_TOKEN='replace-with-a-long-random-token'
+python -m researchpilot.cli serve
+
+curl -H "Authorization: Bearer $RESEARCHPILOT_ACCESS_TOKEN" http://server:8000/config
+```
+
+启用 token 后，`/health`、首页和静态文件保持公开，其余 API 都要求 `Authorization: Bearer ...`。
+页面的 Model Settings 中可以输入 token；它只保存在当前浏览器标签页的 `sessionStorage`。这是一层最小共享部署保护，
+不替代 TLS、反向代理、用户系统或细粒度权限。
+
+单个请求体默认限制为 1 MiB，文档正文最多 500,000 字符，单进程最多同时执行 4 个研究任务；超限分别返回
+`413 request_too_large` 和 `429 capacity_exceeded`。单任务仍受问题长度、最多 4 次研究迭代、token 预算、
+模型请求超时、工具超时、有限重试和默认 300 秒任务级 wall-clock deadline 约束。异步任务可通过
+`DELETE /research/{task_id}` 取消；取消与超时都会停止调度新的模型和工具调用，并释放逻辑容量槽。
+
+长期记忆与知识库索引继续使用 JSON 持久化。写入通过同目录 SQLite 锁文件在 Windows/Linux
+进程之间串行化，并在锁内重读最新快照、合并本次修改，再用同目录临时文件原子替换。知识库查询会检查
+持久化文件签名；API 或独立 MCP 进程提交变更后，其他长驻进程会在下一次查询时自动重载索引，无需重启。
+不同 memory 记录和不同知识文档的修改会合并；同一 memory logical record 沿用去重规则，累计命中次数，
+且只有同等或更高 importance 的后续提交会替换内容。同一知识文档 ID 的并发更新采用最后提交版本生效。
+持久化采用 persist-before-publish：只有原子文件替换成功后才发布新的内存状态。写入失败会回滚候选状态并向
+调用方返回明确失败，`/health` 同时标记 degraded；损坏或结构无效的 JSON 会报告 corruption，原文件保持不变。
+
 ## API
 
 完整参考见 [`docs/api.md`](docs/api.md)。核心端点：
@@ -195,6 +250,7 @@ python -m researchpilot.cli serve
 | --- | --- | --- |
 | POST | `/research` | 运行研究，`mode=sync` 直接返回结果，`mode=async` 返回 202 和 `task_id` |
 | GET | `/research/{task_id}` | 完整结果（计划、证据、校验、报告、指标） |
+| DELETE | `/research/{task_id}` | 协作式取消 pending/running 任务 |
 | GET | `/research/{task_id}/trace` | Agent / LLM / Tool / Retrieval / Retry 轨迹 |
 | GET | `/research/{task_id}/sources` | 全部引用来源 |
 | GET | `/research/{task_id}/metrics` | 延迟、token、工具调用、重试 |
@@ -204,7 +260,7 @@ python -m researchpilot.cli serve
 | GET | `/mcp/tools`、POST `/mcp/call` | MCP 工具发现与调用 |
 | GET | `/evaluation/latest` | 最近一次 benchmark 指标 |
 
-## Docker
+## Recommended Team Deployment
 
 `docker-compose.yml` 把 API 和 MCP Server 起成两个独立服务，API 通过 streamable-HTTP 调用 MCP：
 
@@ -214,7 +270,10 @@ docker compose up --build
 # MCP Server: http://localhost:8765/health
 ```
 
-这台开发机上没有可用的 Docker 引擎（`docker`、`podman`、`buildah`、`nerdctl` 都不存在，WSL 也没装发行版），所以本机从未执行过 `docker build` 或 `docker compose up`。容器验收放在 CI 里跑，用的是 `ubuntu-latest` 的 Linux runner：
+Compose 的 API 和 MCP 端口默认都绑定宿主机回环地址。共享发布 API 时使用上面的三个
+`RESEARCHPILOT_*` 变量；MCP 端口仍只发布到宿主机回环地址，API 在 Compose 内部网络访问它。
+
+这台开发机已安装 Docker CLI 与 Compose，但 Docker daemon 当前不可用，因此本轮只能执行 Compose 配置解析和无引擎拓扑 smoke，不能在本机执行 `docker build` 或 `docker compose up`。真实容器验收由 CI 的 `ubuntu-latest` Linux runner 执行：
 
 | 步骤 | 命令 |
 | --- | --- |
@@ -249,7 +308,7 @@ python scripts/container_smoke.py --in-container
 ## Testing
 
 ```bash
-python -m pytest -q                       # 单元 + 集成 + 评测（298 个测试）
+python -m pytest -q                       # 单元 + 集成 + 评测（401 个测试）
 python -m pytest -q -m "not evaluation"   # 快速回归
 python -m pytest -q -m evaluation         # 全量 Golden Dataset 冒烟
 ruff check . && ruff format --check . && mypy researchpilot
@@ -261,6 +320,20 @@ python scripts/verify_fresh_clone.py      # 从干净 clone 复现上述流程
 测试目录：`tests/unit/`（组件契约、依赖一致性、路径解析、工具参数策略、安全加固）、`tests/integration/`（流水线、API、MCP 三种传输、OpenAI 兼容 HTTP provider 全链路）、`tests/evaluation/`（数据集完整性、评测器机制、全量冒烟）、`tests/fixtures/`（样例语料、mock 数据和本地 OpenAI 兼容端点）。
 
 前端是零依赖 vanilla JS，没有 npm 和构建步骤，也就没有 `npm install`。逻辑仍然被测：`tests/frontend/app.test.mjs` 用 `node --test` 在 VM 加 DOM stub 里加载 `app.js`，覆盖 Markdown 渲染、Agent 时间线、指标卡片、知识库列表、来源与评测面板（含 HTML 转义和空状态）；`tests/unit/test_config_and_paths.py` 额外做前端与 OpenAPI 的契约测试，前端调用的每个 URL 都必须存在于路由表，Settings 字段和面板元素必须存在并被读取。CI 里是独立步骤：`node --test "tests/frontend/**/*.test.mjs"`。
+
+### Reproducible package build
+
+开发依赖已经包含 `build` 与 `wheel`。在推荐的 `.venv` 中执行：
+
+```bash
+python -m build                         # 生成 dist/*.tar.gz 与 dist/*.whl
+python -m venv .venv-wheel              # 第二个空环境，不使用 editable install
+.venv-wheel/bin/python -m pip install -c constraints.txt dist/*.whl
+.venv-wheel/bin/python scripts/installed_package_smoke.py
+```
+
+Windows 将上面的 `.venv-wheel/bin/python` 替换为 `.venv-wheel\Scripts\python.exe`。smoke 脚本验证包导入、
+CLI `--help`、配置加载、API 初始化、MCP 工具注册和一条离线研究路径。CI 的 `package` job 执行同一流程。
 
 ## Benchmark
 
@@ -334,7 +407,7 @@ python scripts/verify_fresh_clone.py      # 从干净 clone 复现上述流程
 - `data/web_corpus/*.jsonl` 是内置的合成语料（元数据里标了 `synthetic: true`），目的是让系统在没有网络时也能完整跑通，它不是真实搜索结果。要用真实检索，配置 `RESEARCHPILOT_WEB_SEARCH_MODE=http` 和真实搜索 API。
 - 离线模式衡量工程管线，可以稳定回归；真实模型模式衡量生成质量。两组数字不能混用，报告里都会标 provider。
 - 指标分母是显式声明的：Recall 和 Context Relevance 只在声明了期望来源的任务上取平均，Citation Correctness 只在要求引用的任务上取平均，Tool Selection 只在声明期望工具的任务上取平均。没有期望值的任务贡献 `n/a`，不会被渲染成 0% 或 100%。
-- 没有任何可用证据的运行标记为 `degraded`，即使所有工具调用都返回成功；只有至少产生一条可用证据且没有错误才是 `succeeded`。
+- `status` 只表示生命周期；`completed` 的结果再用 `quality=succeeded|degraded` 表示质量。没有证据的完成任务质量为 `degraded`。
 - 这台机器没有 Docker 引擎，容器验证由 CI 承担，见上面的 Docker 一节。
 
 ## Future Work

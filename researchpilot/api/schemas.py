@@ -35,6 +35,12 @@ class ModelConfig(BaseModel):
     embedding_provider: str
     mcp_transport: str
     web_search_mode: str
+    auth_required: bool = False
+    max_request_body_bytes: int
+    max_concurrent_tasks: int
+    research_task_timeout_s: float
+    task_heartbeat_interval_s: float
+    recovery_stale_after_s: float
 
 
 class SubmitResponse(BaseModel):
@@ -47,6 +53,7 @@ class RunSummary(BaseModel):
     task_id: str
     question: str
     status: str
+    quality: str | None = None
     created_at: str = ""
     completed_at: str = ""
     citations: int = 0
@@ -56,7 +63,7 @@ class RunSummary(BaseModel):
 
 class DocumentIngestRequest(BaseModel):
     title: str = Field(min_length=2, max_length=200)
-    content: str = Field(min_length=20)
+    content: str = Field(min_length=20, max_length=500_000)
     source: str = "api://inline"
     metadata: dict[str, Any] = Field(default_factory=dict)
 

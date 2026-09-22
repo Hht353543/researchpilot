@@ -7,6 +7,7 @@ import threading
 from pathlib import Path
 
 from researchpilot.config import get_settings
+from researchpilot.persistence import PersistenceCorruptionError, PersistenceError, atomic_write_text
 from researchpilot.schemas import ResearchResult
 
 
@@ -18,29 +19,52 @@ class ResultStore:
         self._lock = threading.Lock()
 
     def save(self, result: ResearchResult) -> None:
+        self.save_durable(result)
+        self.publish(result)
+
+    def save_durable(self, result: ResearchResult) -> None:
+        """Commit the artifact without making it visible in this process yet."""
+        if self.persist:
+            path = self.runs_dir / f"{result.task_id}.result.json"
+            try:
+                atomic_write_text(
+                    path,
+                    json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2),
+                )
+            except Exception as exc:
+                raise PersistenceError("research result could not be committed") from exc
+
+    def publish(self, result: ResearchResult) -> None:
         with self._lock:
             self._results[result.task_id] = result
-        if self.persist:
-            self.runs_dir.mkdir(parents=True, exist_ok=True)
-            path = self.runs_dir / f"{result.task_id}.result.json"
-            path.write_text(
-                json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
+
+    def publish_transient(self, result: ResearchResult) -> None:
+        """Expose an explicitly degraded result without claiming it is durable."""
+        self.publish(result)
 
     def get(self, task_id: str) -> ResearchResult | None:
         result = self._results.get(task_id)
         if result is not None:
             return result
+        result = self.read_durable(task_id)
+        if result is not None:
+            with self._lock:
+                self._results[task_id] = result
+        return result
+
+    def read_durable(self, task_id: str) -> ResearchResult | None:
+        """Read the artifact from disk, bypassing the process-local publication cache."""
         path = self.runs_dir / f"{task_id}.result.json"
         if not path.exists():
             return None
         try:
-            result = ResearchResult.model_validate(json.loads(path.read_text(encoding="utf-8")))
-        except Exception:  # pragma: no cover - corrupted or foreign json file
-            return None
-        with self._lock:
-            self._results[task_id] = result
+            raw = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise PersistenceError("research result could not be read") from exc
+        try:
+            result = ResearchResult.model_validate(json.loads(raw))
+        except (json.JSONDecodeError, UnicodeError, ValueError, TypeError) as exc:
+            raise PersistenceCorruptionError("research result is corrupted") from exc
         return result
 
     def all(self, *, limit: int = 20) -> list[ResearchResult]:

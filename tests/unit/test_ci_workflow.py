@@ -9,7 +9,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
-EXPECTED_JOBS = {"lint", "typecheck", "test", "evaluation", "docker"}
+EXPECTED_JOBS = {"lint", "typecheck", "test", "evaluation", "package", "docker"}
 
 
 def _workflow() -> dict:
@@ -23,7 +23,7 @@ def test_workflow_defines_every_required_job() -> None:
         steps = job.get("steps") or []
         assert steps, f"job {name} has no steps"
     # The docker job is action-only (buildx/push), the rest must run commands.
-    for name in ("lint", "typecheck", "test", "evaluation"):
+    for name in ("lint", "typecheck", "test", "evaluation", "package"):
         assert any("run" in step for step in jobs[name]["steps"]), f"job {name} has no run step"
 
 

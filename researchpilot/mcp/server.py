@@ -6,7 +6,7 @@ import contextlib
 import json
 import sys
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from typing import Any
 
 # Imported at module level (not inside create_http_app) so FastAPI can resolve the
@@ -32,6 +32,7 @@ from researchpilot.mcp.protocol import (
     success,
     text_content,
 )
+from researchpilot.persistence import PersistenceError
 from researchpilot.rag.knowledge_base import KnowledgeBase
 from researchpilot.tools.web_backend import build_web_backend
 from researchpilot.utils import truncate
@@ -68,6 +69,7 @@ class McpServer:
         self, settings: Settings | None = None, *, knowledge_base: KnowledgeBase | None = None
     ) -> None:
         self.settings = settings or get_settings()
+        self._owns_knowledge_base = knowledge_base is None
         self.knowledge_base = knowledge_base or KnowledgeBase.load_or_create(self.settings)
         self.web_backend = build_web_backend(self.settings)
         self._tools: dict[
@@ -75,6 +77,10 @@ class McpServer:
         ] = {}
         self._register_tools()
         self.calls: dict[str, int] = {}
+
+    def close(self) -> None:
+        if getattr(self, "_owns_knowledge_base", False):
+            self.knowledge_base.close()
 
     def _register_tools(self) -> None:
         self._add(
@@ -343,48 +349,65 @@ def serve_stdio(server: McpServer | None = None, *, stdin: Any = None, stdout: A
         sys.stderr.write(f"[researchpilot-mcp] stdio server ready (tools={sorted(server._tools)})\n")
         sys.stderr.flush()
     lines = _iter_utf8_lines(stream_in)
-    while True:
-        try:
-            line = next(lines).strip()
-        except StopIteration:
-            break
-        except UnicodeDecodeError as exc:
-            # A non-UTF-8 request line is a client-side protocol error: report it
-            # as JSON-RPC PARSE_ERROR (visible to the caller) and keep serving.
-            decode_error: Any = failure(
-                None, JsonRpcError(PARSE_ERROR, f"request line is not valid UTF-8: {exc}")
-            )
-            _write_utf8_line(stream_out, json.dumps(decode_error, ensure_ascii=False))
-            continue
-        if not line:
-            continue
-        payload: Any
-        try:
-            message = json.loads(line)
-            if isinstance(message, list):
-                responses = [server.handle(item) for item in message]
-                payload = [r for r in responses if r is not None]
-            else:
-                payload = server.handle(message)
-        except json.JSONDecodeError as exc:
-            payload = failure(None, JsonRpcError(PARSE_ERROR, f"parse error: {exc}"))
-        if payload is None:
-            continue
-        _write_utf8_line(stream_out, json.dumps(payload, ensure_ascii=False))
+    try:
+        while True:
+            try:
+                line = next(lines).strip()
+            except StopIteration:
+                break
+            except UnicodeDecodeError as exc:
+                decode_error: Any = failure(
+                    None, JsonRpcError(PARSE_ERROR, f"request line is not valid UTF-8: {exc}")
+                )
+                _write_utf8_line(stream_out, json.dumps(decode_error, ensure_ascii=False))
+                continue
+            if not line:
+                continue
+            payload: Any
+            try:
+                message = json.loads(line)
+                if isinstance(message, list):
+                    responses = [server.handle(item) for item in message]
+                    payload = [r for r in responses if r is not None]
+                else:
+                    payload = server.handle(message)
+            except json.JSONDecodeError as exc:
+                payload = failure(None, JsonRpcError(PARSE_ERROR, f"parse error: {exc}"))
+            if payload is None:
+                continue
+            _write_utf8_line(stream_out, json.dumps(payload, ensure_ascii=False))
+    finally:
+        server.close()
 
 
 def create_http_app(server: McpServer | None = None) -> Any:
     """Streamable-HTTP transport: ``POST /mcp`` with a JSON-RPC body."""
     mcp = server or McpServer()
-    app = FastAPI(title="ResearchPilot MCP", version="0.1.0")
+
+    @contextlib.asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        try:
+            yield
+        finally:
+            mcp.close()
+
+    app = FastAPI(title="ResearchPilot MCP", version="0.1.0", lifespan=lifespan)
 
     @app.get("/health")
-    def health() -> dict[str, Any]:
+    def health() -> Any:
+        try:
+            kb_stats = mcp.knowledge_base.stats()
+        except PersistenceError:
+            return JSONResponse(
+                status_code=503,
+                content={"status": "unhealthy", "server": "researchpilot-mcp", "storage": "unavailable"},
+            )
         return {
-            "status": "ok",
+            "status": "degraded" if kb_stats.get("persistence_error") else "ok",
             "server": "researchpilot-mcp",
             "tools": sorted(mcp._tools),
             "calls": mcp.calls,
+            "knowledge_base": kb_stats,
         }
 
     @app.post("/mcp")

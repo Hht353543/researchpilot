@@ -127,6 +127,23 @@ def test_stdio_transport_reports_parse_errors(server: McpServer) -> None:
     assert payload["error"]["code"] == -32700
 
 
+@pytest.mark.anyio
+async def test_mcp_http_lifespan_closes_server(server: McpServer, monkeypatch) -> None:
+    closed = False
+    original_close = server.close
+
+    def close() -> None:
+        nonlocal closed
+        closed = True
+        original_close()
+
+    monkeypatch.setattr(server, "close", close)
+    app = create_http_app(server)
+    async with app.router.lifespan_context(app):
+        assert not closed
+    assert closed
+
+
 def test_in_process_client(server: McpServer) -> None:
     client = InProcessMcpClient(server)
     assert client.name == "inprocess"
@@ -190,6 +207,51 @@ async def test_http_transport(settings: Settings, knowledge_base: KnowledgeBase)
             ],
         )
         assert len(batch.json()) == 2
+
+
+@pytest.mark.anyio
+async def test_http_health_reports_corrupted_knowledge_storage(
+    settings: Settings, knowledge_base: KnowledgeBase
+) -> None:
+    app = create_http_app(McpServer(settings, knowledge_base=knowledge_base))
+    knowledge_base.index_path().write_text('{"documents":', encoding="utf-8")
+    transport = httpx.ASGITransport(app=app)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://mcp") as client:
+        response = await client.get("/health")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "unhealthy",
+        "server": "researchpilot-mcp",
+        "storage": "unavailable",
+    }
+
+
+def test_mcp_tool_reports_corrupted_knowledge_storage(
+    settings: Settings, knowledge_base: KnowledgeBase
+) -> None:
+    server = McpServer(settings, knowledge_base=knowledge_base)
+    knowledge_base.index_path().write_text('{"documents":', encoding="utf-8")
+
+    response = server.handle(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "search_knowledge",
+                "arguments": {"query": "corrupted storage", "top_k": 2},
+            },
+        }
+    )
+
+    assert response is not None
+    assert response["result"]["isError"] is True
+    payload = response["result"]["structuredContent"]
+    assert payload["tool"] == "search_knowledge"
+    assert "corrupted" in payload["error"].lower()
+    assert "knowledge_base.json" not in payload["error"]
 
 
 @pytest.mark.anyio
@@ -269,7 +331,8 @@ async def test_api_container_uses_http_mcp_server_process(tmp_path, monkeypatch)
                     json={"question": "如何通过 MCP 网关把知识库复用到多个 Agent？"},
                 )
             ).json()
-            assert result["status"] in {"succeeded", "degraded"}
+            assert result["status"] == "completed"
+            assert result["quality"] in {"succeeded", "degraded"}
             assert result["metrics"]["mcp_calls"] >= 1
             assert (
                 any(item["tool"] == "mcp_research_context" for item in result["evidence"]["evidence"])

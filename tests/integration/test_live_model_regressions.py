@@ -126,7 +126,8 @@ def test_pipeline_still_finishes_with_a_report_and_sources(
     settings: Settings, knowledge_base: KnowledgeBase
 ) -> None:
     result = _run(settings, knowledge_base)
-    assert result.status in {"succeeded", "degraded"}
+    assert result.status == "completed"
+    assert result.quality in {"succeeded", "degraded"}
     assert result.report is not None and result.report.markdown
     assert result.evidence.sources
     assert result.report.dropped_citations == []

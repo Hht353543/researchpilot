@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import secrets
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +32,8 @@ from researchpilot.api.schemas import (
 from researchpilot.api.service import ServiceContainer
 from researchpilot.config import Settings, get_settings
 from researchpilot.llm.base import BudgetExceededError, LLMConfigError, LLMError
-from researchpilot.pipeline import StorageUnavailableError
+from researchpilot.persistence import PersistenceCorruptionError, PersistenceError
+from researchpilot.pipeline import CapacityExceededError, PipelineClosedError, StorageUnavailableError
 from researchpilot.rag.retriever import RetrievalResult
 from researchpilot.schemas import ResearchRequest, ResearchResult
 from researchpilot.utils import utc_now_iso
@@ -46,6 +49,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         format="%(asctime)s %(levelname)s %(name)s :: %(message)s",
     )
     container = ServiceContainer(settings)
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> Any:
+        try:
+            yield
+        finally:
+            container.close()
+
     app = FastAPI(
         title="ResearchPilot API",
         version=__version__,
@@ -53,6 +64,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "Multi-agent deep research and knowledge base platform: structured agents, "
             "hybrid RAG, tool registry, MCP server, memory, tracing and evaluation."
         ),
+        lifespan=lifespan,
     )
     app.state.container = container
     app.add_middleware(
@@ -61,6 +73,45 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def enforce_runtime_boundaries(request: Request, call_next: Any) -> Any:
+        content_length = request.headers.get("content-length")
+        too_large = False
+        if content_length:
+            try:
+                too_large = int(content_length) > settings.max_request_body_bytes
+            except ValueError:
+                too_large = True
+        if not too_large and request.method in {"POST", "PUT", "PATCH"}:
+            too_large = len(await request.body()) > settings.max_request_body_bytes
+        if too_large:
+            return JSONResponse(
+                status_code=413,
+                content={
+                    "detail": f"request body exceeds {settings.max_request_body_bytes} bytes",
+                    "kind": "request_too_large",
+                },
+            )
+
+        public = request.url.path == "/" or request.url.path == "/health"
+        public = public or request.url.path.startswith("/static/")
+        if settings.access_token and not public and request.method != "OPTIONS":
+            authorization = request.headers.get("authorization", "")
+            scheme, _, credential = authorization.partition(" ")
+            authenticated = scheme.lower() == "bearer" and secrets.compare_digest(
+                credential.encode("utf-8"), settings.access_token.encode("utf-8")
+            )
+            if not authenticated:
+                return JSONResponse(
+                    status_code=401,
+                    content={
+                        "detail": "a valid Bearer token is required",
+                        "kind": "authentication_required",
+                    },
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+        return await call_next(request)
 
     @app.middleware("http")
     async def add_request_timing(request: Request, call_next: Any) -> Any:
@@ -94,22 +145,55 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def storage_handler(request: Request, exc: StorageUnavailableError) -> JSONResponse:
         return JSONResponse(status_code=503, content={"detail": str(exc), "kind": "storage_unavailable"})
 
+    @app.exception_handler(PersistenceCorruptionError)
+    async def persistence_corruption_handler(
+        request: Request, exc: PersistenceCorruptionError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "persisted state is corrupted", "kind": "persistence_corruption"},
+        )
+
+    @app.exception_handler(PersistenceError)
+    async def persistence_handler(request: Request, exc: PersistenceError) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "persistent state could not be committed", "kind": "persistence_unavailable"},
+        )
+
+    @app.exception_handler(CapacityExceededError)
+    async def capacity_handler(request: Request, exc: CapacityExceededError) -> JSONResponse:
+        return JSONResponse(
+            status_code=429,
+            content={"detail": str(exc), "kind": "capacity_exceeded"},
+            headers={"Retry-After": "1"},
+        )
+
+    @app.exception_handler(PipelineClosedError)
+    async def shutting_down_handler(request: Request, exc: PipelineClosedError) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "research service is shutting down", "kind": "shutting_down"},
+        )
+
     @app.exception_handler(OSError)
     async def os_error_handler(request: Request, exc: OSError) -> JSONResponse:
         """Any storage/IO failure must surface as 503, not an unhandled traceback."""
         return JSONResponse(
             status_code=503,
-            content={"detail": f"{type(exc).__name__}: {exc}", "kind": "storage_unavailable"},
+            content={"detail": "storage operation failed", "kind": "storage_unavailable"},
         )
 
     # -- meta --------------------------------------------------------------- #
     @app.get("/health", response_model=HealthResponse, tags=["meta"])
     def health() -> HealthResponse:
+        kb_stats = container.knowledge_base.stats()
         return HealthResponse(
+            status="degraded" if kb_stats.get("persistence_error") else "ok",
             version=__version__,
             provider=settings.provider,
             model=container.provider.model_name(),
-            knowledge_base=container.knowledge_base.stats(),
+            knowledge_base=kb_stats,
             tools=container.pipeline_tool_names(),
             mcp_transport=container.mcp_mode,
         )
@@ -131,6 +215,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             embedding_provider=settings.embedding_provider,
             mcp_transport=settings.mcp_transport,
             web_search_mode=settings.web_search_mode,
+            auth_required=bool(settings.access_token),
+            max_request_body_bytes=settings.max_request_body_bytes,
+            max_concurrent_tasks=settings.max_concurrent_tasks,
+            research_task_timeout_s=settings.research_task_timeout_s,
+            task_heartbeat_interval_s=settings.task_heartbeat_interval_s,
+            recovery_stale_after_s=settings.recovery_stale_after_s,
         )
 
     # -- research ----------------------------------------------------------- #
@@ -144,17 +234,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     task_id=task_id, status="pending", message="poll /research/{task_id}"
                 ).model_dump(),
             )
-        return container.run_research(request)
+        result = container.run_research(request)
+        if any(error.startswith("persistence[") for error in result.errors):
+            raise StorageUnavailableError("research artifacts could not be persisted")
+        return result
 
     @app.get("/research", response_model=list[RunSummary], tags=["research"])
     def list_research(limit: int = Query(default=20, ge=1, le=100)) -> list[RunSummary]:
         summaries: list[RunSummary] = []
-        for result in container.result_store.all(limit=limit):
+        for result in container.pipeline.list_results(limit=limit):
             summaries.append(
                 RunSummary(
                     task_id=result.task_id,
                     question=result.question,
                     status=result.status,
+                    quality=result.quality,
                     created_at=result.created_at,
                     completed_at=result.completed_at,
                     citations=len(result.evidence.sources),
@@ -166,9 +260,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/research/{task_id}", response_model=ResearchResult, tags=["research"])
     def get_research(task_id: str) -> ResearchResult:
-        result = container.result_store.get(task_id)
+        result = container.pipeline.get_result(task_id)
         if result is None:
             raise HTTPException(status_code=404, detail=f"unknown task_id: {task_id}")
+        return result
+
+    @app.delete("/research/{task_id}", response_model=ResearchResult, tags=["research"])
+    def cancel_research(task_id: str) -> ResearchResult:
+        if not container.cancel_research(task_id):
+            existing = container.pipeline.get_result(task_id)
+            if existing is None:
+                raise HTTPException(status_code=404, detail=f"unknown task_id: {task_id}")
+            raise HTTPException(status_code=409, detail=f"task is already {existing.status}")
+        result = container.pipeline.get_result(task_id)
+        if result is None:  # pragma: no cover - terminal publication is synchronous
+            raise HTTPException(status_code=503, detail="cancelled task state is unavailable")
         return result
 
     @app.get("/research/{task_id}/trace", response_model=TraceResponse, tags=["research"])
@@ -180,14 +286,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/research/{task_id}/sources", response_model=SourcesResponse, tags=["research"])
     def get_sources(task_id: str) -> SourcesResponse:
-        result = container.result_store.get(task_id)
+        result = container.pipeline.get_result(task_id)
         if result is None:
             raise HTTPException(status_code=404, detail=f"unknown task_id: {task_id}")
         return SourcesResponse(task_id=task_id, sources=result.evidence.sources)
 
     @app.get("/research/{task_id}/metrics", response_model=MetricsResponse, tags=["research"])
     def get_metrics(task_id: str) -> Any:
-        result = container.result_store.get(task_id)
+        result = container.pipeline.get_result(task_id)
         if result is None:
             raise HTTPException(status_code=404, detail=f"unknown task_id: {task_id}")
         return result.metrics
@@ -257,13 +363,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/kb/documents", response_model=DocumentIngestResponse, tags=["knowledge-base"])
     def kb_ingest(payload: DocumentIngestRequest) -> DocumentIngestResponse:
-        report = container.knowledge_base.ingest_text(
+        report = container.ingest_document(
             payload.content,
             title=payload.title,
             source=payload.source,
             metadata=payload.metadata,
         )
-        container.knowledge_base.save()
         return DocumentIngestResponse(**report.model_dump())
 
     @app.post("/kb/reindex", response_model=DocumentIngestResponse, tags=["knowledge-base"])

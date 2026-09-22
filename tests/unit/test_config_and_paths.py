@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from researchpilot.config import Settings
 from researchpilot.tools.web_backend import build_web_backend
@@ -43,6 +44,67 @@ def test_tool_cache_defaults_are_enabled() -> None:
     assert settings.tool_cache_ttl_s > 0, "tool caching must be on by default to be real"
 
 
+def test_settings_repr_does_not_expose_credentials() -> None:
+    settings = Settings(
+        _env_file=None,
+        api_key="provider-secret",
+        access_token="shared-deployment-token",
+    )
+
+    rendered = repr(settings)
+    assert "provider-secret" not in rendered
+    assert "shared-deployment-token" not in rendered
+
+
+def test_runtime_boundary_defaults_are_local_and_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in (
+        "RESEARCHPILOT_BIND_HOST",
+        "RESEARCHPILOT_API_PORT",
+        "RESEARCHPILOT_ALLOW_REMOTE_ACCESS",
+        "RESEARCHPILOT_ACCESS_TOKEN",
+        "RESEARCHPILOT_MAX_REQUEST_BODY_BYTES",
+        "RESEARCHPILOT_MAX_CONCURRENT_TASKS",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    settings = Settings(_env_file=None)
+    assert settings.bind_host == "127.0.0.1"
+    assert settings.api_port == 8000
+    assert settings.allow_remote_access is False
+    assert settings.access_token is None
+    assert settings.max_request_body_bytes > 0
+    assert settings.max_concurrent_tasks > 0
+
+
+def test_remote_binding_requires_explicit_opt_in_and_token() -> None:
+    with pytest.raises(ValidationError, match="ALLOW_REMOTE_ACCESS"):
+        Settings(_env_file=None, bind_host="0.0.0.0", allow_remote_access=False, access_token=None)
+    with pytest.raises(ValidationError, match="ACCESS_TOKEN"):
+        Settings(_env_file=None, bind_host="0.0.0.0", allow_remote_access=True, access_token=None)
+
+    shared = Settings(
+        _env_file=None,
+        bind_host="0.0.0.0",
+        allow_remote_access=True,
+        access_token="shared-deployment-token",
+    )
+    assert shared.bind_host == "0.0.0.0"
+    assert shared.allow_remote_access is True
+
+
+def test_shared_deployment_boundary_can_be_enabled_from_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RESEARCHPILOT_BIND_HOST", "0.0.0.0")
+    monkeypatch.setenv("RESEARCHPILOT_ALLOW_REMOTE_ACCESS", "true")
+    monkeypatch.setenv("RESEARCHPILOT_ACCESS_TOKEN", "environment-access-token")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.bind_host == "0.0.0.0"
+    assert settings.allow_remote_access is True
+    assert settings.access_token == "environment-access-token"
+
+
 def test_frontend_calls_only_existing_api_routes() -> None:
     """Guards against the frontend calling renamed/removed endpoints."""
     from researchpilot.api.app import create_app
@@ -66,7 +128,7 @@ def test_frontend_calls_only_existing_api_routes() -> None:
 def test_frontend_exposes_required_settings_fields() -> None:
     html = (ROOT / "researchpilot" / "api" / "static" / "index.html").read_text(encoding="utf-8")
     script = (ROOT / "researchpilot" / "api" / "static" / "app.js").read_text(encoding="utf-8")
-    for field_id in ("model", "temperature", "presence", "frequency", "maxtokens"):
+    for field_id in ("model", "temperature", "presence", "frequency", "maxtokens", "accessToken"):
         assert f'id="{field_id}"' in html, f"missing settings input: {field_id}"
         assert f'el("{field_id}")' in script, f"settings input {field_id} is never read"
     for panel in ("timeline", "report", "metrics", "kbDocuments", "evaluation"):
@@ -107,4 +169,7 @@ async def test_config_endpoint_matches_settings(settings: Settings) -> None:
     assert payload["max_iterations"] == settings.max_iterations
     assert payload["token_budget"] == settings.token_budget
     assert payload["token_budget_live"] == settings.token_budget_live
+    assert payload["auth_required"] is False
+    assert payload["max_request_body_bytes"] == settings.max_request_body_bytes
+    assert payload["max_concurrent_tasks"] == settings.max_concurrent_tasks
     assert payload["default_model"] == app.state.container.provider.model_name()

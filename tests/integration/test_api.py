@@ -9,6 +9,7 @@ import pytest
 
 from researchpilot.api.app import create_app
 from researchpilot.config import Settings
+from researchpilot.pipeline import CapacityExceededError
 
 
 @pytest.fixture
@@ -35,6 +36,54 @@ async def test_health_and_config(client: httpx.AsyncClient) -> None:
     config = await client.get("/config")
     assert config.status_code == 200
     assert "temperature" in config.json()
+
+
+@pytest.mark.anyio
+async def test_api_token_rejects_unauthenticated_and_accepts_bearer_token(settings: Settings) -> None:
+    protected = settings.model_copy(update={"access_token": "shared-deployment-token"})
+    app = create_app(protected)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as http:
+        assert (await http.get("/health")).status_code == 200
+
+        denied = await http.get("/config")
+        assert denied.status_code == 401
+        assert denied.json()["kind"] == "authentication_required"
+        assert denied.headers["www-authenticate"] == "Bearer"
+        assert (await http.get("/config", headers={"Authorization": "Bearer wrong-token"})).status_code == 401
+
+        allowed = await http.get("/config", headers={"Authorization": "Bearer shared-deployment-token"})
+        assert allowed.status_code == 200
+
+
+@pytest.mark.anyio
+async def test_request_body_limit_returns_413_before_request_parsing(settings: Settings) -> None:
+    bounded = settings.model_copy(update={"max_request_body_bytes": 128})
+    app = create_app(bounded)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as http:
+        response = await http.post(
+            "/research",
+            content=b"x" * 129,
+            headers={"Content-Type": "application/json"},
+        )
+    assert response.status_code == 413
+    assert response.json()["kind"] == "request_too_large"
+
+
+@pytest.mark.anyio
+async def test_capacity_limit_returns_429(app, monkeypatch: pytest.MonkeyPatch) -> None:
+    def reject(_request: object) -> object:
+        raise CapacityExceededError("at most 1 research task may run concurrently")
+
+    monkeypatch.setattr(app.state.container, "run_research", reject)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as http:
+        response = await http.post("/research", json={"question": "valid research question"})
+
+    assert response.status_code == 429
+    assert response.json()["kind"] == "capacity_exceeded"
+    assert response.headers["retry-after"] == "1"
 
 
 @pytest.mark.anyio
@@ -130,7 +179,8 @@ async def test_async_research_mode(client: httpx.AsyncClient) -> None:
         if fetched.json()["status"] not in {"pending", "running"}:
             break
         await asyncio.sleep(0.25)
-    assert fetched.json()["status"] in {"succeeded", "degraded"}
+    assert fetched.json()["status"] == "completed"
+    assert fetched.json()["quality"] in {"succeeded", "degraded"}
 
 
 @pytest.mark.anyio
@@ -244,7 +294,9 @@ async def test_runtime_llm_failure_is_reported_in_result(tmp_path) -> None:
     payload = response.json()
     # Local retrieval still works, so the run degrades into an extractive report
     # instead of failing outright - but the provider error must be visible.
-    assert payload["status"] in {"degraded", "failed"}
+    assert payload["status"] in {"completed", "failed"}
+    if payload["status"] == "completed":
+        assert payload["quality"] == "degraded"
     assert payload["errors"]
     assert any("provider" in message or "openai" in message for message in payload["errors"])
 
@@ -310,11 +362,11 @@ async def test_api_key_never_leaks_into_responses_or_traces(tmp_path) -> None:
         assert secret not in path.read_text(encoding="utf-8", errors="ignore")
 
 
-@pytest.mark.anyio
-async def test_storage_failure_degrades_instead_of_crashing(tmp_path) -> None:
-    """A read-only/full/misconfigured runs_path must not turn into a 500."""
+def test_unwritable_knowledge_storage_prevents_false_successful_startup(tmp_path) -> None:
+    """The service must not start normally when its initial KB cannot be committed."""
     from researchpilot.api.app import create_app as build_app
     from researchpilot.config import Settings as ApiSettings
+    from researchpilot.persistence import PersistenceError
 
     blocker = tmp_path / "runs_blocked"
     blocker.write_text("this is a file, not a directory", encoding="utf-8")
@@ -327,23 +379,8 @@ async def test_storage_failure_degrades_instead_of_crashing(tmp_path) -> None:
         max_iterations=1,
         web_corpus_path=str(tmp_path / "no-corpus"),
     )
-    app = build_app(settings)
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as http:
-        # sync research still returns a usable (degraded) result
-        response = await http.post("/research", json={"question": "工具注册表需要哪些字段？"})
-        assert response.status_code == 200, response.text
-        payload = response.json()
-        assert payload["status"] in {"degraded", "failed"}
-        assert any("persistence" in message for message in payload["errors"]), payload["errors"]
-        assert payload["report"] is not None
-
-        # async submit cannot persist its placeholder -> explicit 503
-        submitted = await http.post(
-            "/research", json={"question": "工具注册表需要哪些字段？", "mode": "async"}
-        )
-        assert submitted.status_code == 503
-        assert submitted.json()["kind"] == "storage_unavailable"
+    with pytest.raises(PersistenceError, match="lock is unavailable"):
+        build_app(settings)
 
 
 @pytest.mark.anyio

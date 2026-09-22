@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from researchpilot.memory.long_term import LongTermMemory
 from researchpilot.memory.manager import MemoryManager
 from researchpilot.memory.short_term import ShortTermMemory
 from researchpilot.memory.working import WorkingMemory
+from researchpilot.persistence import PersistenceError
 from researchpilot.schemas import Evidence, ResearchPlan, Subtask
 
 
@@ -72,6 +75,125 @@ def test_long_term_memory_dedup_ttl_and_recall(tmp_path: Path) -> None:
     recalled = memory.recall("中文报告", limit=3)
     assert recalled and recalled[0].content.startswith("用户偏好")
     assert memory.stats()["records"] == 1
+
+
+def test_long_term_memory_add_keeps_existing_records(tmp_path: Path) -> None:
+    memory = LongTermMemory(tmp_path / "ltm.json")
+    first = memory.remember("record A", importance=0.4, source="first")
+    second = memory.remember("record B", importance=0.6, source="second")
+
+    assert {record.id for record in memory.all()} == {first.id, second.id}
+
+
+def test_long_term_memory_duplicate_update_preserves_other_records(tmp_path: Path) -> None:
+    memory = LongTermMemory(tmp_path / "ltm.json")
+    first = memory.remember("record A", importance=0.4, source="first")
+    second = memory.remember("record B", importance=0.6, source="second")
+    second_before = second.model_copy(deep=True)
+
+    updated = memory.remember("record A", importance=0.9, source="updated")
+
+    assert updated.id == first.id
+    assert updated.importance == 0.9
+    assert next(record for record in memory.all() if record.id == second.id) == second_before
+
+
+def test_long_term_memory_reload_keeps_all_records(tmp_path: Path) -> None:
+    path = tmp_path / "ltm.json"
+    memory = LongTermMemory(path)
+    memory.remember("record A")
+    memory.remember("record B")
+
+    reloaded = LongTermMemory(path)
+
+    assert {record.content for record in reloaded.all()} == {"record A", "record B"}
+
+
+def test_long_term_memory_remembering_unknown_content_inserts_it(tmp_path: Path) -> None:
+    memory = LongTermMemory(tmp_path / "ltm.json")
+    memory.remember("record A")
+
+    created = memory.remember("previously unknown record")
+
+    assert created in memory.all()
+    assert len(memory.all()) == 2
+
+
+def test_long_term_memory_remember_failure_keeps_committed_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "ltm.json"
+    memory = LongTermMemory(path)
+    memory.remember("committed record")
+    before_disk = path.read_bytes()
+    before_memory = [record.model_dump() for record in memory.all()]
+
+    monkeypatch.setattr(
+        "researchpilot.memory.long_term.atomic_write_text",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("simulated write failure")),
+    )
+    with pytest.raises(PersistenceError):
+        memory.remember("uncommitted record")
+
+    assert [record.model_dump() for record in memory.all()] == before_memory
+    assert path.read_bytes() == before_disk
+
+
+def test_long_term_memory_clear_failure_keeps_committed_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "ltm.json"
+    memory = LongTermMemory(path)
+    memory.remember("committed record")
+    before_disk = path.read_bytes()
+
+    monkeypatch.setattr(
+        "researchpilot.memory.long_term.atomic_write_text",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("simulated write failure")),
+    )
+    with pytest.raises(PersistenceError):
+        memory.clear()
+
+    assert [record.content for record in memory.all()] == ["committed record"]
+    assert path.read_bytes() == before_disk
+
+
+def test_long_term_memory_recall_failure_does_not_publish_hit_increment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "ltm.json"
+    memory = LongTermMemory(path)
+    memory.remember("committed record")
+    before_disk = path.read_bytes()
+
+    monkeypatch.setattr(
+        "researchpilot.memory.long_term.atomic_write_text",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("simulated write failure")),
+    )
+    with pytest.raises(PersistenceError):
+        memory.recall("committed")
+
+    assert memory.all()[0].hits == 0
+    assert path.read_bytes() == before_disk
+
+
+def test_long_term_memory_cleanup_failure_keeps_expired_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "ltm.json"
+    memory = LongTermMemory(path)
+    memory.remember("expired but committed", ttl_days=-1)
+    before_disk = path.read_bytes()
+
+    monkeypatch.setattr(
+        "researchpilot.memory.long_term.atomic_write_text",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("simulated write failure")),
+    )
+    with pytest.raises(PersistenceError):
+        memory.forget_expired()
+
+    assert [record.content for record in memory.all()] == ["expired but committed"]
+    assert path.read_bytes() == before_disk
 
 
 def test_memory_manager_persists_task_results(tmp_path: Path) -> None:

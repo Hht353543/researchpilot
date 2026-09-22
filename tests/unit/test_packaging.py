@@ -16,6 +16,10 @@ def _pyproject_dependencies() -> list[str]:
     return list(data["project"]["dependencies"])
 
 
+def _pyproject() -> dict:
+    return tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+
 def test_requirements_txt_mirrors_pyproject() -> None:
     declared = {Requirement(dep).name for dep in _pyproject_dependencies()}
     listed = {
@@ -61,3 +65,34 @@ def test_tokenizer_dependency_is_declared_for_reproducible_metrics() -> None:
     declared = {Requirement(dep).name.lower() for dep in _pyproject_dependencies()}
     assert "jieba" in declared
     assert md.version("jieba")
+
+
+def test_build_metadata_and_dev_extra_are_self_contained() -> None:
+    data = _pyproject()
+    build_names = {Requirement(item).name.lower() for item in data["build-system"]["requires"]}
+    dev_names = {Requirement(item).name.lower() for item in data["project"]["optional-dependencies"]["dev"]}
+    assert {"setuptools", "wheel"} <= build_names
+    assert {"pytest", "mypy", "ruff", "build", "wheel"} <= dev_names
+    assert data["project"]["license"] == "MIT"
+    assert data["project"]["license-files"] == ["LICENSE"]
+
+
+def test_constraints_pin_only_declared_core_dependencies_to_compatible_versions() -> None:
+    declared = {Requirement(item).name.lower(): Requirement(item) for item in _pyproject_dependencies()}
+    constrained = [
+        Requirement(line)
+        for line in (ROOT / "constraints.txt").read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
+    assert {item.name.lower() for item in constrained} >= {
+        "fastapi",
+        "starlette",
+        "pydantic",
+        "pydantic-settings",
+        "httpx",
+    }
+    assert {item.name.lower() for item in constrained} <= set(declared)
+    for constraint in constrained:
+        versions = list(constraint.specifier)
+        assert len(versions) == 1 and versions[0].operator == "=="
+        assert declared[constraint.name.lower()].specifier.contains(versions[0].version)

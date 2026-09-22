@@ -31,6 +31,10 @@ INJECTION_PATTERNS: tuple[tuple[str, str], ...] = (
 )
 
 _COMPILED = tuple((re.compile(pattern, re.IGNORECASE), label) for pattern, label in INJECTION_PATTERNS)
+_WINDOWS_PATH = re.compile(r"\b[A-Za-z]:[\\/][^\s,;]+")
+_UNIX_PATH = re.compile(r"(?<![:\w])/(?:[^/\s]+/)+[^\s,;]*")
+_NAMED_SECRET = re.compile(r"(?i)\b(api[_-]?key|access[_-]?token|password|secret)\s*[:=]\s*[^\s,;]+")
+_TOKEN_SECRET = re.compile(r"\bsk-[A-Za-z0-9_-]{8,}\b")
 
 
 def detect_injection(text: str) -> list[str]:
@@ -54,3 +58,15 @@ def wrap_untrusted(label: str, text: str, *, max_chars: int = 6_000) -> str:
     """Neutralise tag-breaking attempts before embedding content in a prompt."""
     safe = truncate(text, max_chars).replace("</untrusted>", "<\\/untrusted>")
     return f'<untrusted source="{label}">\n{safe}\n</untrusted>'
+
+
+def safe_diagnostic(message: str, *, secrets: tuple[str | None, ...] = ()) -> str:
+    """Keep actionable error context while removing credentials and local paths."""
+    safe = str(message)
+    for secret in secrets:
+        if secret and len(secret) >= 4:
+            safe = safe.replace(secret, "[redacted]")
+    safe = _NAMED_SECRET.sub(r"\1=[redacted]", safe)
+    safe = _TOKEN_SECRET.sub("[redacted]", safe)
+    safe = _WINDOWS_PATH.sub("[path]", safe)
+    return _UNIX_PATH.sub("[path]", safe)

@@ -18,7 +18,9 @@ ToolName = Literal[
 ]
 SourceKind = Literal["knowledge_base", "document", "web", "mcp", "computation"]
 SpanKind = Literal["task", "agent", "llm", "tool", "retrieval", "retry", "mcp"]
-TaskStatus = Literal["pending", "running", "succeeded", "degraded", "failed"]
+TaskStatus = Literal["pending", "running", "completed", "failed", "cancelled", "timed_out"]
+ResultQuality = Literal["succeeded", "degraded"]
+ArtifactState = Literal["pending", "complete", "partial", "unavailable"]
 SubtaskIntent = Literal[
     "knowledge_search",
     "web_search",
@@ -377,6 +379,7 @@ class Trace(BaseModel):
     trace_id: str
     task_id: str
     question: str
+    status: TaskStatus = "completed"
     spans: list[Span] = Field(default_factory=list)
     started_at: str
     ended_at: str = ""
@@ -392,7 +395,8 @@ class Trace(BaseModel):
 class ResearchResult(BaseModel):
     task_id: str
     trace_id: str
-    status: TaskStatus = "succeeded"
+    status: TaskStatus = "completed"
+    quality: ResultQuality | None = "succeeded"
     question: str
     settings: ResearchSettings = Field(default_factory=ResearchSettings)
     plan: ResearchPlan | None = None
@@ -404,3 +408,46 @@ class ResearchResult(BaseModel):
     errors: list[str] = Field(default_factory=list)
     created_at: str = ""
     completed_at: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_quality_status(cls, data: Any) -> Any:
+        """Read Phase 3 artifacts whose lifecycle and result quality shared one field."""
+        if not isinstance(data, dict):
+            return data
+        status = data.get("status")
+        if status not in {"succeeded", "degraded"}:
+            return data
+        migrated = dict(data)
+        migrated["status"] = "completed"
+        migrated.setdefault("quality", status)
+        return migrated
+
+    @model_validator(mode="after")
+    def _separate_lifecycle_from_quality(self) -> ResearchResult:
+        if self.status != "completed":
+            self.quality = None
+        if self.status in {"failed", "cancelled", "timed_out"}:
+            self.report = None
+        return self
+
+
+class TaskRecord(BaseModel):
+    """Durable lifecycle authority; result and trace files are referenced artifacts."""
+
+    task_id: str
+    question: str
+    status: TaskStatus = "pending"
+    created_at: str
+    started_at: str = ""
+    finished_at: str = ""
+    updated_at: str
+    error_summary: list[str] = Field(default_factory=list)
+    result_ref: str | None = None
+    result_state: ArtifactState = "pending"
+    trace_ref: str | None = None
+    trace_state: ArtifactState = "pending"
+    owner_pid: int | None = None
+    owner_instance_id: str = ""
+    recovered_at: str = ""
+    recovered_by: str = ""

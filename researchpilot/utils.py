@@ -7,6 +7,7 @@ import itertools
 import json
 import re
 import time
+import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from pathlib import Path
@@ -105,7 +106,7 @@ def parse_iso(value: str) -> float | None:
 
 
 def new_id(prefix: str) -> str:
-    return f"{prefix}_{hashlib.sha1(str(time.time_ns()).encode()).hexdigest()[:12]}"
+    return f"{prefix}_{uuid.uuid4().hex[:12]}"
 
 
 @contextmanager

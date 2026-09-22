@@ -17,6 +17,7 @@ const appPath = path.resolve(here, "../../researchpilot/api/static/app.js");
 
 function loadApp() {
   const nodes = new Map();
+  const requests = [];
   const document = {
     getElementById(id) {
       if (!nodes.has(id)) {
@@ -30,19 +31,31 @@ function loadApp() {
     document,
     console,
     window: {},
-    fetch: async () => ({ ok: true, status: 200, text: async () => "{}", json: async () => ({}) }),
+    fetch: async (requestPath, options) => {
+      requests.push({ path: requestPath, options });
+      return { ok: true, status: 200, text: async () => "{}", json: async () => ({}) };
+    },
   };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
   const code = fs.readFileSync(appPath, "utf8");
   vm.runInContext(
     `${code}
-     globalThis.__app = { renderMarkdown, renderTimeline, renderMetrics, renderKbDocuments,
+     globalThis.__app = { api, renderMarkdown, renderTimeline, renderMetrics, renderKbDocuments,
                            renderSources, renderEvaluation, escapeHtml, inline };`,
     sandbox,
   );
-  return { app: sandbox.__app, nodes };
+  return { app: sandbox.__app, nodes, requests };
 }
+
+test("api sends the configured access token as a Bearer credential", async () => {
+  const { app, nodes, requests } = loadApp();
+  nodes.set("accessToken", { value: "shared-token", addEventListener() {} });
+
+  await app.api("/config");
+
+  assert.equal(requests[0].options.headers.Authorization, "Bearer shared-token");
+});
 
 test("escapeHtml neutralises tags and quotes", () => {
   const { app } = loadApp();

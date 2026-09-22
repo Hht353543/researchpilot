@@ -7,6 +7,7 @@ from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
+from researchpilot.lifecycle import TaskLifecycle
 from researchpilot.llm.base import (
     BudgetExceededError,
     ChatMessage,
@@ -66,6 +67,10 @@ class StructuredLLMRunner:
         token_budget: int = 80_000,
         temperature: float = 0.2,
         max_tokens: int = 1200,
+        max_tokens_override: int | None = None,
+        presence_penalty: float = 0.0,
+        frequency_penalty: float = 0.0,
+        lifecycle: TaskLifecycle | None = None,
     ) -> None:
         self.provider = provider
         self.tracer = tracer
@@ -73,7 +78,15 @@ class StructuredLLMRunner:
         self.token_budget = token_budget
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.max_tokens_override = max_tokens_override
+        self.presence_penalty = presence_penalty
+        self.frequency_penalty = frequency_penalty
+        self.lifecycle = lifecycle
         self.usage = TokenUsage()
+
+    def _checkpoint(self) -> None:
+        if self.lifecycle is not None:
+            self.lifecycle.checkpoint()
 
     # -- budgets ----------------------------------------------------------- #
     def _charge(self, usage: TokenUsage) -> None:
@@ -108,6 +121,7 @@ class StructuredLLMRunner:
         total = TokenUsage()
 
         for attempt in range(self.max_repair_retries + 1):
+            self._checkpoint()
             attempts += 1
             span = None
             if self.tracer is not None:
@@ -125,8 +139,17 @@ class StructuredLLMRunner:
                     hints=hints,
                     purpose=purpose,
                     temperature=self.temperature if temperature is None else temperature,
-                    max_tokens=self.max_tokens if max_tokens is None else max_tokens,
+                    max_tokens=(
+                        self.max_tokens_override
+                        if self.max_tokens_override is not None
+                        else self.max_tokens
+                        if max_tokens is None
+                        else max_tokens
+                    ),
+                    presence_penalty=self.presence_penalty,
+                    frequency_penalty=self.frequency_penalty,
                 )
+                self._checkpoint()
             except LLMError:
                 if span is not None and self.tracer is not None:
                     self.tracer.end_span(span, error="provider failure")
@@ -199,6 +222,7 @@ class StructuredLLMRunner:
         max_tokens: int | None = None,
     ) -> TextCallResult:
         messages = [ChatMessage(role="system", content=system), ChatMessage(role="user", content=user)]
+        self._checkpoint()
         span = None
         if self.tracer is not None:
             span = self.tracer.start_span(
@@ -215,8 +239,17 @@ class StructuredLLMRunner:
                 hints=hints,
                 purpose=purpose,
                 temperature=self.temperature if temperature is None else temperature,
-                max_tokens=self.max_tokens if max_tokens is None else max_tokens,
+                max_tokens=(
+                    self.max_tokens_override
+                    if self.max_tokens_override is not None
+                    else self.max_tokens
+                    if max_tokens is None
+                    else max_tokens
+                ),
+                presence_penalty=self.presence_penalty,
+                frequency_penalty=self.frequency_penalty,
             )
+            self._checkpoint()
         except Exception as exc:
             if span is not None and self.tracer is not None:
                 self.tracer.end_span(span, error=f"{type(exc).__name__}: {exc}")

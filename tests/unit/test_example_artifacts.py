@@ -27,7 +27,8 @@ def test_sample_result_is_a_complete_typed_run() -> None:
     result = _load("sample_result.json")
     for key in ("task_id", "trace_id", "status", "question", "plan", "evidence", "report", "metrics"):
         assert key in result, f"sample_result.json lacks {key}"
-    assert result["status"] in {"succeeded", "degraded"}
+    assert result["status"] == "completed"
+    assert result["quality"] in {"succeeded", "degraded"}
     assert result["plan"]["subtasks"], "the sample plan must contain sub-tasks"
     evidence = result["evidence"]["evidence"]
     sources = {source["id"] for source in result["evidence"]["sources"]}
@@ -47,6 +48,7 @@ def test_sample_result_is_a_complete_typed_run() -> None:
 
 def test_sample_trace_covers_every_agent_and_span_kind() -> None:
     trace = _load("sample_trace.json")
+    assert trace["status"] == "completed"
     assert trace["spans"], "the sample trace must contain spans"
     kinds = {span["kind"] for span in trace["spans"]}
     assert {"agent", "llm", "tool", "retrieval"} <= kinds, f"missing span kinds: {kinds}"

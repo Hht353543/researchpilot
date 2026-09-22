@@ -38,8 +38,8 @@ def _build_parser() -> argparse.ArgumentParser:
     research.add_argument("--quiet", action="store_true")
 
     serve = sub.add_parser("serve", help="run the FastAPI app")
-    serve.add_argument("--host", default="127.0.0.1")
-    serve.add_argument("--port", type=int, default=8000)
+    serve.add_argument("--host", default=None)
+    serve.add_argument("--port", type=int, default=None)
     serve.add_argument("--reload", action="store_true")
 
     ingest = sub.add_parser("ingest", help="ingest documents into the knowledge base")
@@ -68,7 +68,11 @@ def _run_research(args: argparse.Namespace) -> int:
 
     settings = get_settings()
     provider = build_provider(settings, args.provider) if args.provider else None
-    pipeline = ResearchPipeline(settings=settings, provider=provider)
+    pipeline = ResearchPipeline(
+        settings=settings,
+        provider=provider,
+        owns_provider=provider is not None,
+    )
     request = ResearchRequest(
         question=args.question,
         settings=ResearchSettings(
@@ -80,32 +84,42 @@ def _run_research(args: argparse.Namespace) -> int:
             max_iterations=args.max_iterations,
         ),
     )
-    result = pipeline.run(request)
-    if args.json_out:
-        Path(args.json_out).write_text(
-            json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-    if args.markdown_out and result.report:
-        Path(args.markdown_out).write_text(result.report.markdown, encoding="utf-8")
-    if not args.quiet:
-        print(result.report.markdown if result.report else "(no report)")
-        print(
-            f"\n---\nstatus={result.status} latency={result.metrics.latency_ms / 1000:.2f}s "
-            f"tokens={result.metrics.usage.total_tokens} tool_calls={result.metrics.tool_calls} "
-            f"evidence={len(result.evidence.evidence)} sources={len(result.evidence.sources)}",
-            file=sys.stderr,
-        )
-        if result.errors:
-            print("errors:\n  " + "\n  ".join(result.errors), file=sys.stderr)
-    return 0 if result.status in {"succeeded", "degraded"} else 1
+    try:
+        result = pipeline.run(request)
+        if args.json_out:
+            Path(args.json_out).write_text(
+                json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        if args.markdown_out and result.report:
+            Path(args.markdown_out).write_text(result.report.markdown, encoding="utf-8")
+        if not args.quiet:
+            print(result.report.markdown if result.report else "(no report)")
+            print(
+                f"\n---\nstatus={result.status} quality={result.quality or '-'} "
+                f"latency={result.metrics.latency_ms / 1000:.2f}s "
+                f"tokens={result.metrics.usage.total_tokens} tool_calls={result.metrics.tool_calls} "
+                f"evidence={len(result.evidence.evidence)} sources={len(result.evidence.sources)}",
+                file=sys.stderr,
+            )
+            if result.errors:
+                print("errors:\n  " + "\n  ".join(result.errors), file=sys.stderr)
+        return 0 if result.status == "completed" else 1
+    finally:
+        pipeline.close()
 
 
 def _run_serve(args: argparse.Namespace) -> int:
     import uvicorn
 
     from researchpilot.api.app import create_app
+    from researchpilot.config import get_settings
 
-    uvicorn.run(create_app(), host=args.host, port=args.port, reload=args.reload)
+    settings = get_settings()
+    host = args.host or settings.bind_host
+    port = args.port or settings.api_port
+    settings.validate_bind_host(host)
+    uvicorn.run(create_app(settings), host=host, port=port, reload=args.reload)
     return 0
 
 
@@ -114,10 +128,9 @@ def _run_ingest(args: argparse.Namespace) -> int:
 
     kb = KnowledgeBase.load_or_create()
     if args.text:
-        report = kb.ingest_text(args.text, title=args.title, source="cli://inline")
+        report = kb.ingest_text_and_save(args.text, title=args.title, source="cli://inline")
     else:
-        report = kb.ingest_path(args.path or kb.settings.kb_path)
-    kb.save()
+        report = kb.ingest_path_and_save(args.path or kb.settings.kb_path)
     print(json.dumps(report.model_dump(), ensure_ascii=False, indent=2))
     print(f"knowledge base: {kb.stats()}")
     return 0

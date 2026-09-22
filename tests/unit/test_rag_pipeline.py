@@ -18,6 +18,100 @@ from researchpilot.rag.vector_store import VectorStore, tokenize
 FIXTURE_KB = Path(__file__).resolve().parents[1] / "fixtures" / "kb"
 
 
+def test_knowledge_base_closes_only_the_embedder_it_owns(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from researchpilot.rag.embeddings import Embedder
+    from researchpilot.rag.knowledge_base import KnowledgeBase
+
+    class CloseTrackingEmbedder(Embedder):
+        name = "tracking"
+        dimension = 8
+
+        def __init__(self) -> None:
+            self.close_calls = 0
+
+        def embed(self, texts: list[str]) -> list[list[float]]:
+            return [[0.0] * self.dimension for _ in texts]
+
+        def close(self) -> None:
+            self.close_calls += 1
+
+    owned_embedder = CloseTrackingEmbedder()
+    monkeypatch.setattr("researchpilot.rag.knowledge_base.build_embedder", lambda _settings: owned_embedder)
+    owned = KnowledgeBase(settings)
+    owned.close()
+    assert owned_embedder.close_calls == 1
+
+    shared_embedder = CloseTrackingEmbedder()
+    shared = KnowledgeBase(settings, embedder=shared_embedder)
+    shared.close()
+    assert shared_embedder.close_calls == 0
+
+
+class _ParagraphChunker:
+    """Predictable chunker for document-replacement contract tests."""
+
+    def chunk_document(self, document: Document) -> list[Chunk]:
+        return [
+            Chunk(
+                chunk_id=f"{document.doc_id}#c{position:03d}",
+                doc_id=document.doc_id,
+                title=document.title,
+                source=document.source,
+                content=content.strip(),
+                metadata={"position": position},
+            )
+            for position, content in enumerate(document.content.split("|"))
+            if content.strip()
+        ]
+
+
+def _document(doc_id: str, content: str) -> Document:
+    return Document(doc_id=doc_id, title=doc_id, source=f"test://{doc_id}", content=content)
+
+
+def test_reingest_replaces_single_chunk_without_touching_other_documents(settings: Settings) -> None:
+    from researchpilot.rag.knowledge_base import KnowledgeBase
+
+    kb = KnowledgeBase(settings, embedder=HashEmbedder(32), chunker=_ParagraphChunker())
+    kb.ingest_documents([_document("target", "old"), _document("other", "keep")])
+
+    kb.ingest_documents([_document("target", "new")])
+
+    assert [chunk.content for chunk in kb.document_chunks("target")] == ["new"]
+    assert [chunk.content for chunk in kb.document_chunks("other")] == ["keep"]
+
+
+def test_reingest_replaces_middle_chunk_and_preserves_order(settings: Settings) -> None:
+    from researchpilot.rag.knowledge_base import KnowledgeBase
+
+    kb = KnowledgeBase(settings, embedder=HashEmbedder(32), chunker=_ParagraphChunker())
+    kb.ingest_documents([_document("target", "first|old middle|last")])
+
+    kb.ingest_documents([_document("target", "first|new middle|last")])
+
+    chunks = kb.document_chunks("target")
+    assert [chunk.chunk_id for chunk in chunks] == [
+        "target#c000",
+        "target#c001",
+        "target#c002",
+    ]
+    assert [chunk.content for chunk in chunks] == ["first", "new middle", "last"]
+
+
+def test_reingest_removes_stale_chunks_when_chunk_count_changes(settings: Settings) -> None:
+    from researchpilot.rag.knowledge_base import KnowledgeBase
+
+    kb = KnowledgeBase(settings, embedder=HashEmbedder(32), chunker=_ParagraphChunker())
+    kb.ingest_documents([_document("target", "one|two|three|four")])
+    kb.ingest_documents([_document("target", "replacement")])
+    assert [chunk.content for chunk in kb.document_chunks("target")] == ["replacement"]
+
+    kb.ingest_documents([_document("target", "one|two|three")])
+    assert [chunk.content for chunk in kb.document_chunks("target")] == ["one", "two", "three"]
+
+
 def test_loader_reads_markdown_with_front_matter() -> None:
     documents = DocumentLoader().load_path(FIXTURE_KB)
     assert len(documents) == 5

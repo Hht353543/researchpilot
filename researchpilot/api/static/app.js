@@ -13,7 +13,11 @@ let currentTaskId = null;
 let asyncTimer = null;
 
 async function api(path, options) {
-  const response = await fetch(path, options);
+  const request = { ...(options || {}) };
+  request.headers = { ...(request.headers || {}) };
+  const token = el("accessToken")?.value.trim();
+  if (token) request.headers.Authorization = `Bearer ${token}`;
+  const response = await fetch(path, request);
   const text = await response.text();
   let payload = null;
   try { payload = text ? JSON.parse(text) : null; } catch { payload = text; }
@@ -263,7 +267,8 @@ async function loadTask(taskId) {
   renderTimeline(trace);
   renderMetrics(result.metrics);
   renderSources(result.evidence ? result.evidence.sources : []);
-  setStatus(`task ${taskId} · status=${result.status}${result.errors && result.errors.length ? " · errors=" + result.errors.length : ""}`, result.status === "succeeded" ? "ok" : "error");
+  const quality = result.quality ? ` · quality=${result.quality}` : "";
+  setStatus(`task ${taskId} · status=${result.status}${quality}${result.errors && result.errors.length ? " · errors=" + result.errors.length : ""}`, result.status === "completed" ? "ok" : "error");
   return result;
 }
 
@@ -315,6 +320,15 @@ async function runResearch(mode) {
 }
 
 async function boot() {
+  const savedToken = typeof sessionStorage === "undefined"
+    ? "" : (sessionStorage.getItem("researchpilot.accessToken") || "");
+  el("accessToken").value = savedToken;
+  el("applyAccessToken").addEventListener("click", () => {
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.setItem("researchpilot.accessToken", el("accessToken").value.trim());
+    }
+    window.location.reload();
+  });
   el("samples").innerHTML = SAMPLES.map((sample, index) =>
     `<button data-sample="${index}">${escapeHtml(sample.slice(0, 26))}…</button>`).join("");
   el("samples").addEventListener("click", (event) => {
@@ -362,7 +376,8 @@ async function boot() {
   el("iterations").value = config.max_iterations;
   el("maxtokens").value = config.max_tokens;
   el("configHint").textContent =
-    `provider=${config.provider} · token_budget=${config.token_budget} · max_tokens=${config.max_tokens} · 模型/温度等参数通过环境变量或此处覆盖`;
+    `provider=${config.provider} · token_budget=${config.token_budget} · max_tokens=${config.max_tokens} · ` +
+    `auth=${config.auth_required ? "required" : "off"} · concurrent_tasks=${config.max_concurrent_tasks}`;
   renderKbStats(documents.stats);
   renderKbDocuments(documents.documents);
   try {

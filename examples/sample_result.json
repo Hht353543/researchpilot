@@ -1,7 +1,8 @@
 {
   "task_id": "task_2faf2fb92c1f",
   "trace_id": "trace_b551a0a061e2",
-  "status": "succeeded",
+  "status": "completed",
+  "quality": "succeeded",
   "question": "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。",
   "settings": {
     "model": null,

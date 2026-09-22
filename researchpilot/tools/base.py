@@ -11,6 +11,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from researchpilot.config import Settings, get_settings
+from researchpilot.lifecycle import TaskLifecycle
 from researchpilot.observability.trace import Tracer
 from researchpilot.schemas import SourceKind, SpanKind
 
@@ -93,6 +94,14 @@ class ToolContext:
     settings: Settings = field(default_factory=get_settings)
     services: dict[str, Any] = field(default_factory=dict)
     scratch: dict[str, Any] = field(default_factory=dict)
+    lifecycle: TaskLifecycle | None = None
+
+    def checkpoint(self) -> None:
+        if self.lifecycle is not None:
+            self.lifecycle.checkpoint()
+
+    def remaining(self) -> float | None:
+        return self.lifecycle.remaining() if self.lifecycle is not None else None
 
     def service(self, name: str, default: Any = None) -> Any:
         return self.services.get(name, default)

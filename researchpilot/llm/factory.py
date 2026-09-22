@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from researchpilot.config import Settings, get_settings
+from researchpilot.lifecycle import TaskLifecycle
 from researchpilot.llm.base import LLMProvider
 from researchpilot.llm.mock_provider import MockLLMProvider
 from researchpilot.llm.openai_provider import OpenAICompatibleProvider
@@ -35,6 +36,9 @@ def build_structured_runner(
     *,
     provider: LLMProvider | None = None,
     tracer: Tracer | None = None,
+    token_budget_override: int | None = None,
+    max_tokens_override: int | None = None,
+    lifecycle: TaskLifecycle | None = None,
 ) -> StructuredLLMRunner:
     settings = settings or get_settings()
     resolved = provider or build_provider(settings)
@@ -43,7 +47,15 @@ def build_structured_runner(
         resolved,
         tracer=tracer,
         max_repair_retries=settings.max_retries,
-        token_budget=token_budget_for(settings, provider_name),
+        token_budget=(
+            token_budget_override
+            if token_budget_override is not None
+            else token_budget_for(settings, provider_name)
+        ),
         temperature=settings.temperature,
         max_tokens=settings.max_tokens,
+        max_tokens_override=max_tokens_override,
+        presence_penalty=settings.presence_penalty,
+        frequency_penalty=settings.frequency_penalty,
+        lifecycle=lifecycle,
     )

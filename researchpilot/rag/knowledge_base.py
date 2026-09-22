@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,13 @@ from pydantic import BaseModel, Field
 from researchpilot.config import Settings, get_settings
 from researchpilot.llm.structured import StructuredLLMRunner
 from researchpilot.observability.trace import Tracer
+from researchpilot.persistence import (
+    PersistenceCorruptionError,
+    PersistenceError,
+    StorageSignature,
+    serialized_file_update,
+    storage_signature,
+)
 from researchpilot.rag.chunker import MarkdownChunker
 from researchpilot.rag.embeddings import Embedder, build_embedder
 from researchpilot.rag.loader import DocumentLoader
@@ -44,12 +52,26 @@ class KnowledgeBase:
         loader: DocumentLoader | None = None,
     ) -> None:
         self.settings = settings or get_settings()
+        self._owns_embedder = embedder is None
         self.embedder = embedder or build_embedder(self.settings)
         self.store = store or VectorStore(dimension=self.embedder.dimension)
+        self._auto_refresh = store is None
         self.chunker = chunker or MarkdownChunker()
         self.loader = loader or DocumentLoader()
         self.store.fingerprint = self.embedder_fingerprint()
         self.persistence_error: str = ""
+        self._lock = threading.RLock()
+        self._dirty_document_ids: set[str] = set()
+        self._deleted_document_ids: set[str] = set()
+        self._replace_all = False
+        self._rollback_store: VectorStore | None = None
+        # A bare instance has not loaded the persisted index yet. load_or_create
+        # sets this after loading; other instances refresh on their first read.
+        self._storage_signature: StorageSignature | None = None
+
+    def close(self) -> None:
+        if self._owns_embedder:
+            self.embedder.close()
 
     def embedder_fingerprint(self) -> str:
         """Identity of the embedder a persisted index must match."""
@@ -65,11 +87,16 @@ class KnowledgeBase:
         return self.ingest_documents(documents)
 
     def ingest_documents(self, documents: list[Document]) -> IngestReport:
+        with self._lock:
+            self._refresh_if_changed_unlocked()
+            return self._ingest_documents_unlocked(documents)
+
+    def _ingest_documents_unlocked(self, documents: list[Document]) -> IngestReport:
         import time
 
         start = time.perf_counter()
         report = IngestReport()
-        new_chunks: list[Chunk] = []
+        pending: list[tuple[Document, list[Chunk]]] = []
         for document in documents:
             if not document.content.strip():
                 report.skipped.append(f"{document.doc_id}: empty content")
@@ -78,16 +105,29 @@ class KnowledgeBase:
             if not chunks:
                 report.skipped.append(f"{document.doc_id}: no chunk produced")
                 continue
-            self.store.upsert_document(document)
             report.documents += 1
             report.characters_in += len(document.content)
             report.characters_out += sum(len(c.content) for c in chunks)
-            new_chunks.extend(chunks)
+            pending.append((document, chunks))
+        new_chunks = [chunk for _, chunks in pending for chunk in chunks]
         if new_chunks:
             vectors = self.embedder.embed([c.content for c in new_chunks])
-            self.store.add_chunks(
-                [chunk.with_embedding(vector) for chunk, vector in zip(new_chunks, vectors, strict=True)]
-            )
+            embedded = [
+                chunk.with_embedding(vector) for chunk, vector in zip(new_chunks, vectors, strict=True)
+            ]
+            self._begin_mutation_unlocked()
+            offset = 0
+            for document, chunks in pending:
+                replacement = embedded[offset : offset + len(chunks)]
+                offset += len(chunks)
+                # A document id identifies one current document version. Remove
+                # every chunk from the previous version before inserting the new
+                # ordered set, including stale tail chunks after a shrink.
+                self.store.remove_document(document.doc_id)
+                self.store.upsert_document(document)
+                self.store.add_chunks(replacement)
+                self._dirty_document_ids.add(document.doc_id)
+                self._deleted_document_ids.discard(document.doc_id)
             report.chunks = len(new_chunks)
         report.duration_ms = round((time.perf_counter() - start) * 1000, 3)
         return report
@@ -114,15 +154,59 @@ class KnowledgeBase:
         A rebuild (not a merge) is what makes ``/kb/reindex`` correct when files
         were deleted or renamed on disk - otherwise stale chunks stay searchable.
         """
-        self.store.clear()
-        return self.ingest_path(self.settings.kb_dir())
+        with self._lock:
+            self._begin_mutation_unlocked()
+            self.store.clear()
+            self._dirty_document_ids.clear()
+            self._deleted_document_ids.clear()
+            self._replace_all = True
+            documents = self.loader.load_path(self.settings.kb_dir())
+            return self._ingest_documents_unlocked(documents)
 
     def delete_document(self, doc_id: str) -> int:
         """Remove a document and all of its chunks; returns the chunks removed."""
-        removed = self.store.remove_document(doc_id)
-        if removed:
+        with self._lock:
+            self._refresh_if_changed_unlocked()
+            if self.store.get_document(doc_id) is None:
+                return 0
+            self._begin_mutation_unlocked()
+            removed = self.store.remove_document(doc_id)
+            if removed:
+                self._dirty_document_ids.discard(doc_id)
+                self._deleted_document_ids.add(doc_id)
+                self.save()
+            return removed
+
+    def ingest_text_and_save(
+        self,
+        content: str,
+        *,
+        title: str,
+        source: str = "inline",
+        metadata: dict[str, Any] | None = None,
+    ) -> IngestReport:
+        """Apply and durably commit one inline document as a single operation."""
+        with self._lock:
+            report = self.ingest_text(
+                content,
+                title=title,
+                source=source,
+                metadata=metadata,
+            )
             self.save()
-        return removed
+            return report
+
+    def ingest_path_and_save(self, path: str | Path) -> IngestReport:
+        with self._lock:
+            report = self.ingest_path(path)
+            self.save()
+            return report
+
+    def reindex_and_save(self) -> IngestReport:
+        with self._lock:
+            report = self.load_default()
+            self.save()
+            return report
 
     # -- retrieval --------------------------------------------------------- #
     def retriever(
@@ -132,6 +216,7 @@ class KnowledgeBase:
         llm_runner: StructuredLLMRunner | None = None,
         rerank_strategy: str | None = None,
     ) -> Retriever:
+        self._refresh_if_changed()
         return Retriever(
             self.store,
             self.embedder,
@@ -169,24 +254,30 @@ class KnowledgeBase:
 
     # -- inspection -------------------------------------------------------- #
     def stats(self) -> dict[str, Any]:
+        self._refresh_if_changed()
         stats = self.store.stats()
         if self.persistence_error:
             stats["persistence_error"] = self.persistence_error
         return stats
 
     def summaries(self) -> list[Any]:
+        self._refresh_if_changed()
         return self.store.summaries()
 
     def topics(self) -> list[str]:
+        self._refresh_if_changed()
         return self.store.topics()
 
     def get_document(self, doc_id: str) -> Document | None:
+        self._refresh_if_changed()
         return self.store.get_document(doc_id)
 
     def get_chunk(self, chunk_id: str) -> Chunk | None:
+        self._refresh_if_changed()
         return self.store.get_chunk(chunk_id)
 
     def document_chunks(self, doc_id: str) -> list[Chunk]:
+        self._refresh_if_changed()
         return [c for c in self.store.chunks() if c.doc_id == doc_id]
 
     # -- persistence ------------------------------------------------------- #
@@ -194,22 +285,91 @@ class KnowledgeBase:
         return self.settings.runs_dir() / "knowledge_base.json"
 
     def save(self, path: str | Path | None = None) -> Path:
-        """Persist the index. An unwritable runs_path is recorded, not raised.
-
-        The in-memory index stays usable, so a read-only or full runs_path does not
-        stop the service from starting. The error is kept in ``persistence_error``
-        and surfaced through /health.
-        """
-        self.store.fingerprint = self.embedder_fingerprint()
+        """Commit pending mutations, publishing them only after durable replacement."""
         target = Path(path) if path is not None else self.index_path()
+        durable_before: VectorStore | None = None
         try:
-            saved = self.store.save(target)
-            self.persistence_error = ""
-            return saved
+            with self._lock, serialized_file_update(target):
+                expected = self.embedder_fingerprint()
+                latest: VectorStore | None = None
+                if target.exists():
+                    candidate = VectorStore.load(target)
+                    if candidate.fingerprint == expected:
+                        latest = candidate
+                        durable_before = candidate.clone()
+
+                committed = self.store.clone()
+                if latest is not None and not self._replace_all:
+                    for doc_id in self._deleted_document_ids:
+                        latest.remove_document(doc_id)
+                    for doc_id in self._dirty_document_ids:
+                        latest.remove_document(doc_id)
+                        document = self.store.get_document(doc_id)
+                        if document is not None:
+                            latest.upsert_document(document)
+                            latest.add_chunks(
+                                chunk for chunk in self.store.chunks() if chunk.doc_id == doc_id
+                            )
+                    committed = latest
+
+                disk_generation = latest.generation if latest is not None else 0
+                committed.fingerprint = expected
+                committed.generation = max(committed.generation, disk_generation) + 1
+                saved = committed.save(target)
+                self.store = committed
+                self._storage_signature = storage_signature(target)
+                self._dirty_document_ids.clear()
+                self._deleted_document_ids.clear()
+                self._replace_all = False
+                self._rollback_store = None
+                self.persistence_error = ""
+                return saved
         except Exception as exc:
-            self.persistence_error = f"{type(exc).__name__}: {exc}"
-            logger.warning("could not persist the knowledge base index: %s", self.persistence_error)
-            return target
+            with self._lock:
+                if durable_before is not None:
+                    self.store = durable_before
+                elif self._rollback_store is not None:
+                    self.store = self._rollback_store
+                self._dirty_document_ids.clear()
+                self._deleted_document_ids.clear()
+                self._replace_all = False
+                self._rollback_store = None
+                self._storage_signature = storage_signature(target)
+                self.persistence_error = (
+                    "corrupted" if isinstance(exc, PersistenceCorruptionError) else "write_failed"
+                )
+            logger.exception("could not persist the knowledge base index")
+            if isinstance(exc, PersistenceError):
+                raise
+            raise PersistenceError("knowledge base update could not be committed") from exc
+
+    def _begin_mutation_unlocked(self) -> None:
+        if self._rollback_store is None:
+            self._rollback_store = self.store.clone()
+
+    def _refresh_if_changed(self) -> None:
+        with self._lock:
+            self._refresh_if_changed_unlocked()
+
+    def _refresh_if_changed_unlocked(self) -> None:
+        """Reload a peer's atomic commit before serving the next read."""
+        if self.persistence_error == "corrupted":
+            raise PersistenceCorruptionError("knowledge base index is corrupted")
+        if not self._auto_refresh:
+            return
+        if self._dirty_document_ids or self._deleted_document_ids or self._replace_all:
+            return
+        path = self.index_path()
+        signature = storage_signature(path)
+        if signature is None or signature == self._storage_signature:
+            return
+        loaded = VectorStore.load(path)
+        if loaded.fingerprint != self.embedder_fingerprint():
+            return
+        loaded.dimension = self.embedder.dimension
+        self.store = loaded
+        self._storage_signature = signature
+        self.persistence_error = ""
 
     @classmethod
     def load_or_create(cls, settings: Settings | None = None) -> KnowledgeBase:
@@ -222,6 +382,7 @@ class KnowledgeBase:
             if loaded.fingerprint == expected:
                 kb.store = loaded
                 kb.store.dimension = kb.embedder.dimension
+                kb._storage_signature = storage_signature(path)
                 return kb
             # Vectors from another embedder are meaningless for this one, so rebuild.
             logger.warning(

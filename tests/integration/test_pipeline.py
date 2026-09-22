@@ -30,7 +30,8 @@ def test_pipeline_produces_grounded_report(settings: Settings, knowledge_base: K
     pipeline = _pipeline(settings, knowledge_base)
     result = pipeline.run(ResearchRequest(question="MCP 基于什么协议，核心方法有哪些？"))
 
-    assert result.status in {"succeeded", "degraded"}
+    assert result.status == "completed"
+    assert result.quality in {"succeeded", "degraded"}
     assert result.plan is not None
     assert result.plan.subtasks
     assert result.evidence.evidence
@@ -87,7 +88,8 @@ def test_pipeline_handles_tool_failure_gracefully(settings: Settings, knowledge_
 
     pipeline = _pipeline(settings, knowledge_base, tool_overrides=factory)
     result = pipeline.run(ResearchRequest(question="检索知识库说明混合检索的作用。"))
-    assert result.status in {"degraded", "failed"}
+    assert result.status == "completed"
+    assert result.quality == "degraded"
     assert result.metrics.tool_failures >= 1
     assert result.errors
     # the pipeline still returns a typed result instead of raising
@@ -100,7 +102,7 @@ def test_pipeline_enforces_tool_budget(settings: Settings, knowledge_base: Knowl
     pipeline = _pipeline(settings, knowledge_base, tool_policy=ToolPolicy(max_calls_per_task=1))
     result = pipeline.run(ResearchRequest(question="分析记忆分层与上下文管理，并给出优缺点。"))
     assert result.metrics.tool_failures >= 1
-    assert any("budget" in message for message in result.errors) or result.status == "degraded"
+    assert any("budget" in message for message in result.errors) or result.quality == "degraded"
 
 
 def test_async_submission_returns_task_id(settings: Settings, knowledge_base: KnowledgeBase) -> None:
@@ -117,7 +119,8 @@ def test_async_submission_returns_task_id(settings: Settings, knowledge_base: Kn
             break
         time.sleep(0.2)
     assert result is not None
-    assert result.status in {"succeeded", "degraded"}
+    assert result.status == "completed"
+    assert result.quality in {"succeeded", "degraded"}
 
 
 def test_planner_falls_back_when_provider_fails(settings: Settings, knowledge_base: KnowledgeBase) -> None:
@@ -147,7 +150,8 @@ def test_planner_falls_back_when_provider_fails(settings: Settings, knowledge_ba
 
     pipeline = ResearchPipeline(settings=settings, provider=BrokenProvider(), knowledge_base=knowledge_base)
     result = pipeline.run(ResearchRequest(question="混合检索的作用是什么？"))
-    assert result.status == "degraded"
+    assert result.status == "completed"
+    assert result.quality == "degraded"
     assert result.plan is not None
     assert result.plan.subtasks
 
@@ -183,7 +187,8 @@ def test_empty_knowledge_base_falls_back_to_web_and_reports_gaps(settings: Setti
         settings=settings, provider=MockLLMProvider(settings), knowledge_base=empty_kb
     )
     result = pipeline.run(ResearchRequest(question="空知识库下混合检索的表现如何？"))
-    assert result.status in {"degraded", "succeeded"}
+    assert result.status == "completed"
+    assert result.quality in {"degraded", "succeeded"}
     assert result.report is not None
     assert result.report.markdown.strip()
     if result.evidence.evidence:
@@ -200,7 +205,8 @@ def test_no_sources_available_reports_explicit_gap(settings: Settings, tmp_path)
     barren = settings.model_copy(update={"web_corpus_path": str(tmp_path / "no-corpus")})
     pipeline = ResearchPipeline(settings=barren, provider=MockLLMProvider(barren), knowledge_base=KB(barren))
     result = pipeline.run(ResearchRequest(question="空知识库下混合检索的表现如何？"))
-    assert result.status in {"degraded", "failed"}
+    assert result.status == "completed"
+    assert result.quality == "degraded"
     assert result.report is not None
     assert not result.evidence.evidence
     assert any(marker in result.report.markdown for marker in ("缺口", "未获得", "无可用证据", "不足"))
@@ -219,7 +225,8 @@ def test_empty_retrieval_is_reported_not_invented(settings: Settings, knowledge_
         tool_overrides=factory,
     )
     result = pipeline.run(ResearchRequest(question="检索知识库说明混合检索的作用。"))
-    assert result.status in {"degraded", "failed", "succeeded"}
+    assert result.status == "completed"
+    assert result.quality in {"degraded", "succeeded"}
     assert result.report is not None
     assert not any(item.tool == "knowledge_search" for item in result.evidence.evidence), (
         "empty knowledge_search must not produce knowledge_search evidence"
@@ -248,8 +255,9 @@ def test_embedding_failure_degrades_instead_of_crashing(
         settings=settings, provider=MockLLMProvider(settings), knowledge_base=broken_kb
     )
     result = pipeline.run(ResearchRequest(question="混合检索依赖什么？"))
-    assert result.status in {"degraded", "failed"}
-    assert any("embedding backend unavailable" in message for message in result.errors)
+    assert result.status == "completed"
+    assert result.quality == "degraded"
+    assert result.errors
     assert result.report is not None
 
 
@@ -265,7 +273,8 @@ def test_vector_store_failure_degrades_instead_of_crashing(
         settings=settings, provider=MockLLMProvider(settings), knowledge_base=broken_kb
     )
     result = pipeline.run(ResearchRequest(question="向量库不可用时系统如何表现？"))
-    assert result.status in {"degraded", "failed"}
+    assert result.status == "completed"
+    assert result.quality == "degraded"
     assert result.metrics.tool_failures >= 1
     assert any("vector store unavailable" in message for message in result.errors)
 
@@ -348,7 +357,8 @@ def test_mcp_failure_degrades_without_crashing(settings: Settings, knowledge_bas
         mcp_client=BrokenMcpClient(),
     )
     result = pipeline.run(ResearchRequest(question="如何通过 MCP 网关复用知识库？"))
-    assert result.status in {"degraded", "succeeded"}
+    assert result.status == "completed"
+    assert result.quality in {"degraded", "succeeded"}
     assert result.metrics.tool_failures >= 1
     assert any("mcp" in message.lower() for message in result.errors)
     assert result.report is not None and result.report.markdown.strip()

@@ -1,7 +1,11 @@
 .git
 .github
 .venv
+.venv-clean
+.venv-wheel
 venv
+build
+dist
 # Docker matches patterns against the build-context root only (Go filepath.Match
 # semantics: '*' does not cross '/'), so nested caches need an explicit '**/'
 # prefix - a bare '__pycache__' would only exclude the root-level directory.

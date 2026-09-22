@@ -68,3 +68,7 @@ class LLMProvider(ABC):
 
     def supports_json_schema(self) -> bool:
         return False
+
+    def close(self) -> None:
+        """Release provider-owned resources; stateless providers need no action."""
+        return None

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from contextlib import suppress
 from typing import Any
 
 from researchpilot.agents.base import ResearchRuntime, build_runtime
@@ -18,6 +19,7 @@ from researchpilot.pipeline import ResearchPipeline
 from researchpilot.rag.knowledge_base import KnowledgeBase
 from researchpilot.schemas import ResearchRequest
 from researchpilot.store import ResultStore
+from researchpilot.task_store import TaskStore
 
 logger = logging.getLogger("researchpilot.service")
 
@@ -31,6 +33,7 @@ class ServiceContainer:
         self.knowledge_base = KnowledgeBase.load_or_create(self.settings)
         self.trace_store = TraceStore(self.settings.runs_dir())
         self.result_store = ResultStore(self.settings.runs_dir())
+        self.task_store = TaskStore(self.settings.runs_dir())
         self.provider: LLMProvider = build_provider(self.settings)
         self.mcp_server = McpServer(self.settings, knowledge_base=self.knowledge_base)
         self.mcp_mode = "inprocess"
@@ -41,8 +44,10 @@ class ServiceContainer:
             knowledge_base=self.knowledge_base,
             trace_store=self.trace_store,
             result_store=self.result_store,
+            task_store=self.task_store,
             mcp_client=self.mcp_client,
         )
+        self._closed = False
 
     def _build_mcp_client(self) -> Any:
         """Connect to the configured MCP transport, falling back to in-process.
@@ -80,12 +85,48 @@ class ServiceContainer:
     def submit_research(self, request: ResearchRequest) -> str:
         return self.pipeline.submit(request)
 
+    def cancel_research(self, task_id: str) -> bool:
+        return self.pipeline.cancel(task_id)
+
+    def close(self) -> None:
+        """Stop task admission, signal workers, then close application-owned clients."""
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+        self.pipeline.request_shutdown()
+        close_mcp = getattr(self.mcp_client, "close", None)
+        if callable(close_mcp):
+            with suppress(Exception):
+                close_mcp()
+        close_provider = getattr(self.provider, "close", None)
+        if callable(close_provider):
+            with suppress(Exception):
+                close_provider()
+        self.pipeline.close()
+        with suppress(Exception):
+            self.knowledge_base.close()
+
     # -- knowledge base ---------------------------------------------------- #
+    def ingest_document(
+        self,
+        content: str,
+        *,
+        title: str,
+        source: str,
+        metadata: dict[str, Any],
+    ) -> Any:
+        with self._lock:
+            return self.knowledge_base.ingest_text_and_save(
+                content,
+                title=title,
+                source=source,
+                metadata=metadata,
+            )
+
     def reingest(self) -> Any:
         with self._lock:
-            report = self.knowledge_base.load_default()
-            self.knowledge_base.save()
-            return report
+            return self.knowledge_base.reindex_and_save()
 
     def delete_document(self, doc_id: str) -> int:
         with self._lock:

@@ -5,6 +5,21 @@ Base URL：`http://127.0.0.1:8000`（`python -m researchpilot.cli serve`）
 
 所有请求/响应均为 JSON，模型由 Pydantic 定义并做参数校验；校验失败返回 `422`。
 
+本地开发默认不启用鉴权。配置 `RESEARCHPILOT_ACCESS_TOKEN` 后，除 `/health`、首页和静态资源外，
+所有端点都要求 Bearer token：
+
+```http
+Authorization: Bearer <RESEARCHPILOT_ACCESS_TOKEN>
+```
+
+缺失或错误 token 返回 `401 authentication_required`。请求体超过
+`RESEARCHPILOT_MAX_REQUEST_BODY_BYTES` 返回 `413 request_too_large`；单进程研究任务达到
+`RESEARCHPILOT_MAX_CONCURRENT_TASKS` 后，新任务返回 `429 capacity_exceeded`。
+
+知识库写入只有在持久化文件成功原子替换后才返回成功。锁、临时文件、fsync 或 replace 失败返回
+`503 persistence_unavailable`；检测到 malformed、truncated 或结构无效的 JSON 时返回
+`503 persistence_corruption`。响应不会包含存储绝对路径或底层异常细节。
+
 ---
 
 ## Meta
@@ -64,7 +79,8 @@ Base URL：`http://127.0.0.1:8000`（`python -m researchpilot.cli serve`）
 {
   "task_id": "task_530c154c04b7",
   "trace_id": "trace_530c154c04b7",
-  "status": "succeeded",
+  "status": "completed",
+  "quality": "succeeded",
   "question": "...",
   "plan": {"objective": "...", "subtasks": [{"id": "S1", "intent": "knowledge_search", "tools": ["knowledge_search"]}]},
   "evidence": {
@@ -79,8 +95,11 @@ Base URL：`http://127.0.0.1:8000`（`python -m researchpilot.cli serve`）
 }
 ```
 
-`status` 取值：`pending` / `running` / `succeeded` / `degraded` / `failed`。
-`degraded` 表示结果可用但存在失败（例如某个工具超时），`errors[]` 会给出具体原因。
+`status` 是生命周期状态：`pending` / `running` / `completed` / `failed` / `cancelled` /
+`timed_out`。`quality` 只在 `completed` 时取 `succeeded` 或 `degraded`；工具超时、回退或证据不足
+会得到 `status="completed", quality="degraded"`，从而不再把执行生命周期与结果质量混在一起。
+API 查询以 `{task_id}.task.json` 的持久化生命周期为准；result/trace 文件是被任务记录引用的产物。
+服务重启会把失联的 `pending/running` 任务收敛为 `failed`，不会把残留 result 文件误判为成功。
 
 `mode=async` 响应（HTTP 202）：
 
@@ -96,12 +115,18 @@ Base URL：`http://127.0.0.1:8000`（`python -m researchpilot.cli serve`）
 
 完整 `ResearchResult`；未知 id 返回 `404`。
 
+### `DELETE /research/{task_id}`
+
+协作式取消 pending/running 任务并返回 `status="cancelled"` 的终态。未知 id 返回 `404`；已经进入
+terminal state 的任务返回 `409`。首次成功提交的 terminal transition 获胜，late completion 不会覆盖取消结果。
+
 ### `GET /research/{task_id}/trace`
 
 ```json
 {
   "trace_id": "trace_...",
   "task_id": "task_...",
+  "status": "completed",
   "spans": [
     {"span_id": "span_...", "parent_id": null, "name": "PlannerAgent", "kind": "agent", "latency_ms": 12.4,
      "usage": {"total_tokens": 900, "cost_usd": 0.0002}},
@@ -240,11 +265,14 @@ with StdioMcpClient() as client:  # 或 StdioMcpClient(command=[...])
 | 场景 | 行为 | 原因 |
 | --- | --- | --- |
 | 部署期 provider 配置错误（如 `provider=openai` 但没有 `API_KEY`） | 启动即失败（`LLMConfigError`，附带修复提示） | 配置错误应当 fail-fast，不能静默退回 mock 模型 |
-| 运行时上游不可用（网络错误、超时、5xx、本地检索已成功的场景） | `200` + `status="degraded"`（或 `failed`），`errors[]` 记录原因，报告由本地证据生成或显式声明缺口 | 研究任务本身仍然产出一份可审计的结果文档 |
+| 运行时上游不可用但回退成功 | `200` + `status="completed", quality="degraded"`，`errors[]` 记录安全诊断，报告由本地证据生成或显式声明缺口 | 生命周期完成，但质量明确降级 |
+| 未处理的执行异常 | `200` + `status="failed"`，没有正式报告 | 任务没有完成，不伪装为可用结果 |
+| 任务级 deadline 到达 | `status="timed_out"`，停止调度新的模型/工具调用 | deadline 属于后台任务，不依赖 HTTP 客户端超时 |
+| 调用取消端点 | `status="cancelled"`，停止调度新工作 | 首个 terminal transition 获胜 |
 | 请求体/参数非法 | `422` | FastAPI + Pydantic 校验 |
 | 未知 task/doc | `404` | 资源不存在 |
 | token 预算耗尽 | `429` | `BudgetExceededError` |
-| 运行目录不可写（只读/磁盘满/路径被文件占用） | 同步 `POST /research` 返回 `200` + `status=degraded`（`errors` 含 `persistence[...]`）；`mode=async` 提交返回 `503` + `kind=storage_unavailable` | 索引/结果无法落盘时，内存中的结果仍然可用；服务不会崩溃 |
+| 运行目录不可写（只读/磁盘满/路径被文件占用） | 同步 terminal artifact 失败返回 `503`；异步初始状态无法提交也返回 `503` | 不把未持久化结果报告为 durable success |
 
 ### `GET /health` 与 MCP 传输
 

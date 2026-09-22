@@ -14,7 +14,8 @@ from typing import Any
 
 from researchpilot.config import get_settings
 from researchpilot.observability.costs import estimate_cost
-from researchpilot.schemas import Span, SpanKind, TaskMetrics, TokenUsage, Trace
+from researchpilot.persistence import PersistenceCorruptionError, PersistenceError, atomic_write_text
+from researchpilot.schemas import Span, SpanKind, TaskMetrics, TaskStatus, TokenUsage, Trace
 from researchpilot.utils import new_id, utc_now_iso
 
 _current_tracer: ContextVar[Tracer | None] = ContextVar("researchpilot_tracer", default=None)
@@ -174,11 +175,12 @@ class Tracer:
             metrics.latency_ms = round(sum(s.latency_ms for s in self.spans if s.parent_id is None), 3)
         return metrics
 
-    def to_trace(self) -> Trace:
+    def to_trace(self, *, status: TaskStatus = "completed") -> Trace:
         return Trace(
             trace_id=self.trace_id,
             task_id=self.task_id,
             question=self.question,
+            status=status,
             spans=list(self.spans),
             started_at=self.started_at,
             ended_at=self.ended_at or utc_now_iso(),
@@ -205,15 +207,17 @@ class TraceStore:
         self._lock = threading.Lock()
 
     def save(self, trace: Trace) -> None:
+        if self.persist:
+            path = self.runs_dir / f"{trace.task_id}.trace.json"
+            try:
+                atomic_write_text(
+                    path,
+                    json.dumps(trace.model_dump(mode="json"), ensure_ascii=False, indent=2),
+                )
+            except Exception as exc:
+                raise PersistenceError("trace could not be committed") from exc
         with self._lock:
             self._traces[trace.task_id] = trace
-        if self.persist:
-            self.runs_dir.mkdir(parents=True, exist_ok=True)
-            path = self.runs_dir / f"{trace.task_id}.trace.json"
-            path.write_text(
-                json.dumps(trace.model_dump(mode="json"), ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
 
     def get(self, task_id: str) -> Trace | None:
         trace = self._traces.get(task_id)
@@ -221,7 +225,14 @@ class TraceStore:
             return trace
         path = self.runs_dir / f"{task_id}.trace.json"
         if path.exists():
-            trace = Trace.model_validate(json.loads(path.read_text(encoding="utf-8")))
+            try:
+                raw = path.read_text(encoding="utf-8")
+            except OSError as exc:
+                raise PersistenceError("trace could not be read") from exc
+            try:
+                trace = Trace.model_validate(json.loads(raw))
+            except (json.JSONDecodeError, UnicodeError, ValueError, TypeError) as exc:
+                raise PersistenceCorruptionError("trace is corrupted") from exc
             with self._lock:
                 self._traces[task_id] = trace
             return trace

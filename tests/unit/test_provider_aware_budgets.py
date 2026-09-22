@@ -12,6 +12,11 @@ from researchpilot.config import Settings
 from researchpilot.evaluation.dataset import Expectations, load_dataset
 from researchpilot.evaluation.judge import latency_budget_for
 from researchpilot.llm.factory import token_budget_for
+from researchpilot.llm.openai_provider import OpenAICompatibleProvider
+from researchpilot.observability.trace import Tracer
+from researchpilot.pipeline import ResearchPipeline
+from researchpilot.rag.knowledge_base import KnowledgeBase
+from researchpilot.schemas import ResearchRequest, ResearchSettings
 
 
 def test_offline_run_keeps_the_offline_latency_budget() -> None:
@@ -59,3 +64,46 @@ def test_the_two_defaults_match_the_measured_live_spend() -> None:
     """Defaults: 80k for the offline regression, 160k for real models."""
     assert Settings.model_fields["token_budget"].default == 80_000
     assert Settings.model_fields["token_budget_live"].default == 160_000
+
+
+def test_explicit_request_model_and_budget_override_shared_provider_defaults(
+    settings: Settings, knowledge_base: KnowledgeBase
+) -> None:
+    live = settings.model_copy(
+        update={
+            "provider": "openai",
+            "api_key": "test-key",
+            "model": "server-default",
+            "token_budget_live": 160_000,
+        }
+    )
+    shared = OpenAICompatibleProvider(live)
+    pipeline = ResearchPipeline(settings=live, provider=shared, knowledge_base=knowledge_base)
+    request = ResearchRequest(
+        question="verify request model settings",
+        settings=ResearchSettings(
+            model="request-model",
+            temperature=0.0,
+            presence_penalty=0.0,
+            frequency_penalty=-0.5,
+            max_tokens=321,
+            token_budget=1_234,
+        ),
+    )
+
+    effective = pipeline._request_settings(request)
+    runtime = pipeline._build_runtime("task", request.question, effective, Tracer("task"), request)
+    try:
+        assert runtime.llm.provider.model_name() == "request-model"
+        assert runtime.llm.temperature == 0.0
+        assert runtime.llm.max_tokens == 321
+        assert runtime.llm.max_tokens_override == 321
+        assert runtime.llm.presence_penalty == 0.0
+        assert runtime.llm.frequency_penalty == -0.5
+        assert runtime.llm.token_budget == 1_234
+    finally:
+        runtime.tools.close()
+        close = getattr(runtime.llm.provider, "close", None)
+        if close is not None:
+            close()
+        shared.close()

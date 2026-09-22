@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import ipaddress
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ProviderName = Literal["mock", "openai"]
@@ -39,6 +40,7 @@ class Settings(BaseSettings):
     )
     api_key: str | None = Field(
         default=None,
+        repr=False,
         validation_alias=AliasChoices("RESEARCHPILOT_API_KEY", "API_KEY", "OPENAI_API_KEY", "api_key"),
     )
     base_url: str = Field(
@@ -98,9 +100,44 @@ class Settings(BaseSettings):
     web_search_allowed_hosts: str = ""
 
     # --- Misc ----------------------------------------------------------------
+    bind_host: str = "127.0.0.1"
+    api_port: int = Field(default=8000, ge=1, le=65_535)
+    allow_remote_access: bool = False
+    access_token: str | None = Field(default=None, repr=False)
+    max_request_body_bytes: int = Field(default=1_048_576, ge=128, le=16_777_216)
+    max_concurrent_tasks: int = Field(default=4, ge=1, le=64)
+    research_task_timeout_s: float = Field(default=300.0, gt=0, le=86_400)
+    shutdown_timeout_s: float = Field(default=5.0, gt=0, le=60)
+    task_heartbeat_interval_s: float = Field(default=5.0, gt=0, le=60)
+    recovery_stale_after_s: float = Field(default=30.0, gt=0, le=3_600)
     log_level: str = "INFO"
     max_context_chars: int = 12_000
     pricing_file: str = "configs/pricing.yaml"
+
+    @field_validator("access_token", mode="before")
+    @classmethod
+    def _normalise_access_token(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @model_validator(mode="after")
+    def _validate_runtime_boundary(self) -> Settings:
+        self.validate_bind_host(self.bind_host)
+        if self.recovery_stale_after_s <= self.task_heartbeat_interval_s:
+            raise ValueError("recovery_stale_after_s must exceed task_heartbeat_interval_s")
+        return self
+
+    def validate_bind_host(self, host: str) -> None:
+        """Reject accidental public binding unless shared mode is explicit and authenticated."""
+        if _is_loopback_host(host):
+            return
+        if not self.allow_remote_access:
+            raise ValueError("non-loopback binding requires RESEARCHPILOT_ALLOW_REMOTE_ACCESS=true")
+        if not self.access_token:
+            raise ValueError("remote access requires RESEARCHPILOT_ACCESS_TOKEN")
+        if len(self.access_token) < 16:
+            raise ValueError("RESEARCHPILOT_ACCESS_TOKEN must contain at least 16 characters")
 
     def kb_dir(self) -> Path:
         from researchpilot.utils import resolve_input_path
@@ -134,3 +171,13 @@ def get_settings() -> Settings:
 
 def reset_settings_cache() -> None:
     get_settings.cache_clear()
+
+
+def _is_loopback_host(host: str) -> bool:
+    candidate = host.strip().lower().strip("[]")
+    if candidate == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(candidate).is_loopback
+    except ValueError:
+        return False

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import threading
 import time
 
+import pytest
 from pydantic import BaseModel
 
+from researchpilot.lifecycle import LifecycleCancelled, TaskLifecycle
 from researchpilot.observability.trace import Tracer
 from researchpilot.tools.base import BaseTool, ToolContext, ToolPermission, ToolResult
 from researchpilot.tools.implementations.calculator import CalculatorTool
@@ -57,6 +60,26 @@ class FlakyTool(BaseTool):
         return ToolResult(tool=self.name, data={"attempt": self.calls})
 
 
+class BlockingTool(BaseTool):
+    name = "blocking"
+    description = "waits for a test event"
+    permission = ToolPermission.COMPUTE
+    timeout_s = 5
+    max_retries = 0
+    args_model = EchoArgs
+
+    def __init__(self) -> None:
+        self.entered = threading.Event()
+        self.release = threading.Event()
+        self.calls = 0
+
+    def run(self, args: BaseModel, ctx: ToolContext) -> ToolResult:
+        self.calls += 1
+        self.entered.set()
+        assert self.release.wait(timeout=5)
+        return ToolResult(tool=self.name)
+
+
 def test_registry_lists_specs_with_schemas() -> None:
     registry = ToolRegistry([EchoTool(), CalculatorTool()])
     specs = {spec["name"]: spec for spec in registry.specs()}
@@ -99,6 +122,33 @@ def test_registry_times_out_and_retries() -> None:
     assert "timeout" in (result.error or "")
     assert elapsed < 2.0
     assert any(span.kind == "retry" for span in tracer.spans)
+
+
+def test_registry_observes_cancellation_while_blocking_tool_unwinds() -> None:
+    tool = BlockingTool()
+    registry = ToolRegistry([tool])
+    lifecycle = TaskLifecycle(timeout_s=10)
+    assert lifecycle.transition("running")
+    ctx = ToolContext(task_id="cancel-tool", lifecycle=lifecycle)
+    observed: list[type[BaseException]] = []
+
+    def invoke() -> None:
+        try:
+            registry.invoke("blocking", {"text": "x"}, ctx)
+        except LifecycleCancelled as exc:
+            observed.append(type(exc))
+
+    worker = threading.Thread(target=invoke)
+    worker.start()
+    assert tool.entered.wait(timeout=2)
+    assert lifecycle.cancel()
+    worker.join(timeout=1)
+    assert observed == [LifecycleCancelled]
+    assert tool.calls == 1
+    with pytest.raises(LifecycleCancelled):
+        registry.invoke("blocking", {"text": "again"}, ctx)
+    tool.release.set()
+    registry.close()
 
 
 def test_registry_retries_until_success() -> None:

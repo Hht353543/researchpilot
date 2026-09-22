@@ -1,0 +1,8 @@
+# Tested core compatibility baseline. Runtime and development requirements remain
+# declared in pyproject.toml; use this file with ``pip -c`` for team/CI installs.
+pydantic==2.13.5
+pydantic-settings==2.15.0
+fastapi==0.112.4
+starlette==0.38.6
+uvicorn==0.53.0
+httpx==0.28.1

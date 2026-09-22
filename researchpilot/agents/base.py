@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from researchpilot.config import Settings, get_settings
+from researchpilot.lifecycle import TaskLifecycle
 from researchpilot.llm.base import LLMProvider
 from researchpilot.llm.factory import build_structured_runner
 from researchpilot.llm.structured import StructuredLLMRunner
@@ -37,6 +38,13 @@ class ResearchRuntime:
     mcp_client: Any = None
     scratch: dict[str, Any] = field(default_factory=dict)
     errors: list[str] = field(default_factory=list)
+    lifecycle: TaskLifecycle | None = None
+    owns_provider: bool = False
+    owns_tools: bool = False
+
+    def checkpoint(self) -> None:
+        if self.lifecycle is not None:
+            self.lifecycle.checkpoint()
 
     @property
     def tool_context(self) -> ToolContext:
@@ -52,6 +60,7 @@ class ResearchRuntime:
                 "registry": self.tools,
             },
             scratch=dict(self.scratch),
+            lifecycle=self.lifecycle,
         )
 
 
@@ -68,12 +77,24 @@ def build_runtime(
     mcp_client: Any = None,
     sources: SourceRegistry | None = None,
     policy: Any = None,
+    token_budget_override: int | None = None,
+    max_tokens_override: int | None = None,
+    lifecycle: TaskLifecycle | None = None,
+    owns_provider: bool = False,
+    owns_tools: bool | None = None,
 ) -> ResearchRuntime:
     settings = settings or get_settings()
     tracer = tracer or Tracer(task_id, question)
     knowledge_base = knowledge_base or KnowledgeBase.load_or_create(settings)
     web_backend = build_web_backend(settings)
-    llm = build_structured_runner(settings, provider=provider, tracer=tracer)
+    llm = build_structured_runner(
+        settings,
+        provider=provider,
+        tracer=tracer,
+        token_budget_override=token_budget_override,
+        max_tokens_override=max_tokens_override,
+        lifecycle=lifecycle,
+    )
     if memory is None:
         # Long-term memory goes under the task's runs_path rather than the
         # process-wide default, so injected settings (tests, a Docker volume) write
@@ -82,6 +103,7 @@ def build_runtime(
             task_id=task_id,
             long_term=LongTermMemory(settings.runs_dir() / "long_term_memory.json"),
         )
+    tools_were_supplied = tools is not None
     if tools is None:
         tools = build_default_registry(
             settings=settings,
@@ -104,6 +126,9 @@ def build_runtime(
         sources=sources or SourceRegistry(),
         web_backend=web_backend,
         mcp_client=mcp_client,
+        lifecycle=lifecycle,
+        owns_provider=owns_provider,
+        owns_tools=(not tools_were_supplied if owns_tools is None else owns_tools),
     )
 
 

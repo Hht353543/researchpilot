@@ -50,6 +50,7 @@ class StubState:
         self.chat_requests = 0
         self.embedding_requests = 0
         self.last_schemas: list[str] = []
+        self.chat_payloads: list[dict[str, Any]] = []
         self.lock = threading.Lock()
 
     def begin_chat(self) -> int:
@@ -219,6 +220,7 @@ def create_stub_app(state: StubState) -> FastAPI:
 
         schema_name = (payload.get("response_format") or {}).get("json_schema", {}).get("name", "")
         state.last_schemas.append(schema_name)
+        state.chat_payloads.append(payload)
         prompt = "\n".join(str(m.get("content", "")) for m in payload.get("messages", []))
         handler = _HANDLERS.get(schema_name)
         if handler is None:

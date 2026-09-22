@@ -33,6 +33,7 @@ class ScriptedProvider(LLMProvider):
     def __init__(self, answers: list[str]) -> None:
         self.answers = answers
         self.calls = 0
+        self.last_parameters: dict[str, float | int | None] = {}
 
     def model_name(self) -> str:
         return "scripted-model"
@@ -49,6 +50,12 @@ class ScriptedProvider(LLMProvider):
         presence_penalty: float | None = None,
         frequency_penalty: float | None = None,
     ) -> LLMResponse:
+        self.last_parameters = {
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "presence_penalty": presence_penalty,
+            "frequency_penalty": frequency_penalty,
+        }
         text = self.answers[min(self.calls, len(self.answers) - 1)]
         self.calls += 1
         return LLMResponse(
@@ -67,6 +74,36 @@ def test_structured_runner_parses_and_validates() -> None:
     assert result.value.value == 7
     assert runner.usage.total_tokens == 15
     assert any(span.kind == "llm" for span in tracer.spans)
+
+
+def test_structured_runner_passes_explicit_generation_parameters_including_zero() -> None:
+    provider = ScriptedProvider(['{"value": 7}'])
+    runner = StructuredLLMRunner(
+        provider,
+        temperature=0.0,
+        max_tokens=999,
+        max_tokens_override=321,
+        presence_penalty=0.0,
+        frequency_penalty=-0.5,
+    )
+
+    runner.run(Answer, agent="Test", system="s", user="u", max_tokens=3_000)
+
+    assert provider.last_parameters == {
+        "temperature": 0.0,
+        "max_tokens": 321,
+        "presence_penalty": 0.0,
+        "frequency_penalty": -0.5,
+    }
+
+    provider.answers = ["plain text"]
+    runner.run_text(agent="Test", system="s", user="u", max_tokens=4_000)
+    assert provider.last_parameters == {
+        "temperature": 0.0,
+        "max_tokens": 321,
+        "presence_penalty": 0.0,
+        "frequency_penalty": -0.5,
+    }
 
 
 def test_structured_runner_repairs_invalid_json() -> None:
@@ -92,6 +129,15 @@ def test_token_budget_is_enforced() -> None:
     runner = StructuredLLMRunner(provider, token_budget=10)
     with pytest.raises(LLMError):
         runner.run(Answer, agent="Test", system="s", user="u")
+
+
+def test_token_budget_accumulates_across_lifecycle_checkpoints() -> None:
+    provider = ScriptedProvider(['{"value": 1}'])
+    runner = StructuredLLMRunner(provider, token_budget=25)
+    runner.run(Answer, agent="Test", system="s", user="u")
+    with pytest.raises(LLMError):
+        runner.run(Answer, agent="Test", system="s", user="u")
+    assert runner.usage.total_tokens == 30
 
 
 def test_mock_provider_produces_schema_valid_plan() -> None:

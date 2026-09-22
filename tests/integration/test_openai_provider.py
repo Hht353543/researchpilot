@@ -18,7 +18,7 @@ from researchpilot.llm.openai_provider import OpenAICompatibleProvider
 from researchpilot.pipeline import ResearchPipeline
 from researchpilot.rag.embeddings import OpenAIEmbedder
 from researchpilot.rag.knowledge_base import KnowledgeBase
-from researchpilot.schemas import CritiqueReport, ResearchRequest
+from researchpilot.schemas import CritiqueReport, ResearchRequest, ResearchSettings
 from tests.fixtures.openai_stub import run_stub_server
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
@@ -49,9 +49,22 @@ def test_pipeline_end_to_end_over_http(tmp_path: Path) -> None:
         knowledge_base = KnowledgeBase(settings)
         knowledge_base.ingest_path(FIXTURES / "kb")
         pipeline = ResearchPipeline(settings=settings, knowledge_base=knowledge_base)
-        result = pipeline.run(ResearchRequest(question="MCP 基于什么协议，核心方法有哪些？"))
+        result = pipeline.run(
+            ResearchRequest(
+                question="MCP 基于什么协议，核心方法有哪些？",
+                settings=ResearchSettings(
+                    model="gpt-4o",
+                    temperature=0.0,
+                    presence_penalty=0.0,
+                    frequency_penalty=-0.5,
+                    max_tokens=321,
+                    token_budget=200_000,
+                ),
+            )
+        )
 
-        assert result.status in {"succeeded", "degraded"}
+        assert result.status == "completed"
+        assert result.quality in {"succeeded", "degraded"}
         assert result.report is not None
         markdown = result.report.markdown
         assert markdown.strip()
@@ -71,8 +84,14 @@ def test_pipeline_end_to_end_over_http(tmp_path: Path) -> None:
         assert trace is not None
         llm_spans = trace.spans_of("llm")
         assert llm_spans
-        assert all(span.model == "gpt-4o-mini" for span in llm_spans)
+        assert all(span.model == "gpt-4o" for span in llm_spans)
         assert any(span.usage.total_tokens > 0 for span in llm_spans)
+        assert state.chat_payloads
+        assert all(payload["model"] == "gpt-4o" for payload in state.chat_payloads)
+        assert all(payload["temperature"] == 0.0 for payload in state.chat_payloads)
+        assert all(payload["presence_penalty"] == 0.0 for payload in state.chat_payloads)
+        assert all(payload["frequency_penalty"] == -0.5 for payload in state.chat_payloads)
+        assert all(payload["max_tokens"] == 321 for payload in state.chat_payloads)
         assert set(state.last_schemas) >= {
             "ResearchPlan",
             "EvidenceBundle",

@@ -58,6 +58,17 @@ def test_compose_environment_variables_are_real_settings() -> None:
             assert name in fields or key in extra_allowed, f"unknown env var in compose: {key}"
 
 
+def test_compose_publishes_services_on_loopback_by_default() -> None:
+    services = _compose()["services"]
+    api_port = str(services["api"]["ports"][0])
+    mcp_port = str(services["mcp"]["ports"][0])
+    assert "RESEARCHPILOT_BIND_HOST:-127.0.0.1" in api_port
+    assert mcp_port.startswith("127.0.0.1:")
+    api_env = services["api"]["environment"]
+    assert "RESEARCHPILOT_ALLOW_REMOTE_ACCESS" in api_env
+    assert "RESEARCHPILOT_ACCESS_TOKEN" in api_env
+
+
 def test_dockerfile_copy_sources_exist_and_are_not_ignored() -> None:
     dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
     ignored = {
@@ -78,7 +89,10 @@ def test_dockerfile_copy_sources_exist_and_are_not_ignored() -> None:
 
 def test_dockerfile_installs_project_and_runs_real_commands() -> None:
     text = DOCKERFILE.read_text(encoding="utf-8")
-    assert "pip install" in text and "-e ." in text, "image must install the project itself"
+    assert "pip install" in text and "-c constraints.txt ." in text, (
+        "image must install the project with the tested constraints"
+    )
+    assert "-e ." not in text, "the deployment image must exercise a regular package install"
     cmd = re.search(r"^CMD \[(.*)\]$", text, re.M)
     assert cmd, "Dockerfile needs an exec-form CMD"
     assert "researchpilot.api.app:create_app" in cmd.group(1)
