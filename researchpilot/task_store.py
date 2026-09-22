@@ -161,16 +161,20 @@ def process_is_alive(pid: int | None) -> bool:
         try:
             import ctypes
 
-            process = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)
+            windll = getattr(ctypes, "windll", None)
+            if windll is None:
+                return False
+            kernel32 = windll.kernel32
+            process = kernel32.OpenProcess(0x1000, False, pid)
             if not process:
                 return False
             exit_code = ctypes.c_ulong()
             try:
-                return bool(ctypes.windll.kernel32.GetExitCodeProcess(process, ctypes.byref(exit_code))) and (
+                return bool(kernel32.GetExitCodeProcess(process, ctypes.byref(exit_code))) and (
                     exit_code.value == 259
                 )
             finally:
-                ctypes.windll.kernel32.CloseHandle(process)
+                kernel32.CloseHandle(process)
         except (AttributeError, OSError):
             return False
     try:

@@ -82,9 +82,13 @@ def atomic_write_text(path: str | Path, content: str, *, encoding: str = "utf-8"
 
 
 def storage_signature(path: str | Path) -> StorageSignature | None:
-    """Cheap change detector for an atomically replaced persistence file."""
+    """Best-effort change detector for an atomically replaced persistence file."""
     try:
         stat = Path(path).stat()
-    except FileNotFoundError:
+    except OSError:
+        # A signature is only a cache invalidation hint. Filesystem states such
+        # as a missing parent, an inaccessible path, or a non-directory parent
+        # cannot produce a reliable signature and must not mask a primary
+        # persistence exception during rollback.
         return None
     return (stat.st_mtime_ns, stat.st_size, stat.st_ino)
