@@ -196,6 +196,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             knowledge_base=kb_stats,
             tools=container.pipeline_tool_names(),
             mcp_transport=container.mcp_mode,
+            auth_required=bool(settings.access_token),
+            provider_ready=settings.provider == "mock" or bool(settings.api_key),
         )
 
     @app.get("/config", response_model=ModelConfig, tags=["meta"])
@@ -216,6 +218,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             mcp_transport=settings.mcp_transport,
             web_search_mode=settings.web_search_mode,
             auth_required=bool(settings.access_token),
+            api_key_configured=bool(settings.api_key),
             max_request_body_bytes=settings.max_request_body_bytes,
             max_concurrent_tasks=settings.max_concurrent_tasks,
             research_task_timeout_s=settings.research_task_timeout_s,

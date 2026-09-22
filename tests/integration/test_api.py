@@ -215,6 +215,9 @@ async def test_frontend_is_served(client: httpx.AsyncClient) -> None:
     assert "ResearchPilot" in page.text
     script = await client.get("/static/app.js")
     assert script.status_code == 200
+    health = (await client.get("/health")).json()
+    assert health["auth_required"] is False
+    assert health["provider_ready"] is True
 
 
 @pytest.mark.anyio

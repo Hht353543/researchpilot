@@ -1,48 +1,95 @@
 /* ResearchPilot frontend: vanilla JS, no build step, no CDN (works offline). */
 
 const SAMPLES = [
-  "分析当前 AI Agent 在企业软件开发中的应用趋势，并给出技术路线、代表性项目、优缺点以及参考资料。",
-  "MCP 基于什么协议，它的核心方法有哪些？",
-  "Agent 的三种主流控制流分别是什么，各自代价是什么？",
-  "如何防止工具滥用？请给出权限分级与调用预算的设计。",
-  "公司内部代号 Proxima 的调度算法参数是多少？",
+  "比较三个主流 AI coding agent 的定位、优势和适用团队。",
+  "调研企业部署生成式 AI 时最常见的安全风险与应对方案。",
+  "分析一个技术团队从单体应用迁移到微服务的收益与代价。",
+  "总结 MCP 的工作方式、典型使用场景和落地注意事项。",
 ];
+
+const STATUS = {
+  pending: { label: "准备中", title: "正在准备研究", kind: "pending" },
+  running: { label: "研究中", title: "正在搜索和整理信息", kind: "running" },
+  completed: { label: "已完成", title: "研究完成", kind: "completed" },
+  failed: { label: "失败", title: "研究未能完成", kind: "failed" },
+  cancelled: { label: "已取消", title: "任务已取消", kind: "cancelled" },
+  timed_out: { label: "已超时", title: "研究已超时", kind: "timed_out" },
+};
+
+const ERROR_MESSAGES = {
+  authentication_required: ["需要访问令牌", "请输入管理员提供的平台访问令牌，然后重新连接。"],
+  llm_config: ["模型尚未配置", "请联系管理员检查模型和 API Key 配置。"],
+  llm: ["模型连接失败", "请稍后重试；如果问题持续，请联系管理员检查模型服务。"],
+  token_budget: ["本次研究达到资源上限", "请缩小问题范围，或联系管理员调整研究预算。"],
+  capacity_exceeded: ["当前研究任务较多", "请稍后再试，已有任务不会受到影响。"],
+  request_too_large: ["输入内容过长", "请缩短研究问题或知识库内容后重试。"],
+  persistence_unavailable: ["暂时无法保存数据", "请稍后重试；如果问题持续，请联系管理员检查存储。"],
+  persistence_corruption: ["已有数据无法读取", "请联系管理员检查已保存的研究数据。"],
+  storage_unavailable: ["存储服务暂时不可用", "请稍后重试；如果问题持续，请联系管理员。"],
+  shutting_down: ["服务正在重启", "请等待片刻后重新开始研究。"],
+  network: ["无法连接 ResearchPilot", "请确认服务正在运行并检查网络连接。"],
+  timed_out: ["研究超过最大执行时间", "任务已停止。可以缩小问题范围后重新研究。"],
+  cancelled: ["任务已取消", "你可以修改问题后重新开始研究。"],
+  unknown: ["操作未能完成", "请稍后重试；如果问题持续，可展开技术详情并联系管理员。"],
+};
 
 const el = (id) => document.getElementById(id);
 let currentTaskId = null;
-let asyncTimer = null;
+let pollTimer = null;
+let pollFailures = 0;
+let privateApiReady = false;
+let currentReportMarkdown = "";
+
+class ApiError extends Error {
+  constructor(message, kind = "unknown", status = 0, detail = "") {
+    super(message);
+    this.name = "ApiError";
+    this.kind = kind;
+    this.status = status;
+    this.detail = detail || message;
+  }
+}
 
 async function api(path, options) {
   const request = { ...(options || {}) };
   request.headers = { ...(request.headers || {}) };
   const token = el("accessToken")?.value.trim();
   if (token) request.headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(path, request);
+  let response;
+  try {
+    response = await fetch(path, request);
+  } catch (error) {
+    throw new ApiError("network request failed", "network", 0, String(error));
+  }
   const text = await response.text();
   let payload = null;
   try { payload = text ? JSON.parse(text) : null; } catch { payload = text; }
   if (!response.ok) {
-    const detail = payload && payload.detail ? payload.detail : text;
-    throw new Error(`${response.status} ${detail}`);
+    const detail = payload && payload.detail ? payload.detail : (text || response.statusText);
+    const kind = payload && payload.kind
+      ? payload.kind
+      : ({ 401: "authentication_required", 413: "request_too_large", 429: "capacity_exceeded" }[response.status] || "unknown");
+    throw new ApiError(`${response.status} ${detail}`, kind, response.status, detail);
   }
   return payload;
 }
 
-function setStatus(message, kind = "") {
-  const node = el("runStatus");
-  node.textContent = message;
-  node.className = `status ${kind}`;
-}
-
-function chip(label, value) {
-  return `<div class="chip">${label} <strong>${value}</strong></div>`;
-}
-
-/* ---------------------------- markdown (tiny) ---------------------------- */
-
 function escapeHtml(text) {
-  return String(text)
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return String(text ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function safeExternalUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+  } catch {
+    return "";
+  }
 }
 
 function inline(text) {
@@ -59,18 +106,13 @@ function renderMarkdown(markdown) {
   let inList = false, inCode = false, inTable = false;
   const closeList = () => { if (inList) { out.push("</ul>"); inList = false; } };
   const closeTable = () => { if (inTable) { out.push("</tbody></table>"); inTable = false; } };
-
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
     if (line.trim().startsWith("```")) {
-      closeList(); closeTable();
-      out.push(inCode ? "</pre>" : "<pre>");
-      inCode = !inCode;
-      continue;
+      closeList(); closeTable(); out.push(inCode ? "</pre>" : "<pre>"); inCode = !inCode; continue;
     }
     if (inCode) { out.push(escapeHtml(line)); continue; }
     if (!line.trim()) { closeList(); closeTable(); continue; }
-
     const heading = line.match(/^(#{1,6})\s+(.*)$/);
     if (heading) {
       closeList(); closeTable();
@@ -92,169 +134,288 @@ function renderMarkdown(markdown) {
     }
     if (line.trim().startsWith("|")) {
       closeList();
-      const cells = line.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+      const cells = line.trim().replace(/^\||\|$/g, "").split("|").map((cell) => cell.trim());
       if (/^\|?[\s:-]+\|/.test(lines[i + 1] || "") && !inTable) {
         inTable = true;
-        out.push("<table><thead><tr>" + cells.map((c) => `<th>${inline(c)}</th>`).join("") + "</tr></thead><tbody>");
+        out.push("<table><thead><tr>" + cells.map((cell) => `<th>${inline(cell)}</th>`).join("") + "</tr></thead><tbody>");
         i += 1;
         continue;
       }
       if (inTable) {
-        out.push("<tr>" + cells.map((c) => `<td>${inline(c)}</td>`).join("") + "</tr>");
+        out.push("<tr>" + cells.map((cell) => `<td>${inline(cell)}</td>`).join("") + "</tr>");
         continue;
       }
     }
-    if (/^\s*>\s?/.test(line)) { closeList(); closeTable(); out.push(`<blockquote>${inline(line.replace(/^\s*>\s?/, ""))}</blockquote>`); continue; }
-    if (/^\s*(---|\*\*\*)\s*$/.test(line)) { closeList(); closeTable(); out.push("<hr/>"); continue; }
-
-    closeList(); closeTable();
-    out.push(`<p>${inline(line)}</p>`);
+    if (/^\s*>\s?/.test(line)) {
+      closeList(); closeTable(); out.push(`<blockquote>${inline(line.replace(/^\s*>\s?/, ""))}</blockquote>`); continue;
+    }
+    if (/^\s*(---|\*\*\*)\s*$/.test(line)) {
+      closeList(); closeTable(); out.push("<hr/>"); continue;
+    }
+    closeList(); closeTable(); out.push(`<p>${inline(line)}</p>`);
   }
   closeList(); closeTable();
   if (inCode) out.push("</pre>");
   return out.join("\n");
 }
 
-/* ------------------------------ rendering -------------------------------- */
+function statusMeta(status) {
+  return STATUS[status] || { label: status || "未知", title: "任务状态未知", kind: "failed" };
+}
 
-function renderBadges(config, health) {
-  el("badges").innerHTML = [
-    `<div class="badge">provider <strong>${config.provider}</strong></div>`,
-    `<div class="badge">model <strong>${config.default_model}</strong></div>`,
-    `<div class="badge">embedding <strong>${config.embedding_provider}</strong></div>`,
-    `<div class="badge">mcp <strong>${config.mcp_transport}</strong></div>`,
-    `<div class="badge">web <strong>${config.web_search_mode}</strong></div>`,
-    `<div class="badge">tools <strong>${(health.tools || []).length}</strong></div>`,
+function friendlyError(errorOrKind) {
+  const kind = typeof errorOrKind === "string" ? errorOrKind : (errorOrKind?.kind || "unknown");
+  const [title, message] = ERROR_MESSAGES[kind] || ERROR_MESSAGES.unknown;
+  const detail = typeof errorOrKind === "string"
+    ? errorOrKind
+    : (errorOrKind?.detail || errorOrKind?.message || String(errorOrKind || ""));
+  return { kind, title, message, detail };
+}
+
+function showError(errorOrKind, extraDetail = "") {
+  const message = friendlyError(errorOrKind);
+  el("errorTitle").textContent = message.title;
+  el("errorMessage").textContent = message.message;
+  el("errorDetails").textContent = [message.detail, extraDetail].filter(Boolean).join("\n");
+  el("errorPanel").classList.remove("hidden");
+}
+
+function clearError() {
+  el("errorPanel").classList.add("hidden");
+  el("errorDetails").textContent = "";
+}
+
+function setBusy(busy) {
+  el("run").disabled = busy || !privateApiReady;
+  el("run").textContent = busy ? "正在启动…" : "开始研究";
+  el("cancelResearch").classList.toggle("hidden", !busy || !currentTaskId);
+}
+
+function formatDate(value) {
+  if (!value) return "刚刚";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+function renderHealth(health) {
+  const warning = health.status !== "ok" || !health.provider_ready;
+  el("badges").innerHTML = `<span class="system-pill ${warning ? "warning" : ""}"><span>${warning ? "需要配置" : "服务正常"}</span></span>`;
+  el("footerInfo").textContent = `ResearchPilot v${health.version} · ${health.provider} / ${health.model}`;
+  if (!health.provider_ready) {
+    el("providerNotice").textContent = "开始第一次研究前，请联系管理员完成模型配置。";
+    el("providerNotice").classList.remove("hidden");
+  }
+  if (health.auth_required) {
+    el("accessTokenGroup").classList.remove("hidden");
+  }
+}
+
+function renderConfig(config) {
+  el("model").value = config.default_model;
+  el("temperature").value = config.temperature;
+  el("presence").value = config.presence_penalty;
+  el("frequency").value = config.frequency_penalty;
+  el("topk").value = config.top_k;
+  el("iterations").value = config.max_iterations;
+  el("maxtokens").value = config.max_tokens;
+  const credential = config.provider === "mock"
+    ? "演示模式无需 API Key"
+    : (config.api_key_configured ? "API Key 已由管理员配置" : "API Key 尚未配置");
+  el("modelStatus").innerHTML = [
+    `<span class="model-chip">服务商 <strong>${escapeHtml(config.provider)}</strong></span>`,
+    `<span class="model-chip">模型 <strong>${escapeHtml(config.default_model)}</strong></span>`,
+    `<span class="model-chip">凭据 <strong>${escapeHtml(credential)}</strong></span>`,
   ].join("");
-  el("footerInfo").textContent =
-    `ResearchPilot v${health.version} · provider=${config.provider} · kb=${health.knowledge_base.documents} docs / ${health.knowledge_base.chunks} chunks`;
+  el("settingsSummary").textContent = `${config.provider} · ${config.default_model}`;
+  el("configHint").textContent =
+    `embedding=${config.embedding_provider} · mcp=${config.mcp_transport} · web=${config.web_search_mode} · ` +
+    `token budget=${config.token_budget} · concurrency=${config.max_concurrent_tasks}`;
+}
+
+function metric(label, value) {
+  return `<div class="metric"><span>${label}</span><strong>${value}</strong></div>`;
 }
 
 function renderMetrics(metrics) {
-  if (!metrics) { el("metrics").innerHTML = "<p class='hint'>运行一次研究后显示。</p>"; return; }
-  const rows = [
-    ["latency", `${(metrics.latency_ms / 1000).toFixed(2)}s`],
-    ["llm calls", metrics.llm_calls],
-    ["tool calls", metrics.tool_calls],
-    ["tool failures", metrics.tool_failures],
-    ["retrievals", metrics.retrieval_calls],
-    ["mcp calls", metrics.mcp_calls],
-    ["retries", metrics.retries],
-    ["iterations", metrics.iterations],
-    ["tokens", (metrics.usage?.total_tokens ?? 0).toLocaleString()],
-    ["cost usd", `$${(metrics.usage?.cost_usd ?? 0).toFixed(6)}`],
-  ];
-  el("metrics").innerHTML = rows
-    .map(([label, value]) => `<div class="metric"><span>${label}</span><strong>${value}</strong></div>`)
-    .join("");
+  if (!metrics) {
+    el("metrics").innerHTML = '<div class="empty-state small">暂无运行数据。</div>';
+    return;
+  }
+  el("metrics").innerHTML = [
+    metric("用时", `${(Number(metrics.latency_ms || 0) / 1000).toFixed(1)} 秒`),
+    metric("模型调用", metrics.llm_calls ?? 0),
+    metric("工具调用", metrics.tool_calls ?? 0),
+    metric("资料检索", metrics.retrieval_calls ?? 0),
+    metric("研究轮次", metrics.iterations ?? 0),
+    metric("Token", Number(metrics.usage?.total_tokens || 0).toLocaleString()),
+  ].join("");
 }
 
 function renderTimeline(trace) {
-  if (!trace) { el("timeline").innerHTML = "<p class='hint'>暂无 Trace。</p>"; return; }
+  if (!trace || !(trace.spans || []).length) {
+    el("timeline").innerHTML = '<div class="empty-state small">暂无执行详情。</div>';
+    return;
+  }
   const children = new Map();
-  (trace.spans || []).forEach((span) => {
+  trace.spans.forEach((span) => {
     const key = span.parent_id || "root";
     if (!children.has(key)) children.set(key, []);
     children.get(key).push(span);
   });
-  const walk = (parentId, depth) => {
-    const nodes = children.get(parentId) || [];
-    return nodes.map((span) => {
-      const indent = depth * 18;
-      const tokens = span.usage?.total_tokens ? ` · ${span.usage.total_tokens} tok` : "";
-      const error = span.error ? `<div class="span-error">${escapeHtml(span.error)}</div>` : "";
-      const agentOrTool = span.agent || span.tool || "";
-      const body = `
-        <div class="span kind-${span.kind}" style="margin-left:${indent}px">
-          <div class="span-head">
-            <span><strong>${escapeHtml(span.name)}</strong> <span class="span-meta">${span.kind} ${agentOrTool ? "· " + escapeHtml(agentOrTool) : ""}</span></span>
-            <span class="span-meta">${Number(span.latency_ms || 0).toFixed(0)} ms${tokens}</span>
-          </div>
-          ${error}
-        </div>`;
-      return body + walk(span.span_id, depth + 1);
-    }).join("");
-  };
-  const html = walk("root", 0) || "<p class='hint'>暂无 span。</p>";
-  const metrics = trace.metrics || {};
-  const summary = `<div class="stats" style="margin-bottom:8px">
-      ${chip("spans", (trace.spans || []).length)}
-      ${chip("tokens", (metrics.usage?.total_tokens ?? 0).toLocaleString())}
-      ${chip("tools", metrics.tool_calls ?? 0)}
-      ${chip("llm", metrics.llm_calls ?? 0)}
-    </div>`;
-  el("timeline").innerHTML = summary + html;
+  const walk = (parentId, depth) => (children.get(parentId) || []).map((span) => {
+    const tokens = span.usage?.total_tokens ? ` · ${span.usage.total_tokens} tokens` : "";
+    const error = span.error ? `<div class="span-error">${escapeHtml(span.error)}</div>` : "";
+    return `<div class="span kind-${escapeHtml(span.kind)}" style="margin-left:${depth * 16}px">
+      <div class="span-head"><strong>${escapeHtml(span.name)}</strong><span class="span-meta">${Number(span.latency_ms || 0).toFixed(0)} ms${tokens}</span></div>
+      ${error}</div>${walk(span.span_id, depth + 1)}`;
+  }).join("");
+  el("timeline").innerHTML = walk("root", 0);
 }
 
 function renderSources(sources) {
-  if (!sources || !sources.length) { el("sources").innerHTML = "<p class='hint'>暂无来源。</p>"; return; }
-  el("sources").innerHTML = sources.map((source) => `
-    <div class="list-item">
-      <div><code>${escapeHtml(source.id)}</code> ${escapeHtml(source.title || "")}</div>
-      <div class="meta">${escapeHtml(source.kind)} · score ${Number(source.score || 0).toFixed(3)} · ${escapeHtml(source.url || source.locator || "")}</div>
-    </div>`).join("");
+  const items = sources || [];
+  el("sourceCount").textContent = String(items.length);
+  if (!items.length) {
+    el("sources").innerHTML = '<div class="empty-state small">这次研究没有可展示的来源。</div>';
+    return;
+  }
+  el("sources").innerHTML = items.map((source, index) => {
+    const url = safeExternalUrl(source.url);
+    const title = escapeHtml(source.title || source.locator || `来源 ${index + 1}`);
+    const heading = url
+      ? `<a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">${index + 1}. ${title}</a>`
+      : `<strong>${index + 1}. ${title}</strong>`;
+    const location = source.url || source.locator || source.doc_id || source.id;
+    return `<div class="source-item">${heading}<div class="source-meta">${escapeHtml(location)}</div></div>`;
+  }).join("");
+}
+
+function renderReport(report) {
+  if (!report) {
+    currentReportMarkdown = "";
+    el("report").innerHTML = '<div class="empty-state">这次研究没有生成报告。</div>';
+    return;
+  }
+  currentReportMarkdown = report.markdown || "";
+  el("resultTitle").textContent = report.title || "最终报告";
+  el("report").innerHTML = renderMarkdown(currentReportMarkdown || report.executive_summary || "暂无报告内容。");
+}
+
+function renderHistory(runs) {
+  if (!runs || !runs.length) {
+    el("history").innerHTML = '<div class="empty-state small">还没有研究记录。<br />输入一个问题开始第一次研究。</div>';
+    return;
+  }
+  el("history").innerHTML = runs.map((run) => {
+    const state = statusMeta(run.status);
+    return `<button class="history-item ${run.task_id === currentTaskId ? "active" : ""}" type="button" data-history-task="${escapeHtml(run.task_id)}">
+      <span class="history-question">${escapeHtml(run.question)}</span>
+      <span class="history-meta"><span class="history-status ${state.kind}">${state.label}</span><span>${formatDate(run.completed_at || run.created_at)}</span></span>
+    </button>`;
+  }).join("");
 }
 
 function renderKbStats(stats) {
-  el("kbStats").innerHTML = [
-    chip("docs", stats.documents),
-    chip("chunks", stats.chunks),
-    chip("chars", (stats.characters || 0).toLocaleString()),
-    chip("avg chunk", stats.avg_chunk_chars),
-    chip("dim", stats.dimension),
-  ].join("");
+  el("kbStats").innerHTML = `<strong>${Number(stats?.documents || 0)}</strong> 份资料`;
 }
 
 function renderKbDocuments(documents) {
-  el("kbDocuments").innerHTML = documents.map((doc) => `
-    <div class="list-item">
-      <div>${escapeHtml(doc.title)}</div>
-      <div class="meta">${doc.doc_id} · ${doc.chunks} chunks · ${doc.source}</div>
-      <button class="ghost tiny" data-delete-doc="${escapeHtml(doc.doc_id)}">delete</button>
-    </div>`).join("") || "<p class='hint'>知识库为空。</p>";
+  if (!documents || !documents.length) {
+    el("kbDocuments").innerHTML = '<div class="empty-state small">团队知识库目前为空。添加资料后，研究时会自动利用这些内容。</div>';
+    return;
+  }
+  el("kbDocuments").innerHTML = documents.map((doc) => `<div class="document-item">
+    <strong>${escapeHtml(doc.title)}</strong>
+    <div class="meta">${Number(doc.chunks || 0)} 个内容片段 · ${escapeHtml(doc.source || "团队资料")}</div>
+    <button class="link-button" type="button" data-delete-doc="${escapeHtml(doc.doc_id)}">删除资料</button>
+  </div>`).join("");
 }
 
 function renderKbSearch(result) {
-  el("kbResults").innerHTML = `
-    <div class="list-item"><div class="meta">query: ${escapeHtml(result.query)} → rewritten: ${escapeHtml(result.rewritten_query)} · ${result.strategy} · ${result.latency_ms} ms</div></div>
-    ` + result.hits.map((hit) => `
-    <div class="list-item">
-      <div><strong>#${hit.rank}</strong> ${escapeHtml(hit.title)} <span class="meta">${Number(hit.score).toFixed(3)}</span></div>
-      <div class="meta">${escapeHtml(hit.chunk_id)} · ${escapeHtml(hit.section || "")}</div>
-      <div class="meta">${escapeHtml((hit.content || "").slice(0, 180))}…</div>
-    </div>`).join("");
+  if (!result?.hits?.length) {
+    el("kbResults").innerHTML = '<div class="empty-state small">没有找到相关资料，试试更换关键词。</div>';
+    return;
+  }
+  el("kbResults").innerHTML = result.hits.map((hit) => `<div class="kb-hit">
+    <strong>${escapeHtml(hit.title)}</strong>
+    <p>${escapeHtml((hit.content || "").slice(0, 220))}${(hit.content || "").length > 220 ? "…" : ""}</p>
+  </div>`).join("");
 }
 
 function renderEvaluation(payload) {
   if (!payload || payload.available === false) {
-    el("evaluation").innerHTML = `<p class="hint">${escapeHtml(
-      (payload && payload.message) || "尚未运行 benchmark（python scripts/run_benchmark.py --provider mock）"
-    )}</p>`;
+    el("evaluation").innerHTML = '<p class="muted">暂无离线评估结果。</p>';
     return;
   }
-  const m = payload.metrics || {};
-  const pct = (v) => (typeof v === "number" ? `${(v * 100).toFixed(1)}%` : "n/a");
-  el("evaluation").innerHTML = `
-    <div class="stats">
-      ${chip("provider", escapeHtml(payload.provider || "-"))}
-      ${chip("tasks", m.tasks ?? "-")}
-      ${chip("success", pct(m.task_success_rate))}
-      ${chip("recall", pct(m.retrieval_recall))}
-      ${chip("citation", pct(m.citation_correctness))}
-      ${chip("tool F1", pct(m.tool_selection_f1))}
-      ${chip("avg latency", m.avg_latency_s != null ? `${m.avg_latency_s}s` : "-")}
-    </div>
-    <div class="scroll small">${(payload.categories || []).map((row) => `
-      <div class="list-item">
-        <div>${escapeHtml(row.category)} <span class="meta">${row.passed}/${row.tasks} · ${pct(row.task_success_rate)}</span></div>
-        <div class="meta">latency ${row.avg_latency_s}s · tokens ${Math.round(row.avg_tokens || 0)} · citation ${pct(row.citation_correctness)}</div>
-      </div>`).join("")}</div>
-    <p class="hint">generated_at ${escapeHtml(payload.generated_at || "")} · 离线 mock 数据仅代表工程管线回归，不代表模型质量</p>`;
+  const metrics = payload.metrics || {};
+  el("evaluation").innerHTML = `<p class="muted">离线评估：${metrics.tasks ?? 0} 个任务 · 成功率 ${Math.round(Number(metrics.task_success_rate || 0) * 100)}%</p>`;
 }
 
-function renderReport(report) {
-  if (!report) { el("report").innerHTML = "<p class='hint'>暂无报告。</p>"; return; }
-  el("report").innerHTML = renderMarkdown(report.markdown || "_report.markdown 为空_");
+function renderMcp(tools) {
+  const names = (tools?.tools || []).map((tool) => escapeHtml(tool.name));
+  el("mcpTools").innerHTML = `<p class="muted">可用工具：${names.join("、") || "无"}</p>`;
+}
+
+function updateProgress(result, trace) {
+  const state = statusMeta(result.status);
+  el("progressTitle").textContent = state.title;
+  el("runStatus").textContent = state.label;
+  el("runStatus").className = `status-pill ${state.kind}`;
+  el("progressPanel").classList.remove("hidden");
+  const names = (trace?.spans || []).map((span) => String(span.name || "").toLowerCase());
+  const writing = names.some((name) => name.includes("writer") || name.includes("report"));
+  const researching = names.some((name) => name.includes("tool") || name.includes("search") || name.includes("retriev"));
+  const stages = [el("stagePrepare"), el("stageResearch"), el("stageReport")];
+  stages.forEach((stage) => { stage.classList.remove("active", "done"); });
+  if (result.status === "completed") {
+    stages.forEach((stage) => stage.classList.add("done"));
+  } else if (writing) {
+    stages[0].classList.add("done"); stages[1].classList.add("done"); stages[2].classList.add("active");
+  } else if (researching || result.status === "running") {
+    stages[0].classList.add("done"); stages[1].classList.add("active");
+  } else {
+    stages[0].classList.add("active");
+  }
+  el("progressMessage").textContent = {
+    pending: "任务正在等待开始。",
+    running: writing ? "正在整理已有信息并生成最终报告。" : "正在搜索和整理与问题相关的信息。",
+    completed: "报告和来源已经准备好。",
+    failed: "研究没有完成，请查看下方提示。",
+    cancelled: "任务已取消。",
+    timed_out: "任务超过最大执行时间并已停止。",
+  }[result.status] || "正在更新任务状态。";
+}
+
+function renderTask(result, trace) {
+  currentTaskId = result.task_id;
+  updateProgress(result, trace);
+  const terminal = !["pending", "running"].includes(result.status);
+  setBusy(!terminal);
+  if (!terminal) return;
+  if (pollTimer) clearTimeout(pollTimer);
+  if (result.status === "completed") {
+    clearError();
+    renderReport(result.report);
+    renderSources(result.evidence?.sources || []);
+    renderMetrics(result.metrics);
+    renderTimeline(trace);
+    const degraded = result.quality === "degraded";
+    el("resultMeta").textContent = degraded
+      ? "研究已完成，但部分信息不可用。报告中保留了可验证的结果。"
+      : `${formatDate(result.completed_at)} · ${(result.evidence?.sources || []).length} 个来源`;
+    el("resultSection").classList.remove("hidden");
+    if (degraded || (result.errors || []).length) {
+      const details = (result.errors || []).join("\n");
+      el("providerNotice").textContent = "研究已完成，但部分模型或工具调用不可用。你仍可以阅读已生成的报告。";
+      el("providerNotice").classList.remove("hidden");
+      if (details) el("errorDetails").textContent = details;
+    }
+  } else {
+    el("resultSection").classList.add("hidden");
+    const kind = result.status === "timed_out" ? "timed_out" : (result.status === "cancelled" ? "cancelled" : "unknown");
+    showError(kind, (result.errors || []).join("\n"));
+  }
 }
 
 async function loadTask(taskId) {
@@ -263,21 +424,38 @@ async function loadTask(taskId) {
     api(`/research/${taskId}`),
     api(`/research/${taskId}/trace`).catch(() => null),
   ]);
-  renderReport(result.report);
-  renderTimeline(trace);
-  renderMetrics(result.metrics);
-  renderSources(result.evidence ? result.evidence.sources : []);
-  const quality = result.quality ? ` · quality=${result.quality}` : "";
-  setStatus(`task ${taskId} · status=${result.status}${quality}${result.errors && result.errors.length ? " · errors=" + result.errors.length : ""}`, result.status === "completed" ? "ok" : "error");
+  renderTask(result, trace);
   return result;
 }
 
-async function runResearch(mode) {
-  const question = el("question").value.trim();
-  if (question.length < 4) { setStatus("请输入至少 4 个字符的问题", "error"); return; }
+function schedulePoll(taskId) {
+  if (pollTimer) clearTimeout(pollTimer);
+  pollTimer = setTimeout(async () => {
+    try {
+      const result = await loadTask(taskId);
+      pollFailures = 0;
+      if (["pending", "running"].includes(result.status)) {
+        schedulePoll(taskId);
+      } else {
+        await loadHistory();
+      }
+    } catch (error) {
+      pollFailures += 1;
+      if (pollFailures < 3) {
+        el("progressMessage").textContent = "暂时无法更新进度，正在重试…";
+        schedulePoll(taskId);
+      } else {
+        setBusy(false);
+        showError(error);
+      }
+    }
+  }, 1500);
+}
+
+function researchPayload(question) {
   const payload = {
     question,
-    mode,
+    mode: "async",
     settings: {
       temperature: Number(el("temperature").value),
       presence_penalty: Number(el("presence").value),
@@ -289,115 +467,257 @@ async function runResearch(mode) {
   };
   const model = el("model").value.trim();
   if (model) payload.settings.model = model;
+  return payload;
+}
 
-  setStatus("运行中…");
+async function runResearch() {
+  clearError();
+  const question = el("question").value.trim();
+  if (!privateApiReady) {
+    showError("authentication_required");
+    el("settings").open = true;
+    el("settings").scrollIntoView({ behavior: "smooth" });
+    return;
+  }
+  if (question.length < 4) {
+    showError(new ApiError("question must contain at least four characters", "unknown", 422, "请输入至少 4 个字符的研究问题。"));
+    el("errorTitle").textContent = "研究问题太短";
+    el("errorMessage").textContent = "请补充一些背景或说明你希望得到什么结果。";
+    return;
+  }
+  currentTaskId = null;
+  el("resultSection").classList.add("hidden");
+  el("progressPanel").classList.remove("hidden");
+  updateProgress({ status: "pending" }, null);
+  setBusy(true);
   try {
-    if (mode === "async") {
-      const submitted = await api("/research", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      setStatus(`已提交 task ${submitted.task_id}，轮询中…`);
-      if (asyncTimer) clearInterval(asyncTimer);
-      asyncTimer = setInterval(async () => {
-        try {
-          const result = await loadTask(submitted.task_id);
-          if (result.status !== "pending" && result.status !== "running") clearInterval(asyncTimer);
-        } catch (error) { /* keep polling */ }
-      }, 1500);
-      return;
-    }
-    const result = await api("/research", {
+    const submitted = await api("/research", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(researchPayload(question)),
     });
-    await loadTask(result.task_id);
+    currentTaskId = submitted.task_id;
+    el("cancelResearch").classList.remove("hidden");
+    schedulePoll(submitted.task_id);
+    await loadHistory();
   } catch (error) {
-    setStatus(`失败：${error.message}`, "error");
+    setBusy(false);
+    el("progressPanel").classList.add("hidden");
+    showError(error);
   }
+}
+
+async function cancelResearch() {
+  if (!currentTaskId) return;
+  el("cancelResearch").disabled = true;
+  el("cancelResearch").textContent = "正在取消…";
+  try {
+    const result = await api(`/research/${currentTaskId}`, { method: "DELETE" });
+    renderTask(result, null);
+    await loadHistory();
+  } catch (error) {
+    showError(error);
+  } finally {
+    el("cancelResearch").disabled = false;
+    el("cancelResearch").textContent = "取消研究";
+  }
+}
+
+async function loadHistory() {
+  try {
+    const runs = await api("/research?limit=12");
+    renderHistory(runs);
+  } catch (error) {
+    if (error.kind !== "authentication_required") showError(error);
+  }
+}
+
+async function loadKnowledgeBase() {
+  const documents = await api("/kb/documents");
+  renderKbStats(documents.stats);
+  renderKbDocuments(documents.documents);
+}
+
+async function loadPrivateData() {
+  try {
+    const [config, documents, runs, tools, evaluation] = await Promise.all([
+      api("/config"),
+      api("/kb/documents"),
+      api("/research?limit=12"),
+      api("/mcp/tools").catch(() => ({ tools: [] })),
+      api("/evaluation/latest").catch(() => ({ available: false })),
+    ]);
+    privateApiReady = true;
+    renderConfig(config);
+    renderKbStats(documents.stats);
+    renderKbDocuments(documents.documents);
+    renderHistory(runs);
+    renderMcp(tools);
+    renderEvaluation(evaluation);
+    clearError();
+    el("providerNotice").classList.add("hidden");
+    setBusy(false);
+    return true;
+  } catch (error) {
+    privateApiReady = false;
+    setBusy(false);
+    if (error.kind === "authentication_required") {
+      el("accessTokenGroup").classList.remove("hidden");
+      el("providerNotice").textContent = "此平台需要访问令牌。打开“模型与高级设置”，输入管理员提供的令牌后即可开始研究。";
+      el("providerNotice").classList.remove("hidden");
+    }
+    showError(error);
+    return false;
+  }
+}
+
+function resetResearch() {
+  currentTaskId = null;
+  currentReportMarkdown = "";
+  clearError();
+  el("progressPanel").classList.add("hidden");
+  el("resultSection").classList.add("hidden");
+  el("question").value = "";
+  el("questionCount").textContent = "0 / 2000";
+  setBusy(false);
+  el("question").focus();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function copyReport() {
+  if (!currentReportMarkdown) return;
+  try {
+    await navigator.clipboard.writeText(currentReportMarkdown);
+    el("copyReport").textContent = "已复制";
+    setTimeout(() => { el("copyReport").textContent = "复制报告"; }, 1600);
+  } catch (error) {
+    showError(new ApiError("clipboard write failed", "unknown", 0, String(error)));
+  }
+}
+
+function bindEvents() {
+  el("question").addEventListener("input", () => {
+    el("questionCount").textContent = `${el("question").value.length} / 2000`;
+  });
+  el("question").addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") runResearch();
+  });
+  el("samples").innerHTML = SAMPLES.map((sample, index) =>
+    `<button data-sample="${index}" type="button">${escapeHtml(sample)}</button>`).join("");
+  el("samples").addEventListener("click", (event) => {
+    const index = event.target?.dataset?.sample;
+    if (index === undefined) return;
+    el("question").value = SAMPLES[Number(index)];
+    el("questionCount").textContent = `${el("question").value.length} / 2000`;
+    el("question").focus();
+  });
+  el("run").addEventListener("click", runResearch);
+  el("cancelResearch").addEventListener("click", cancelResearch);
+  el("newResearch").addEventListener("click", resetResearch);
+  el("copyReport").addEventListener("click", copyReport);
+  el("refreshHistory").addEventListener("click", loadHistory);
+  el("history").addEventListener("click", async (event) => {
+    const button = event.target?.closest?.("[data-history-task]");
+    const taskId = button?.dataset?.historyTask;
+    if (!taskId) return;
+    try {
+      clearError();
+      const result = await loadTask(taskId);
+      renderHistory(await api("/research?limit=12"));
+      if (["pending", "running"].includes(result.status)) schedulePoll(taskId);
+      el("progressPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (error) {
+      showError(error);
+    }
+  });
+  el("applyAccessToken").addEventListener("click", async () => {
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.setItem("researchpilot.accessToken", el("accessToken").value.trim());
+    }
+    const connected = await loadPrivateData();
+    el("applyAccessToken").textContent = connected ? "已连接" : "重新连接";
+  });
+  el("kbSearch").addEventListener("click", async () => {
+    const query = el("kbQuery").value.trim();
+    if (query.length < 2) {
+      el("kbResults").innerHTML = '<div class="empty-state small">请输入至少两个字符。</div>';
+      return;
+    }
+    try {
+      const result = await api(`/kb/search?q=${encodeURIComponent(query)}&strategy=${el("kbStrategy").value}`);
+      renderKbSearch(result);
+    } catch (error) {
+      el("kbResults").innerHTML = `<div class="empty-state small">${escapeHtml(friendlyError(error).message)}</div>`;
+    }
+  });
+  el("kbAdd").addEventListener("click", async () => {
+    const title = el("kbTitle").value.trim();
+    const content = el("kbContent").value.trim();
+    if (title.length < 2 || content.length < 20) {
+      el("kbFeedback").textContent = "请填写标题和至少 20 个字符的内容。";
+      return;
+    }
+    el("kbAdd").disabled = true;
+    el("kbFeedback").textContent = "正在添加…";
+    try {
+      await api("/kb/documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, content, source: "web-ui://inline" }),
+      });
+      el("kbTitle").value = "";
+      el("kbContent").value = "";
+      el("kbFeedback").textContent = "已添加。";
+      await loadKnowledgeBase();
+    } catch (error) {
+      el("kbFeedback").textContent = friendlyError(error).message;
+    } finally {
+      el("kbAdd").disabled = false;
+    }
+  });
+  el("kbDocuments").addEventListener("click", async (event) => {
+    const docId = event.target?.dataset?.deleteDoc;
+    if (!docId) return;
+    if (typeof window.confirm === "function" && !window.confirm("确定删除这份团队资料吗？")) return;
+    event.target.disabled = true;
+    try {
+      await api(`/kb/documents/${encodeURIComponent(docId)}`, { method: "DELETE" });
+      el("kbFeedback").textContent = "资料已删除。";
+      await loadKnowledgeBase();
+    } catch (error) {
+      el("kbFeedback").textContent = friendlyError(error).message;
+    }
+  });
+  el("kbReindex").addEventListener("click", async () => {
+    el("kbReindex").disabled = true;
+    try {
+      await api("/kb/reindex", { method: "POST" });
+      el("kbFeedback").textContent = "知识库已重新索引。";
+      await loadKnowledgeBase();
+    } catch (error) {
+      el("kbFeedback").textContent = friendlyError(error).message;
+    } finally {
+      el("kbReindex").disabled = false;
+    }
+  });
 }
 
 async function boot() {
   const savedToken = typeof sessionStorage === "undefined"
     ? "" : (sessionStorage.getItem("researchpilot.accessToken") || "");
   el("accessToken").value = savedToken;
-  el("applyAccessToken").addEventListener("click", () => {
-    if (typeof sessionStorage !== "undefined") {
-      sessionStorage.setItem("researchpilot.accessToken", el("accessToken").value.trim());
-    }
-    window.location.reload();
-  });
-  el("samples").innerHTML = SAMPLES.map((sample, index) =>
-    `<button data-sample="${index}">${escapeHtml(sample.slice(0, 26))}…</button>`).join("");
-  el("samples").addEventListener("click", (event) => {
-    const index = event.target?.dataset?.sample;
-    if (index !== undefined) el("question").value = SAMPLES[Number(index)];
-  });
-  el("run").addEventListener("click", () => runResearch("sync"));
-  el("runAsync").addEventListener("click", () => runResearch("async"));
-  el("kbSearch").addEventListener("click", async () => {
-    const q = el("kbQuery").value.trim();
-    if (q.length < 2) return;
-    try {
-      renderKbSearch(await api(`/kb/search?q=${encodeURIComponent(q)}&strategy=${el("kbStrategy").value}`));
-    } catch (error) { el("kbResults").innerHTML = `<p class='hint'>${escapeHtml(error.message)}</p>`; }
-  });
-  el("kbReindex").addEventListener("click", async () => {
-    const report = await api("/kb/reindex", { method: "POST" });
-    const docs = await api("/kb/documents");
-    renderKbStats(docs.stats);
-    renderKbDocuments(docs.documents);
-    el("kbResults").innerHTML = `<p class='hint'>reindexed: ${report.documents} docs / ${report.chunks} chunks</p>`;
-  });
-  el("kbDocuments").addEventListener("click", async (event) => {
-    const docId = event.target?.dataset?.deleteDoc;
-    if (!docId) return;
-    try {
-      await api(`/kb/documents/${encodeURIComponent(docId)}`, { method: "DELETE" });
-      const documents = await api("/kb/documents");
-      renderKbStats(documents.stats);
-      renderKbDocuments(documents.documents);
-    } catch (error) {
-      el("kbResults").innerHTML = `<p class='hint'>${escapeHtml(error.message)}</p>`;
-    }
-  });
-
-  const [config, health, documents] = await Promise.all([
-    api("/config"), api("/health"), api("/kb/documents"),
-  ]);
-  renderBadges(config, health);
-  el("model").value = config.default_model;
-  el("temperature").value = config.temperature;
-  el("presence").value = config.presence_penalty;
-  el("frequency").value = config.frequency_penalty;
-  el("topk").value = config.top_k;
-  el("iterations").value = config.max_iterations;
-  el("maxtokens").value = config.max_tokens;
-  el("configHint").textContent =
-    `provider=${config.provider} · token_budget=${config.token_budget} · max_tokens=${config.max_tokens} · ` +
-    `auth=${config.auth_required ? "required" : "off"} · concurrent_tasks=${config.max_concurrent_tasks}`;
-  renderKbStats(documents.stats);
-  renderKbDocuments(documents.documents);
+  bindEvents();
+  setBusy(true);
   try {
-    const tools = await api("/mcp/tools");
-    el("mcpTools").innerHTML = (tools.tools || []).map((tool) => `
-      <div class="list-item"><div><code>${escapeHtml(tool.name)}</code></div>
-      <div class="meta">${escapeHtml(tool.description || "")}</div></div>`).join("")
-      || "<p class='hint'>MCP 客户端不可用。</p>";
-  } catch (error) { el("mcpTools").innerHTML = `<p class='hint'>${escapeHtml(error.message)}</p>`; }
-
-  try {
-    renderEvaluation(await api("/evaluation/latest"));
+    const health = await api("/health");
+    renderHealth(health);
+    await loadPrivateData();
   } catch (error) {
-    el("evaluation").innerHTML = `<p class='hint'>${escapeHtml(error.message)}</p>`;
+    privateApiReady = false;
+    setBusy(false);
+    showError(error);
+    el("history").innerHTML = '<div class="empty-state small">连接服务后会显示研究记录。</div>';
   }
-
-  try {
-    const runs = await api("/research?limit=1");
-    if (runs.length) await loadTask(runs[0].task_id);
-  } catch (error) { /* no previous runs */ }
 }
 
 document.addEventListener("DOMContentLoaded", boot);

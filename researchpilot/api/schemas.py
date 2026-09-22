@@ -18,6 +18,8 @@ class HealthResponse(BaseModel):
     knowledge_base: dict[str, Any] = Field(default_factory=dict)
     tools: list[str] = Field(default_factory=list)
     mcp_transport: str = "inprocess"
+    auth_required: bool = False
+    provider_ready: bool = True
 
 
 class ModelConfig(BaseModel):
@@ -36,6 +38,7 @@ class ModelConfig(BaseModel):
     mcp_transport: str
     web_search_mode: str
     auth_required: bool = False
+    api_key_configured: bool = False
     max_request_body_bytes: int
     max_concurrent_tasks: int
     research_task_timeout_s: float

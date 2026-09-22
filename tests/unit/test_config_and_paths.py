@@ -170,6 +170,7 @@ async def test_config_endpoint_matches_settings(settings: Settings) -> None:
     assert payload["token_budget"] == settings.token_budget
     assert payload["token_budget_live"] == settings.token_budget_live
     assert payload["auth_required"] is False
+    assert payload["api_key_configured"] is bool(settings.api_key)
     assert payload["max_request_body_bytes"] == settings.max_request_body_bytes
     assert payload["max_concurrent_tasks"] == settings.max_concurrent_tasks
     assert payload["default_model"] == app.state.container.provider.model_name()
