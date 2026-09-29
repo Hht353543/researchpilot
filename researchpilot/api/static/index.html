@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f7f8f7" />
+    <title>ResearchPilot · 团队研究空间</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/styles.css?v=4" />
+  </head>
+  <body>
+    <a class="skip-link" href="#mainContent">跳到主要内容</a>
+    <aside class="sidebar">
+      <a class="brand" href="#research" aria-label="ResearchPilot 首页"
+        ><span class="brand-mark" data-icon="compass"></span
+        ><strong>ResearchPilot</strong></a
+      >
+      <div class="workspace-label">
+        <span class="workspace-avatar">RP</span
+        ><span>团队研究空间<small>Team workspace</small></span>
+      </div>
+      <button id="sidebarNew" class="new-research" type="button">
+        <span data-icon="plus"></span>新建研究
+      </button>
+      <nav class="main-nav" aria-label="主要导航">
+        <a href="#research" data-view="research"
+          ><span data-icon="compass"></span>研究</a
+        >
+        <a href="#history" data-view="history"
+          ><span data-icon="history"></span>研究记录<span
+            id="historyNavCount"
+            class="nav-count"
+          ></span
+        ></a>
+        <a href="#knowledge" data-view="knowledge"
+          ><span data-icon="book-open"></span>团队知识库</a
+        >
+      </nav>
+      <div class="sidebar-note">
+        <span data-icon="layers"></span>
+        <p>把复杂问题变成<br />有据可查的团队知识。</p>
+      </div>
+      <div class="sidebar-bottom">
+        <a class="settings-link" href="#settings" data-view="settings"
+          ><span data-icon="settings-2"></span>设置</a
+        >
+        <div id="badges" class="system-status" aria-live="polite"></div>
+        <small id="footerInfo">ResearchPilot</small>
+      </div>
+    </aside>
+    <div class="app-shell">
+      <header class="content-header">
+        <div class="breadcrumb">
+          <span>工作空间</span><span data-icon="chevron-right"></span
+          ><strong id="pageLabel">研究</strong>
+        </div>
+        <span class="header-caption">Research, with perspective.</span>
+      </header>
+      <main id="mainContent" class="workspace" tabindex="-1">
+        <div id="providerNotice" class="notice hidden" role="status"></div>
+        <section id="errorPanel" class="error-panel hidden" role="alert">
+          <span data-icon="circle-alert"></span>
+          <div>
+            <h2 id="errorTitle">操作未能完成</h2>
+            <p id="errorMessage"></p>
+            <details>
+              <summary>技术详情</summary>
+              <pre id="errorDetails"></pre>
+            </details>
+          </div>
+          <button
+            id="dismissError"
+            class="icon-button"
+            aria-label="关闭提示"
+            type="button"
+          >
+            <span data-icon="x"></span>
+          </button>
+        </section>
+        <section
+          id="researchView"
+          class="view home-view"
+          aria-labelledby="homeTitle"
+        >
+          <div class="home-heading">
+            <span class="home-symbol" data-icon="compass"></span>
+            <p class="eyebrow">一个问题，一份更清晰的答案</p>
+            <h1 id="homeTitle">今天，想深入了解什么？</h1>
+            <p>搜索、分析、连接线索。让好奇心成为下一步的依据。</p>
+          </div>
+          <div class="composer">
+            <label class="sr-only" for="question">研究问题</label
+            ><textarea
+              id="question"
+              rows="4"
+              maxlength="2000"
+              placeholder="提出一个值得深入研究的问题…&#10;可以补充背景、比较对象，以及你希望得到的结论。"
+              aria-describedby="composerHint"
+            ></textarea>
+            <div class="composer-footer">
+              <span class="composer-mode"
+                ><span data-icon="scan-line"></span>深度研究</span
+              ><span id="questionCount" class="character-count">0 / 2000</span
+              ><button id="run" class="primary" type="button">
+                开始研究<span data-icon="arrow-up-right"></span>
+              </button>
+            </div>
+          </div>
+          <p id="composerHint" class="composer-hint">
+            <span>结合团队知识与可用来源，生成带引用的报告</span
+            ><span><kbd>Ctrl</kbd> + <kbd>Enter</kbd> 开始</span>
+          </p>
+          <div class="examples">
+            <div class="section-heading compact">
+              <h2>从这里获得灵感</h2>
+              <span class="muted">选一个方向，继续完善问题</span>
+            </div>
+            <div id="samples" class="sample-list"></div>
+          </div>
+          <section class="recent-section" aria-labelledby="recentTitle">
+            <div class="section-heading compact">
+              <h2 id="recentTitle">最近的研究</h2>
+              <a class="text-link" href="#history"
+                >查看全部<span data-icon="arrow-right"></span
+              ></a>
+            </div>
+            <div id="recentHistory" class="history-list">
+              <div class="skeleton-row" aria-label="正在加载最近研究"></div>
+            </div>
+          </section>
+        </section>
+        <section
+          id="taskView"
+          class="view task-view hidden"
+          aria-label="研究任务"
+        >
+          <a class="text-link back-link" href="#history"
+            ><span data-icon="arrow-left"></span>研究记录</a
+          >
+          <section
+            id="progressPanel"
+            class="progress-panel hidden"
+            aria-live="polite"
+          >
+            <div class="progress-heading">
+              <span class="activity-indicator" aria-hidden="true"></span
+              ><span id="runStatus" class="status-pill pending">准备中</span>
+            </div>
+            <h1 id="progressTitle">正在准备研究</h1>
+            <p id="progressQuery" class="progress-query"></p>
+            <p id="progressMessage" class="muted">任务已经提交，请稍候。</p>
+            <div
+              id="progressActivity"
+              class="activity-track"
+              aria-hidden="true"
+            >
+              <span></span>
+            </div>
+            <p class="progress-explainer">
+              进度随实际任务状态更新。研究完成后，报告与来源会显示在这里。
+            </p>
+            <div class="progress-actions">
+              <button id="cancelResearch" class="danger hidden" type="button">
+                取消研究</button
+              ><button
+                id="retryResearch"
+                class="secondary hidden"
+                type="button"
+              >
+                修改问题，重新研究
+              </button>
+            </div>
+          </section>
+          <section
+            id="resultSection"
+            class="result-section hidden"
+            aria-labelledby="resultTitle"
+          >
+            <div class="result-header">
+              <div class="result-kicker">
+                <span class="status-pill completed">研究完成</span
+                ><span id="qualityBadge" class="status-pill partial hidden"
+                  >部分结果</span
+                ><span id="resultMeta" class="muted"></span>
+              </div>
+              <h1 id="resultTitle">研究报告</h1>
+              <details class="original-question">
+                <summary>原始研究问题</summary>
+                <p id="resultQuestion"></p>
+              </details>
+              <div class="result-actions">
+                <button id="copyReport" class="secondary" type="button">
+                  <span data-icon="copy"></span>复制报告</button
+                ><button id="downloadReport" class="secondary" type="button">下载报告</button
+                ><button id="followupResearch" class="secondary" type="button">
+                  <span data-icon="messages-square"></span>追问</button
+                ><button id="newResearch" class="text-button" type="button">
+                  新建研究<span data-icon="plus"></span>
+                </button>
+              </div>
+            </div>
+            <nav class="report-nav" aria-label="报告章节">
+              <a href="#report" data-section="report" class="active">研究报告</a
+              ><a href="#sourceSection" data-section="sourceSection"
+                >参考来源<span id="sourceCount" class="count-badge">0</span></a
+              ><a href="#executionDetails" data-section="executionDetails"
+                >执行详情</a
+              >
+            </nav>
+            <article id="report" class="markdown"></article>
+            <section id="sourceSection" class="sources-section">
+              <div class="section-heading">
+                <div>
+                  <h2>参考来源</h2>
+                  <p class="section-copy">沿着证据，继续探索。</p>
+                </div>
+              </div>
+              <div id="sources" class="source-list"></div>
+            </section>
+            <details id="executionDetails" class="technical-panel">
+              <summary>
+                <span data-icon="activity"></span>执行详情<span class="muted"
+                  >运行指标与技术记录</span
+                >
+              </summary>
+              <div class="technical-content">
+                <h3>运行概况</h3>
+                <div id="metrics" class="metrics"></div>
+                <h3>执行记录</h3>
+                <div id="timeline" class="timeline"></div>
+              </div>
+            </details>
+          </section>
+        </section>
+        <section
+          id="historyView"
+          class="view hidden"
+          aria-labelledby="historyTitle"
+        >
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">你的研究，一处整理</p>
+              <h1 id="historyTitle">研究记录</h1>
+              <p>回到之前的问题，接着往下探索。</p>
+            </div>
+            <button id="refreshHistory" class="secondary" type="button">
+              <span data-icon="rotate-cw"></span>刷新
+            </button>
+          </div>
+          <div class="list-toolbar">
+            <label class="search-field"
+              ><span data-icon="search"></span
+              ><input
+                id="historySearch"
+                type="search"
+                placeholder="搜索研究问题"
+                aria-label="搜索研究记录" /></label
+            ><span id="historyCount" class="muted"></span>
+          </div>
+          <div id="history" class="history-list">
+            <div class="skeleton-row" aria-label="正在加载研究记录"></div>
+            <div class="skeleton-row" aria-hidden="true"></div>
+          </div>
+        </section>
+        <section
+          id="knowledge"
+          class="view hidden"
+          aria-labelledby="knowledgeTitle"
+        >
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">为研究提供更多上下文</p>
+              <h1 id="knowledgeTitle">团队知识库</h1>
+              <p>把文档、经验与团队共识，带进每一次研究。</p>
+            </div>
+            <button id="openKnowledgeDialog" class="primary" type="button">
+              <span data-icon="plus"></span>添加资料
+            </button>
+          </div>
+          <div class="file-import-row">
+            <label class="secondary file-picker">导入文件
+              <input id="kbFiles" type="file" accept=".txt,.md,.markdown,.csv,.json,.jsonl" multiple />
+            </label>
+            <span class="muted">TXT、Markdown、CSV、JSON、JSONL；也可直接粘贴资料。</span>
+          </div>
+          <div class="knowledge-banner">
+            <span data-icon="book-open"></span
+            ><span>团队资料会自动参与研究，帮助答案贴近你们的实际情况。</span
+            ><span id="kbStats" class="summary-stat"></span>
+          </div>
+          <div class="list-toolbar">
+            <label class="search-field"
+              ><span data-icon="search"></span
+              ><input
+                id="kbQuery"
+                type="search"
+                placeholder="搜索资料中的内容"
+                aria-label="搜索团队知识库" /></label
+            ><button id="kbSearch" class="secondary" type="button">搜索</button>
+            <details class="search-options">
+              <summary>搜索选项</summary>
+              <label for="kbStrategy">检索方式</label
+              ><select id="kbStrategy">
+                <option value="hybrid">综合搜索</option>
+                <option value="keyword">关键词</option>
+                <option value="dense">语义搜索</option>
+              </select>
+            </details>
+          </div>
+          <div
+            id="kbResults"
+            class="kb-results hidden"
+            aria-live="polite"
+          ></div>
+          <div class="section-heading compact document-heading">
+            <h2>所有资料</h2>
+            <span class="muted">供团队研究使用</span>
+          </div>
+          <div id="kbDocuments" class="document-list">
+            <div class="skeleton-row" aria-label="正在加载团队资料"></div>
+            <div class="skeleton-row" aria-hidden="true"></div>
+          </div>
+          <p id="kbFeedback" class="feedback" role="status"></p>
+          <details class="advanced-inline">
+            <summary>知识库维护</summary>
+            <p id="kbReindexHint" class="muted">
+              重新索引会从部署目录重新载入资料，通常由管理员使用。
+            </p>
+            <button id="kbReindex" class="secondary" type="button">
+              重新索引
+            </button>
+          </details>
+        </section>
+        <section
+          id="settings"
+          class="view settings-view hidden"
+          aria-labelledby="settingsTitle"
+        >
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">让研究适合你的工作方式</p>
+              <h1 id="settingsTitle">设置</h1>
+              <p id="settingsIntro">查看平台连接，调整研究参数。</p>
+            </div>
+            <span id="settingsSummary" class="muted"></span>
+          </div>
+          <section id="desktopConnection" class="desktop-connection hidden">
+            <h2 id="setupHeading">连接你的 AI 服务</h2>
+            <p id="setupCopy">只需输入自己的 API Key，其余设置已准备好。</p>
+            <label for="connectionKey">API Key
+              <input id="connectionKey" type="password" autocomplete="off" spellcheck="false" placeholder="粘贴你的 DeepSeek API Key" />
+            </label>
+            <p id="keyStatus" class="muted"></p>
+            <details class="advanced-inline">
+              <summary>更换服务商或修改地址</summary>
+              <div class="settings-grid">
+                <label for="connectionService">AI 服务商<select id="connectionService"><option value="deepseek">DeepSeek</option><option value="openai">OpenAI</option><option value="custom">其他兼容服务</option></select></label>
+                <label for="connectionUrl">服务地址<input id="connectionUrl" type="url" /></label>
+              </div>
+              <button id="testConnection" type="button" class="secondary">测试连接</button>
+            </details>
+            <div class="connection-actions">
+              <button id="saveConnection" class="primary" type="button">测试并保存</button>
+              <button id="clearConnectionKey" class="text-button hidden" type="button">清除已保存的密钥</button>
+            </div>
+            <p id="connectionFeedback" class="feedback" role="status" aria-live="polite"></p>
+          </section>
+          <section id="managedConnection" class="setting-section">
+            <div class="setting-description">
+              <h2>AI 服务</h2>
+              <p>模型与凭据由管理员配置。</p>
+            </div>
+            <div class="setting-body">
+              <div id="modelStatus" class="model-status"></div>
+              <p class="muted">此页面不会显示或保存模型 API Key。</p>
+            </div>
+          </section>
+          <details id="researchPreferences" class="advanced-settings">
+            <summary>研究偏好与模型（高级）</summary>
+            <div class="setting-description">
+              <h2>研究偏好</h2>
+              <p id="preferencesHint">修改后应用于本标签页的新研究。</p>
+            </div>
+            <div class="setting-body">
+              <div class="settings-grid">
+                <label for="model">模型<input id="model" type="text" /></label
+                ><label for="topk"
+                  >参考资料数量<input
+                    id="topk"
+                    type="number"
+                    min="1"
+                    max="20" /></label
+                ><label for="iterations"
+                  >最多研究轮次<input
+                    id="iterations"
+                    type="number"
+                    min="1"
+                    max="4"
+                /></label>
+              </div>
+              <div class="setting-readonly">
+                <span>最长研究时间<strong id="timeoutSetting"></strong></span
+                ><span>研究资源预算<strong id="budgetSetting"></strong></span>
+              </div>
+              <p id="limitsHint" class="muted">时间与预算由平台管理员设置。</p>
+            </div>
+          </details>
+          <section id="platformAccess" class="setting-section">
+            <div class="setting-description">
+              <h2>平台访问</h2>
+              <p>连接到团队的 ResearchPilot。</p>
+            </div>
+            <div class="setting-body">
+              <p id="accessStatus" class="muted">此平台仅供本地访问。</p>
+              <div id="accessTokenGroup" class="auth-box hidden">
+                <label for="accessToken">平台访问令牌</label>
+                <div class="field-row">
+                  <input
+                    id="accessToken"
+                    type="password"
+                    autocomplete="off"
+                    placeholder="管理员提供的访问令牌"
+                  /><button
+                    id="applyAccessToken"
+                    class="secondary"
+                    type="button"
+                  >
+                    连接平台
+                  </button>
+                </div>
+                <p class="muted">令牌仅保存在当前浏览器标签页。</p>
+              </div>
+            </div>
+          </section>
+          <details class="advanced-settings">
+            <summary>
+              高级设置<span class="muted">生成参数与开发者信息</span>
+            </summary>
+            <div class="settings-grid">
+              <label for="temperature"
+                >随机性<input
+                  id="temperature"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="2" /></label
+              ><label for="presence"
+                >主题扩展<input
+                  id="presence"
+                  type="number"
+                  step="0.1"
+                  min="-2"
+                  max="2" /></label
+              ><label for="frequency"
+                >重复抑制<input
+                  id="frequency"
+                  type="number"
+                  step="0.1"
+                  min="-2"
+                  max="2" /></label
+              ><label for="maxtokens"
+                >最长输出<input
+                  id="maxtokens"
+                  type="number"
+                  min="64"
+                  max="16000"
+              /></label>
+            </div>
+            <div id="desktopLimits" class="settings-grid hidden">
+              <label for="desktopTimeout">最长研究时间（秒）<input id="desktopTimeout" type="number" min="30" max="3600" /></label>
+              <label for="desktopBudget">研究资源预算（tokens）<input id="desktopBudget" type="number" min="1000" max="1000000" /></label>
+            </div>
+            <p id="configHint" class="muted mono"></p>
+            <div id="mcpTools"></div>
+            <div id="evaluation"></div>
+          </details>
+          <details id="desktopDiagnostics" class="advanced-settings hidden">
+            <summary>诊断与程序管理</summary>
+            <p class="muted">关闭浏览器后，研究会继续运行。再次双击程序可重新打开页面。</p>
+            <button id="loadDiagnostics" class="secondary" type="button">查看诊断</button>
+            <button id="downloadDiagnostics" class="secondary" type="button">下载诊断</button>
+            <button id="desktopExit" class="text-button" type="button">退出 ResearchPilot</button>
+            <pre id="diagnosticsOutput" class="diagnostics-output"></pre>
+          </details>
+        </section>
+      </main>
+    </div>
+    <dialog id="knowledgeDialog" aria-labelledby="knowledgeDialogTitle">
+      <form id="knowledgeForm">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">团队知识</p>
+            <h2 id="knowledgeDialogTitle">添加一份资料</h2>
+          </div>
+          <button
+            id="closeKnowledgeDialog"
+            class="icon-button"
+            type="button"
+            aria-label="关闭添加资料"
+          >
+            <span data-icon="x"></span>
+          </button>
+        </div>
+        <p class="muted">
+          粘贴会议记录、技术文档或团队经验。研究时会自动引用相关内容。
+        </p>
+        <label for="kbTitle"
+          >资料标题<input
+            id="kbTitle"
+            autofocus
+            type="text"
+            minlength="2"
+            maxlength="200"
+            required
+            placeholder="例如：团队技术选型原则" /></label
+        ><label for="kbContent"
+          >资料内容<textarea
+            id="kbContent"
+            rows="8"
+            minlength="20"
+            maxlength="500000"
+            required
+            placeholder="粘贴资料正文，至少 20 个字符…"
+          ></textarea>
+        </label>
+        <p id="kbDialogFeedback" class="feedback" role="status"></p>
+        <div class="dialog-footer">
+          <button id="cancelKnowledgeDialog" class="secondary" type="button">
+            取消</button
+          ><button id="kbAdd" class="primary" type="submit">
+            添加到知识库
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <div id="toast" class="toast hidden" role="status"></div>
+    <script src="/static/app.js?v=7"></script>
+    <script src="/static/desktop.js?v=1"></script>
+  </body>
+</html>

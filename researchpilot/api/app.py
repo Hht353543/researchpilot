@@ -1,0 +1,511 @@
+"""FastAPI application: typed, validated, traced REST surface."""
+
+from __future__ import annotations
+
+import logging
+import secrets
+import time
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+
+from researchpilot import __version__
+from researchpilot.api.schemas import (
+    DocumentDetail,
+    DocumentIngestRequest,
+    DocumentIngestResponse,
+    DocumentListResponse,
+    FileImportRequest,
+    HealthResponse,
+    KnowledgeSearchResponse,
+    MetricsResponse,
+    ModelConfig,
+    RunSummary,
+    SourcesResponse,
+    SubmitResponse,
+    TraceResponse,
+)
+from researchpilot.api.service import ServiceContainer
+from researchpilot.config import Settings, get_settings
+from researchpilot.llm.base import BudgetExceededError, LLMConfigError, LLMError
+from researchpilot.persistence import PersistenceCorruptionError, PersistenceError
+from researchpilot.pipeline import CapacityExceededError, PipelineClosedError, StorageUnavailableError
+from researchpilot.rag.loader import SUPPORTED_SUFFIXES
+from researchpilot.rag.retriever import RetrievalResult
+from researchpilot.schemas import ResearchRequest, ResearchResult
+from researchpilot.security import safe_diagnostic
+from researchpilot.utils import utc_now_iso
+
+if TYPE_CHECKING:
+    from researchpilot.desktop.api import DesktopController
+
+STATIC_DIR = Path(__file__).parent / "static"
+logger = logging.getLogger("researchpilot.api")
+
+
+def create_app(settings: Settings | None = None, *, desktop: DesktopController | None = None) -> FastAPI:
+    settings = settings or get_settings()
+    logging.basicConfig(
+        level=getattr(logging, settings.log_level.upper(), logging.INFO),
+        format="%(asctime)s %(levelname)s %(name)s :: %(message)s",
+    )
+    container = ServiceContainer(settings)
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> Any:
+        try:
+            yield
+        finally:
+            container.close()
+
+    app = FastAPI(
+        title="ResearchPilot API",
+        version=__version__,
+        description=(
+            "Multi-agent deep research and knowledge base platform: structured agents, "
+            "hybrid RAG, tool registry, MCP server, memory, tracing and evaluation."
+        ),
+        lifespan=lifespan,
+    )
+    app.state.container = container
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[] if desktop else ["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    @app.middleware("http")
+    async def enforce_runtime_boundaries(request: Request, call_next: Any) -> Any:
+        if desktop:
+            origin = request.headers.get("origin")
+            if request.url.hostname not in {"127.0.0.1", "localhost"} or (
+                origin and origin != str(request.base_url).rstrip("/")
+            ):
+                return JSONResponse(status_code=403, content={"detail": "仅允许本机页面访问。"})
+            if request.method in {"POST", "PUT", "PATCH", "DELETE"} and (
+                request.headers.get("x-researchpilot") != "desktop"
+            ):
+                return JSONResponse(status_code=403, content={"detail": "请从 ResearchPilot 页面操作。"})
+        content_length = request.headers.get("content-length")
+        too_large = False
+        if content_length:
+            try:
+                too_large = int(content_length) > settings.max_request_body_bytes
+            except ValueError:
+                too_large = True
+        if not too_large and request.method in {"POST", "PUT", "PATCH"}:
+            too_large = len(await request.body()) > settings.max_request_body_bytes
+        if too_large:
+            return JSONResponse(
+                status_code=413,
+                content={
+                    "detail": f"request body exceeds {settings.max_request_body_bytes} bytes",
+                    "kind": "request_too_large",
+                },
+            )
+
+        public = request.url.path == "/" or request.url.path == "/health"
+        public = public or request.url.path.startswith("/static/")
+        if settings.access_token and not public and request.method != "OPTIONS":
+            authorization = request.headers.get("authorization", "")
+            scheme, _, credential = authorization.partition(" ")
+            authenticated = scheme.lower() == "bearer" and secrets.compare_digest(
+                credential.encode("utf-8"), settings.access_token.encode("utf-8")
+            )
+            if not authenticated:
+                return JSONResponse(
+                    status_code=401,
+                    content={
+                        "detail": "a valid Bearer token is required",
+                        "kind": "authentication_required",
+                    },
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+        return await call_next(request)
+
+    @app.middleware("http")
+    async def add_request_timing(request: Request, call_next: Any) -> Any:
+        started = time.perf_counter()
+        response = await call_next(request)
+        elapsed = (time.perf_counter() - started) * 1000
+        response.headers["X-Process-Time-Ms"] = f"{elapsed:.2f}"
+        if not request.url.path.startswith("/static"):
+            logger.info(
+                "%s %s -> %s (%.1f ms)",
+                request.method,
+                request.url.path,
+                response.status_code,
+                elapsed,
+            )
+        return response
+
+    @app.exception_handler(LLMConfigError)
+    async def llm_config_handler(request: Request, exc: LLMConfigError) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": safe_diagnostic(str(exc), secrets=(container.settings.api_key,)),
+                "kind": "llm_config",
+            },
+        )
+
+    @app.exception_handler(BudgetExceededError)
+    async def budget_handler(request: Request, exc: BudgetExceededError) -> JSONResponse:
+        return JSONResponse(status_code=429, content={"detail": str(exc), "kind": "token_budget"})
+
+    @app.exception_handler(LLMError)
+    async def llm_handler(request: Request, exc: LLMError) -> JSONResponse:
+        return JSONResponse(
+            status_code=502,
+            content={
+                "detail": safe_diagnostic(str(exc), secrets=(container.settings.api_key,)),
+                "kind": "llm",
+            },
+        )
+
+    @app.exception_handler(StorageUnavailableError)
+    async def storage_handler(request: Request, exc: StorageUnavailableError) -> JSONResponse:
+        return JSONResponse(status_code=503, content={"detail": str(exc), "kind": "storage_unavailable"})
+
+    @app.exception_handler(PersistenceCorruptionError)
+    async def persistence_corruption_handler(
+        request: Request, exc: PersistenceCorruptionError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "persisted state is corrupted", "kind": "persistence_corruption"},
+        )
+
+    @app.exception_handler(PersistenceError)
+    async def persistence_handler(request: Request, exc: PersistenceError) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "persistent state could not be committed", "kind": "persistence_unavailable"},
+        )
+
+    @app.exception_handler(CapacityExceededError)
+    async def capacity_handler(request: Request, exc: CapacityExceededError) -> JSONResponse:
+        return JSONResponse(
+            status_code=429,
+            content={"detail": str(exc), "kind": "capacity_exceeded"},
+            headers={"Retry-After": "1"},
+        )
+
+    @app.exception_handler(PipelineClosedError)
+    async def shutting_down_handler(request: Request, exc: PipelineClosedError) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "research service is shutting down", "kind": "shutting_down"},
+        )
+
+    @app.exception_handler(OSError)
+    async def os_error_handler(request: Request, exc: OSError) -> JSONResponse:
+        """Any storage/IO failure must surface as 503, not an unhandled traceback."""
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "storage operation failed", "kind": "storage_unavailable"},
+        )
+
+    # -- meta --------------------------------------------------------------- #
+    @app.get("/health", response_model=HealthResponse, tags=["meta"])
+    def health() -> HealthResponse:
+        settings = container.settings
+        kb_stats = container.knowledge_base.stats()
+        return HealthResponse(
+            status="degraded" if kb_stats.get("persistence_error") else "ok",
+            version=__version__,
+            provider=settings.provider,
+            model=container.provider.model_name(),
+            knowledge_base=kb_stats,
+            tools=container.pipeline_tool_names(),
+            mcp_transport=container.mcp_mode,
+            auth_required=bool(settings.access_token),
+            provider_ready=settings.provider == "mock" or bool(settings.api_key),
+            desktop_mode=desktop is not None,
+            instance_id=desktop.instance_id if desktop else "",
+        )
+
+    @app.get("/config", response_model=ModelConfig, tags=["meta"])
+    def config() -> ModelConfig:
+        settings = container.settings
+        return ModelConfig(
+            provider=settings.provider,
+            models=sorted(settings.price_table().keys()),
+            default_model=container.provider.model_name(),
+            temperature=settings.temperature,
+            presence_penalty=settings.presence_penalty,
+            frequency_penalty=settings.frequency_penalty,
+            max_tokens=settings.max_tokens,
+            top_k=settings.top_k,
+            max_iterations=settings.max_iterations,
+            token_budget=settings.token_budget,
+            token_budget_live=settings.token_budget_live,
+            embedding_provider=settings.embedding_provider,
+            mcp_transport=settings.mcp_transport,
+            web_search_mode=settings.web_search_mode,
+            auth_required=bool(settings.access_token),
+            api_key_configured=bool(settings.api_key),
+            max_request_body_bytes=settings.max_request_body_bytes,
+            max_concurrent_tasks=settings.max_concurrent_tasks,
+            research_task_timeout_s=settings.research_task_timeout_s,
+            task_heartbeat_interval_s=settings.task_heartbeat_interval_s,
+            recovery_stale_after_s=settings.recovery_stale_after_s,
+        )
+
+    # -- research ----------------------------------------------------------- #
+    @app.post("/research", response_model=ResearchResult, tags=["research"])
+    def create_research(request: ResearchRequest) -> Any:
+        if request.mode == "async":
+            task_id = container.submit_research(request)
+            return JSONResponse(
+                status_code=202,
+                content=SubmitResponse(
+                    task_id=task_id, status="pending", message="poll /research/{task_id}"
+                ).model_dump(),
+            )
+        result = container.run_research(request)
+        if any(error.startswith("persistence[") for error in result.errors):
+            raise StorageUnavailableError("research artifacts could not be persisted")
+        return result
+
+    @app.get("/research", response_model=list[RunSummary], tags=["research"])
+    def list_research(limit: int = Query(default=20, ge=1, le=100)) -> list[RunSummary]:
+        summaries: list[RunSummary] = []
+        for result in container.pipeline.list_results(limit=limit):
+            summaries.append(
+                RunSummary(
+                    task_id=result.task_id,
+                    question=result.question,
+                    status=result.status,
+                    quality=result.quality,
+                    created_at=result.created_at,
+                    completed_at=result.completed_at,
+                    citations=len(result.evidence.sources),
+                    latency_ms=result.metrics.latency_ms,
+                    errors=len(result.errors),
+                )
+            )
+        return summaries
+
+    @app.get("/research/{task_id}", response_model=ResearchResult, tags=["research"])
+    def get_research(task_id: str) -> ResearchResult:
+        result = container.pipeline.get_result(task_id)
+        if result is None:
+            raise HTTPException(status_code=404, detail=f"unknown task_id: {task_id}")
+        return result
+
+    @app.delete("/research/{task_id}", response_model=ResearchResult, tags=["research"])
+    def cancel_research(task_id: str) -> ResearchResult:
+        if not container.cancel_research(task_id):
+            existing = container.pipeline.get_result(task_id)
+            if existing is None:
+                raise HTTPException(status_code=404, detail=f"unknown task_id: {task_id}")
+            raise HTTPException(status_code=409, detail=f"task is already {existing.status}")
+        result = container.pipeline.get_result(task_id)
+        if result is None:  # pragma: no cover - terminal publication is synchronous
+            raise HTTPException(status_code=503, detail="cancelled task state is unavailable")
+        return result
+
+    @app.get("/research/{task_id}/trace", response_model=TraceResponse, tags=["research"])
+    def get_trace(task_id: str) -> Any:
+        trace = container.trace_store.get(task_id)
+        if trace is None:
+            raise HTTPException(status_code=404, detail=f"no trace for task_id: {task_id}")
+        return trace
+
+    @app.get("/research/{task_id}/sources", response_model=SourcesResponse, tags=["research"])
+    def get_sources(task_id: str) -> SourcesResponse:
+        result = container.pipeline.get_result(task_id)
+        if result is None:
+            raise HTTPException(status_code=404, detail=f"unknown task_id: {task_id}")
+        return SourcesResponse(task_id=task_id, sources=result.evidence.sources)
+
+    @app.get("/research/{task_id}/metrics", response_model=MetricsResponse, tags=["research"])
+    def get_metrics(task_id: str) -> Any:
+        result = container.pipeline.get_result(task_id)
+        if result is None:
+            raise HTTPException(status_code=404, detail=f"unknown task_id: {task_id}")
+        return result.metrics
+
+    # -- knowledge base ----------------------------------------------------- #
+    @app.get("/kb/documents", response_model=DocumentListResponse, tags=["knowledge-base"])
+    def kb_documents() -> DocumentListResponse:
+        kb = container.knowledge_base
+        return DocumentListResponse(documents=kb.summaries(), stats=kb.stats())
+
+    @app.get("/kb/documents/{doc_id}", response_model=DocumentDetail, tags=["knowledge-base"])
+    def kb_document(doc_id: str) -> DocumentDetail:
+        kb = container.knowledge_base
+        document = kb.get_document(doc_id)
+        if document is None:
+            raise HTTPException(status_code=404, detail=f"unknown doc_id: {doc_id}")
+        chunks = kb.document_chunks(doc_id)
+        return DocumentDetail(
+            document={
+                "doc_id": document.doc_id,
+                "title": document.title,
+                "source": document.source,
+                "kind": document.kind,
+                "metadata": document.metadata,
+                "created_at": document.created_at,
+                "characters": len(document.content),
+            },
+            chunks=[
+                {
+                    "chunk_id": chunk.chunk_id,
+                    "section": chunk.metadata.get("section", ""),
+                    "characters": len(chunk.content),
+                    "preview": chunk.content[:240],
+                }
+                for chunk in chunks
+            ],
+        )
+
+    @app.get("/kb/search", response_model=KnowledgeSearchResponse, tags=["knowledge-base"])
+    def kb_search(
+        q: str = Query(min_length=2, max_length=400),
+        top_k: int = Query(default=6, ge=1, le=20),
+        strategy: str = Query(default="hybrid", pattern="^(dense|keyword|hybrid)$"),
+        rewrite: bool = True,
+    ) -> KnowledgeSearchResponse:
+        started = time.perf_counter()
+        result: RetrievalResult = container.knowledge_base.search(
+            q, top_k=top_k, strategy=strategy, rewrite=rewrite
+        )
+        latency = (time.perf_counter() - started) * 1000
+        hits = [
+            {
+                **hit.as_item(),
+                "rank": hit.rank,
+                "components": hit.components,
+                "section": hit.chunk.metadata.get("section", ""),
+            }
+            for hit in result.hits
+        ]
+        return KnowledgeSearchResponse(
+            query=result.query,
+            rewritten_query=result.rewritten_query,
+            strategy=result.strategy,
+            hits=hits,
+            latency_ms=round(latency, 3),
+        )
+
+    @app.post("/kb/documents", response_model=DocumentIngestResponse, tags=["knowledge-base"])
+    def kb_ingest(payload: DocumentIngestRequest) -> DocumentIngestResponse:
+        report = container.ingest_document(
+            payload.content,
+            title=payload.title,
+            source=payload.source,
+            metadata=payload.metadata,
+        )
+        return DocumentIngestResponse(**report.model_dump())
+
+    @app.post("/kb/reindex", response_model=DocumentIngestResponse, tags=["knowledge-base"])
+    def kb_reindex() -> DocumentIngestResponse:
+        report = container.reingest()
+        return DocumentIngestResponse(**report.model_dump())
+
+    @app.post("/kb/import", response_model=DocumentIngestResponse, tags=["knowledge-base"])
+    def kb_import(payload: FileImportRequest) -> DocumentIngestResponse:
+        filename = payload.filename
+        if (
+            any(char in filename for char in ("/", "\\", ":"))
+            or Path(filename).suffix.lower() not in SUPPORTED_SUFFIXES
+        ):
+            raise HTTPException(status_code=422, detail="请选择 TXT、Markdown、CSV、JSON 或 JSONL 文件。")
+        try:
+            report = container.import_file(filename, payload.content)
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise HTTPException(
+                status_code=422, detail="文件没有有效正文或格式不正确，请检查后重新导入。"
+            ) from exc
+        return DocumentIngestResponse(**report.model_dump())
+
+    @app.delete("/kb/documents/{doc_id}", tags=["knowledge-base"])
+    def kb_delete(doc_id: str) -> dict[str, Any]:
+        removed = container.delete_document(doc_id)
+        if not removed:
+            raise HTTPException(status_code=404, detail=f"unknown doc_id: {doc_id}")
+        return {"doc_id": doc_id, "chunks_removed": removed, "stats": container.knowledge_base.stats()}
+
+    # -- MCP ---------------------------------------------------------------- #
+    @app.get("/mcp/tools", tags=["mcp"])
+    def mcp_tools() -> dict[str, Any]:
+        client = container.mcp_client
+        return {
+            "transport": getattr(client, "name", "unknown"),
+            "server": "researchpilot-mcp",
+            "tools": client.list_tools() if client is not None else [],
+        }
+
+    @app.post("/mcp/call", tags=["mcp"])
+    def mcp_call(payload: dict[str, Any]) -> dict[str, Any]:
+        name = str(payload.get("name") or "")
+        arguments = payload.get("arguments") or {}
+        if not name:
+            raise HTTPException(status_code=422, detail="'name' is required")
+        client = container.mcp_client
+        if client is None:
+            raise HTTPException(status_code=503, detail="MCP client is not configured")
+        try:
+            return client.call_tool(name, arguments)
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"MCP call failed: {exc}") from exc
+
+    # -- evaluation --------------------------------------------------------- #
+    @app.get("/evaluation/latest", tags=["evaluation"])
+    def evaluation_latest() -> dict[str, Any]:
+        import json
+
+        candidates = sorted(
+            Path("benchmarks").glob("latest_*.json"),
+            key=lambda path: path.stat().st_mtime,
+        )
+        if not candidates:
+            return {"available": False, "message": "run scripts/run_benchmark.py first"}
+        payload = json.loads(candidates[-1].read_text(encoding="utf-8"))
+        return {
+            "available": True,
+            "generated_at": payload.get("generated_at", utc_now_iso()),
+            "provider": payload.get("provider"),
+            "model": payload.get("model"),
+            "metrics": payload.get("metrics", {}),
+            "categories": payload.get("categories", []),
+            "failed_checks": payload.get("failed_checks", {}),
+        }
+
+    if desktop:
+        app.include_router(desktop.router(container))
+
+        @app.exception_handler(RequestValidationError)
+        async def desktop_validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+            # Framework validation responses otherwise echo submitted secret values.
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "detail": "输入格式不正确，请检查设置或资料内容。",
+                    "kind": "validation",
+                },
+            )
+
+    # -- frontend ----------------------------------------------------------- #
+    if STATIC_DIR.exists():
+        app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+        @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+        def index() -> HTMLResponse:
+            return HTMLResponse((STATIC_DIR / "index.html").read_text(encoding="utf-8"))
+
+    return app
+
+
+def container_of(app: FastAPI) -> ServiceContainer:
+    container: ServiceContainer = app.state.container
+    return container

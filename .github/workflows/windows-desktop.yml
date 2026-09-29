@@ -1,0 +1,44 @@
+name: Windows desktop executable
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["desktop-v*"]
+  pull_request:
+    paths:
+      - "researchpilot/**"
+      - "scripts/*windows*"
+      - "scripts/desktop*"
+      - "tests/**"
+      - "pyproject.toml"
+      - "constraints.txt"
+      - "desktop-constraints.txt"
+      - "data/**"
+      - "configs/**"
+      - "LICENSE"
+      - ".github/workflows/windows-desktop.yml"
+
+jobs:
+  desktop:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -c constraints.txt -c desktop-constraints.txt -e ".[dev,desktop-build]"
+      - run: python -m pytest tests/unit/test_desktop.py tests/integration/test_desktop_api.py -q
+      - run: python scripts/build_windows.py
+      - run: python scripts/desktop_smoke.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ResearchPilot-Windows-x64
+          path: dist/ResearchPilot.exe
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-smoke-evidence
+          path: output/desktop-smoke.json

@@ -1,0 +1,52 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.venv-clean/
+.venv-wheel/
+.venv*/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+build/
+dist/
+
+# runtime artifacts (including ablation / live-run scratch directories)
+runs/
+runs_*/
+*.log
+
+# local secrets
+.env
+.env.*
+!.env.example
+
+# editor, OS and temporary files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*.tmp
+*.bak
+
+# generated benchmark output (timestamped runs stay local; the reports referenced
+# by docs/ are committed so every documented number is traceable)
+benchmarks/*.json
+!benchmarks/.gitkeep
+!benchmarks/latest_mock.json
+!benchmarks/latest_openai.json
+!benchmarks/real_llm_3tasks_before_writer_fallback.json
+!benchmarks/live_deepseek_citation_verify_10tasks.json
+!benchmarks/live_deepseek_alias_verify_3tasks.json
+!benchmarks/live_deepseek_alias_verify_6tasks.json
+
+# Local browser QA, screenshots, tool caches and isolated test data
+output/
+.playwright-cli/

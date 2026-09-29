@@ -1,0 +1,3 @@
+{"id": "fx-01", "category": "simple_fact", "question": "MCP 基于什么协议，核心方法有哪些？", "expected_docs": ["kb-fixture-tools"], "expected_tools": ["knowledge_search"], "expectations": {"min_citation_integrity": 0.8, "required_any": [["JSON-RPC"]]}, "notes": "smoke fixture"}
+{"id": "fx-02", "category": "rag", "question": "混合检索与重排分别解决什么问题？", "expected_docs": ["kb-fixture-retrieval"], "expected_tools": ["knowledge_search"], "expectations": {"min_retrieval_recall": 1.0, "min_citation_integrity": 0.8}, "notes": "smoke fixture"}
+{"id": "fx-03", "category": "no_result", "question": "公司内部代号 Nimbus 的平台参数是多少？", "expected_docs": [], "expected_tools": ["knowledge_search"], "expectations": {"require_gap_statement": true, "status_in": ["succeeded", "degraded"]}, "notes": "smoke fixture"}
