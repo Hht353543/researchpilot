@@ -16,6 +16,7 @@ from researchpilot.agents.writer import WriterAgent
 from researchpilot.llm.base import ChatMessage, LLMResponse
 from researchpilot.llm.mock_provider import MockLLMProvider
 from researchpilot.schemas import (
+    CitationCheck,
     Evidence,
     EvidenceBundle,
     ResearchPlan,
@@ -68,9 +69,24 @@ def _run(settings: Any, knowledge_base: Any):
         subtasks=[Subtask(id="S1", question="q", intent="synthesis", tools=[], expected_output="o")],
     )
     bundle = EvidenceBundle(
-        evidence=[Evidence(id="E1", subtask_id="S1", claim="c", quote="q", source_id="s")]
+        evidence=[
+            Evidence(
+                id="E1",
+                subtask_id="S1",
+                claim=f"凭据 {SECRET} 出现在来源里",
+                quote=f"凭据 {SECRET} 出现在来源里",
+                source_id="s",
+            )
+        ]
     )
-    return runtime, WriterAgent(runtime).run(plan, bundle, VerificationReport(sufficient=True))
+    return runtime, WriterAgent(runtime).run(
+        plan,
+        bundle,
+        VerificationReport(
+            sufficient=True,
+            checks=[CitationCheck(evidence_id="E1", statement=bundle.evidence[0].claim, status="supported")],
+        ),
+    )
 
 
 def test_the_configured_key_never_reaches_the_report(settings: Any, knowledge_base: Any) -> None:

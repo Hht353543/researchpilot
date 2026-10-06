@@ -6,6 +6,7 @@ This uses a scripted local model endpoint, not a vendor key or a clean Windows V
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import shutil
@@ -14,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -78,11 +80,18 @@ def main() -> int:
                 assert health["desktop_mode"] and not health["provider_ready"]
                 assert instance["port"] != 8000
                 checks["isolated_startup_and_port_fallback"] = True
-                for asset in ("/", "/static/app.js", "/static/desktop.js", "/static/icons.svg"):
+                for asset in (
+                    "/",
+                    "/static/app.js",
+                    "/static/desktop.js",
+                    "/static/icons.svg",
+                    "/static/markdown-it.min.js",
+                    "/static/purify.min.js",
+                ):
                     assert client.get(asset).status_code == 200
                 assert 'importedNames.join("、")' in client.get("/static/desktop.js").text
-                assert client.get("/kb/search", params={"q": "RAG"}).json()["hits"]
-                checks["bundled_frontend_and_knowledge"] = True
+                assert client.get("/kb/documents").json()["documents"] == []
+                checks["bundled_frontend_and_empty_personal_library"] = True
                 blocked = client.post("/research", json={"question": "分析 RAG", "mode": "async"})
                 assert blocked.status_code == 503
                 update = {
@@ -106,13 +115,31 @@ def main() -> int:
                     ).status_code
                     == 200
                 )
+                from docx import Document
+
+                from tests.unit.test_personal_research import text_pdf
+
+                document, buffer = Document(), BytesIO()
+                document.add_paragraph("本产品不支持离线部署，收费 10 元。")
+                document.save(buffer)
+                for filename, payload in (("说明.docx", buffer.getvalue()), ("spec.pdf", text_pdf())):
+                    imported = client.post(
+                        "/kb/import",
+                        json={"filename": filename, "content_base64": base64.b64encode(payload).decode()},
+                    )
+                    assert imported.status_code == 200, imported.text
+                documents = client.get("/kb/documents").json()["documents"]
+                chosen_ids = [doc["doc_id"] for doc in documents]
+                assert len(chosen_ids) == 3
+                checks["pdf_docx_import"] = True
                 assert client.post("/kb/reindex").status_code == 200
                 assert any(
                     doc["doc_id"].startswith("import_")
                     for doc in client.get("/kb/documents").json()["documents"]
                 )
                 result_response = client.post(
-                    "/research", json={"question": "分析 RAG 知识库如何帮助企业研究"}
+                    "/research",
+                    json={"question": "分析 RAG 知识库如何帮助个人研究", "document_ids": chosen_ids},
                 )
                 assert result_response.status_code == 200, result_response.text
                 result = result_response.json()
@@ -120,6 +147,17 @@ def main() -> int:
                 assert result["evidence"]["sources"] and state.chat_requests > 1
                 task_id = result["task_id"]
                 checks["scripted_http_research_and_citations"] = True
+                followup = client.post(
+                    "/research", json={"question": "这些资料是否支持离线部署？", "parent_task_id": task_id}
+                )
+                assert followup.status_code == 200, followup.text
+                assert followup.json()["document_ids"] == sorted(chosen_ids)
+                assert followup.json()["parent_task_id"] == task_id
+                checks["inherited_followup_scope"] = True
+                assert client.post("/kb/examples").status_code == 200
+                scope = client.post("/research", json={"question": "个人资料范围"}).json()["document_ids"]
+                assert scope == sorted(chosen_ids)
+                checks["example_isolation"] = True
                 duplicate = subprocess.run(command, cwd=outside, env=environment, timeout=60, check=False)
                 assert duplicate.returncode == 0
                 assert (

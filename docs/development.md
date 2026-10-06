@@ -1,6 +1,6 @@
 # ResearchPilot
 
-多 Agent 深度研究系统。给它一个研究问题，它会拆解任务、检索知识库和 Web、收集证据、交叉校验、必要时补检，最后写出一份结构化报告，报告里的每条结论都绑定可解析的来源。
+个人资料研究助手。桌面用户选定本机资料，获得可核对、可追问的中文报告。下面保留维护者所需的 CLI、mock、Trace 与已有工具架构说明；桌面流程仅使用本次选定的资料，不包含实时联网搜索。当前实施与验收边界见[个人研究交付记录](personal_research_delivery.md)。
 
 ```
 LLM → Prompt → Structured Output → Tool Calling → RAG → Knowledge Base → MCP
@@ -33,7 +33,7 @@ LLM → Prompt → Structured Output → Tool Calling → RAG → Knowledge Base
 | 服务化 | FastAPI 加零依赖前端：独立研究工作区、历史搜索、团队知识库、可读报告与引用来源；高级参数和执行记录默认折叠 |
 | 知识库管理 | 入库、检索、删除（级联删 chunk）、全量重建索引 |
 | LLM 抽象 | 任意 OpenAI 兼容端点（OpenAI / DeepSeek / vLLM / Ollama 等）加确定性离线 provider；真实 HTTP 链路由本地兼容端点端到端测试覆盖 |
-| 工程质量 | 434 个 pytest + 27 个前端测试（含真实 HTTP provider 链路）、ruff、mypy、pip check、Dockerfile、docker-compose、GitHub Actions |
+| 工程质量 | 490 个 pytest + 34 个前端测试（含真实 HTTP provider 链路）、ruff、mypy、pip check、Dockerfile、docker-compose、GitHub Actions |
 
 ## Architecture
 
@@ -198,7 +198,7 @@ MCP 传输配置属于高级用法，基础安装不需要 API Key 或外部服�
 | `RESEARCHPILOT_BIND_HOST` / `API_PORT` | API 对宿主机的监听地址 / 端口 | `127.0.0.1` / `8000` |
 | `RESEARCHPILOT_ALLOW_REMOTE_ACCESS` | 是否明确允许非回环地址；开启时必须同时配置访问 token | `false` |
 | `RESEARCHPILOT_ACCESS_TOKEN` | API Bearer token；为空时仅适合本机开发 | 空 |
-| `RESEARCHPILOT_MAX_REQUEST_BODY_BYTES` / `MAX_CONCURRENT_TASKS` | HTTP 请求体上限 / 单进程并发研究任务上限 | 1048576 / 4 |
+| `RESEARCHPILOT_MAX_REQUEST_BODY_BYTES` / `MAX_CONCURRENT_TASKS` | HTTP 请求体上限 / 单进程并发研究任务上限 | 1049076 / 4 |
 | `RESEARCHPILOT_RESEARCH_TASK_TIMEOUT_S` | 单个研究任务的 wall-clock deadline | 300 |
 | `RESEARCHPILOT_SHUTDOWN_TIMEOUT_S` | 关闭时等待受管 worker 清理的上限 | 5 |
 | `RESEARCHPILOT_TASK_HEARTBEAT_INTERVAL_S` / `RECOVERY_STALE_AFTER_S` | 持久化任务心跳间隔 / 活跃 owner 租约失效窗口 | 5 / 30 |
@@ -289,7 +289,7 @@ Compose 的 API 和 MCP 端口默认都绑定宿主机回环地址。共享发�
 
 这个 job 里没有 `if:`、没有 `continue-on-error`、没有假的引擎，容器坏了整个 workflow 就会红。`tests/unit/test_ci_docker_job.py` 把这些性质固定成回归测试，防止以后被改掉。
 
-2026-09-14 的运行（CI run 34820524987）里 docker job 通过，实测结果：镜像构建成功，`researchpilot-mcp-1` 和 `researchpilot-api-1` 都 healthy，主机侧和容器内两轮 smoke 全过，API `/health` 报 `mcp_transport=http`，前端 200，一次研究任务 `succeeded`、`mcp_calls=1`、8 条证据、8 个来源。
+2026-09-14 的 CI 运行（run 34900524987）里 docker job 通过，实测结果：镜像构建成功，`researchpilot-mcp-1` 和 `researchpilot-api-1` 都 healthy，主机侧和容器内两轮 smoke 全过，API `/health` 报 `mcp_transport=http`，前端 200，一次研究任务 `succeeded`、`mcp_calls=1`、8 条证据、8 个来源。
 
 本机还能做的等价验证：
 
@@ -308,7 +308,7 @@ python scripts/container_smoke.py --in-container
 ## Testing
 
 ```bash
-python -m pytest -q                       # 单元 + 集成 + 评测（434 个测试）
+python -m pytest -q                       # 单元 + 集成 + 评测（490 个测试）
 python -m pytest -q -m "not evaluation"   # 快速回归
 python -m pytest -q -m evaluation         # 全量 Golden Dataset 冒烟
 ruff check . && ruff format --check . && mypy researchpilot

@@ -1,0 +1,78 @@
+{
+  "date": "2026-10-05",
+  "mode": "deterministic mock; no paid model",
+  "baseline_commit": "02b4ab227af942a266e7b4cd5ce65b3d9628c550",
+  "same_inputs": "eval/golden_dataset.jsonl; data/knowledge_base; data/web_corpus; hash embeddings; top_k=6; max_iterations=3",
+  "limitations": [
+    "single local run; timing is not statistically measured",
+    "mock token usage is simulated, cost is zero",
+    "citation correctness definitions differ; values cannot be compared as answer-quality gains",
+    "developer dataset includes legacy MCP and offline web fixtures; desktop personal workflow is tested separately"
+  ],
+  "runs": {
+    "before": {
+      "run_id": "eval_c7fcf9467199",
+      "metrics": {
+        "tasks": 35,
+        "passed": 35,
+        "task_success_rate": 1.0,
+        "retrieval_tasks": 30,
+        "citation_tasks": 34,
+        "tool_selection_tasks": 35,
+        "retrieval_recall": 0.9389,
+        "context_relevance": 0.2876,
+        "citation_correctness": 1.0,
+        "tool_selection_accuracy": 1.0,
+        "tool_selection_f1": 0.8592,
+        "tool_success_rate": 0.6743,
+        "tool_calls": 175,
+        "tool_failures": 57,
+        "retries": 13,
+        "llm_calls": 309,
+        "avg_latency_s": 0.548,
+        "p50_latency_s": 0.19,
+        "p95_latency_s": 2.069,
+        "total_tokens": 700754,
+        "avg_tokens": 20021.5,
+        "total_cost_usd": 0.0,
+        "avg_cost_usd": 0.0,
+        "avg_iterations": 1.286,
+        "writer_fallback_tasks": 0
+      },
+      "failed_checks": {},
+      "duration_s": 22.633
+    },
+    "after": {
+      "run_id": "eval_6b17fcbab80c",
+      "metrics": {
+        "tasks": 35,
+        "passed": 35,
+        "task_success_rate": 1.0,
+        "retrieval_tasks": 30,
+        "citation_tasks": 32,
+        "tool_selection_tasks": 35,
+        "retrieval_recall": 0.9389,
+        "context_relevance": 0.2891,
+        "citation_correctness": 1.0,
+        "tool_selection_accuracy": 1.0,
+        "tool_selection_f1": 0.8592,
+        "tool_success_rate": 0.7596,
+        "tool_calls": 104,
+        "tool_failures": 25,
+        "retries": 6,
+        "llm_calls": 253,
+        "avg_latency_s": 0.43,
+        "p50_latency_s": 0.237,
+        "p95_latency_s": 1.252,
+        "total_tokens": 568676,
+        "avg_tokens": 16247.9,
+        "total_cost_usd": 0.0,
+        "avg_cost_usd": 0.0,
+        "avg_iterations": 1.229,
+        "writer_fallback_tasks": 0
+      },
+      "failed_checks": {},
+      "duration_s": 18.441
+    }
+  }
+}

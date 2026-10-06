@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "profile": {"candidate_id": "researchpilot-project", "target_roles": ["AI 应用开发", "Python 后端"], "updated_at": "2026-10-06"},
+  "claims": [
+    {
+      "id": "claim-delivery-001",
+      "source_fact": "本机最终 EXE 完成资料导入、选择、真实研究、继承追问、引用、导出和重启恢复操作，留有视频和任务记录。",
+      "candidate_wording": "交付 Windows 个人资料研究助手，串联资料导入、选定范围研究、追问、原文核对、导出与记录恢复。",
+      "sources": [{"type": "document", "location": "docs/goal_delivery_20261006.md", "public": false}, {"type": "video", "location": "output/playwright/goal-20261006/researchpilot-final-demo.webm", "public": false}],
+      "responsibility_level": "参与",
+      "verification_status": "已确认",
+      "allowed_uses": ["AI 应用开发简历草稿", "Python 后端简历草稿", "项目面试材料"],
+      "interview_details": {"decisions": ["复用既有资料库、Provider、DPAPI 与 PyInstaller"], "difficulties": ["资料范围继承与重启持久化"], "verification": ["最终 EXE 浏览器实际操作及录像", "源码外 desktop_smoke 11项检查"], "result": "本机流程完成；干净 Windows 和独立用户待完成"},
+      "boundary": "系统交付事实可核验；执行验证者为 Codex，用户个人职责仍待确认。",
+      "risk_notes": ["不能写独立用户验收通过或全 Windows 兼容性通过。"],
+      "last_verified": "2026-10-06"
+    },
+    {
+      "id": "claim-evaluation-001",
+      "source_fact": "固定 deepseek-flash 与六类资料，六题加两次追问完成61次调用，142933 tokens，平均19.950秒；八题核心答案无遗漏，两题辅助文字仍有问题。",
+      "candidate_wording": "建立六类资料的真实模型回归与用量对账，逐题记录正确性、遗漏和无依据扩展。",
+      "sources": [{"type": "document", "location": "output/goal-20261006/review-summary.json", "public": false}, {"type": "document", "location": "eval/personal_acceptance.json", "public": false}],
+      "responsibility_level": "参与",
+      "verification_status": "已确认",
+      "allowed_uses": ["AI 应用开发简历草稿", "Python 后端简历草稿", "项目面试材料"],
+      "interview_details": {"decisions": ["按预算跨限和重复步骤的实际结果改用60000实验预算", "保留报告事实复核而非仅依赖关键词"], "difficulties": ["计算引用不能视为已回答原始年份金额", "摘要支撑性与完整性是不同问题"], "verification": ["HTTP usage、任务metrics、LLM span逐题对账一致", "Codex逐题阅读原文和整篇报告"], "result": "核心回答保留；辅助范围限定和缺失判断仍有两处问题"},
+      "boundary": "单次合成小样本；不是独立人工评分，不等于全部正文100%正确。",
+      "risk_notes": ["不能宣称通用正确率、真实用户覆盖或稳定成本降幅。", "模型别名没有不可变版本或采样种子保证。"],
+      "last_verified": "2026-10-06"
+    },
+    {
+      "id": "claim-personal-responsibility-001",
+      "source_fact": "尚无用户确认的个人设计、实现与决策职责范围；开发和验证由 AI 辅助。",
+      "candidate_wording": "【待补：确认个人承担的模块、设计决策与实现范围】",
+      "sources": [{"type": "document", "location": "docs/resume.md", "public": false}],
+      "responsibility_level": "参与",
+      "verification_status": "待确认",
+      "allowed_uses": [],
+      "interview_details": {"decisions": [], "difficulties": [], "verification": ["由用户按实际经历确认职责"], "result": null},
+      "boundary": "项目事实不自动证明个人独立完成；待确认内容不得进入正式对外简历。",
+      "risk_notes": ["投递前按真实职责调整动词；不使用未经确认的主导、负责人或独立完成。"],
+      "last_verified": null
+    }
+  ]
+}

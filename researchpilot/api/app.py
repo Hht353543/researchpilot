@@ -35,7 +35,12 @@ from researchpilot.api.service import ServiceContainer
 from researchpilot.config import Settings, get_settings
 from researchpilot.llm.base import BudgetExceededError, LLMConfigError, LLMError
 from researchpilot.persistence import PersistenceCorruptionError, PersistenceError
-from researchpilot.pipeline import CapacityExceededError, PipelineClosedError, StorageUnavailableError
+from researchpilot.pipeline import (
+    CapacityExceededError,
+    PipelineClosedError,
+    ResearchScopeError,
+    StorageUnavailableError,
+)
 from researchpilot.rag.loader import SUPPORTED_SUFFIXES
 from researchpilot.rag.retriever import RetrievalResult
 from researchpilot.schemas import ResearchRequest, ResearchResult
@@ -260,6 +265,10 @@ def create_app(settings: Settings | None = None, *, desktop: DesktopController |
         )
 
     # -- research ----------------------------------------------------------- #
+    @app.exception_handler(ResearchScopeError)
+    async def scope_handler(request: Request, exc: ResearchScopeError) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": str(exc), "kind": "document_scope"})
+
     @app.post("/research", response_model=ResearchResult, tags=["research"])
     def create_research(request: ResearchRequest) -> Any:
         if request.mode == "async":
@@ -287,7 +296,12 @@ def create_app(settings: Settings | None = None, *, desktop: DesktopController |
                     quality=result.quality,
                     created_at=result.created_at,
                     completed_at=result.completed_at,
-                    citations=len(result.evidence.sources),
+                    citations=len(
+                        {
+                            ("document", source.doc_id) if source.doc_id else ("source", source.id)
+                            for source in result.evidence.sources
+                        }
+                    ),
                     latency_ms=result.metrics.latency_ms,
                     errors=len(result.errors),
                 )
@@ -419,14 +433,29 @@ def create_app(settings: Settings | None = None, *, desktop: DesktopController |
             any(char in filename for char in ("/", "\\", ":"))
             or Path(filename).suffix.lower() not in SUPPORTED_SUFFIXES
         ):
-            raise HTTPException(status_code=422, detail="请选择 TXT、Markdown、CSV、JSON 或 JSONL 文件。")
+            raise HTTPException(
+                status_code=422, detail="请选择 TXT、Markdown、CSV、JSON、JSONL、PDF 或 DOCX 文件。"
+            )
         try:
-            report = container.import_file(filename, payload.content)
+            import base64
+
+            if Path(filename).suffix.lower() in {".pdf", ".docx"} and payload.content_base64 is None:
+                raise ValueError("PDF/DOCX 请以文件方式导入。")
+            content = (
+                base64.b64decode(payload.content_base64, validate=True)
+                if payload.content_base64 is not None
+                else payload.content or ""
+            )
+            report = container.import_file(filename, content)
         except (ValueError, TypeError, AttributeError) as exc:
             raise HTTPException(
-                status_code=422, detail="文件没有有效正文或格式不正确，请检查后重新导入。"
+                status_code=422, detail=str(exc) if isinstance(exc, ValueError) else "文件格式不正确。"
             ) from exc
         return DocumentIngestResponse(**report.model_dump())
+
+    @app.post("/kb/examples", response_model=DocumentIngestResponse, tags=["knowledge-base"])
+    def kb_examples() -> DocumentIngestResponse:
+        return DocumentIngestResponse(**container.load_examples().model_dump())
 
     @app.delete("/kb/documents/{doc_id}", tags=["knowledge-base"])
     def kb_delete(doc_id: str) -> dict[str, Any]:

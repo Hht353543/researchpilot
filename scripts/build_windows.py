@@ -6,7 +6,7 @@ import argparse
 import os
 import shutil
 import sys
-from importlib.metadata import distribution
+from importlib.metadata import PackageNotFoundError, distribution
 from pathlib import Path
 
 
@@ -41,6 +41,9 @@ def main() -> int:
         "httpcore",
         "PyYAML",
         "jieba",
+        "pypdf",
+        "python-docx",
+        "lxml",
         "pystray",
         "Pillow",
         "anyio",
@@ -56,7 +59,12 @@ def main() -> int:
         "six",
         "pyinstaller",
     ):
-        package = distribution(name)
+        try:
+            package = distribution(name)
+        except PackageNotFoundError:
+            if name == "colorama":  # Optional in newer Click releases.
+                continue
+            raise
         for file in package.files or []:
             if "license" in file.name.lower() or file.name.lower() in {"copying", "notice"}:
                 license_target = licenses / name / file.name

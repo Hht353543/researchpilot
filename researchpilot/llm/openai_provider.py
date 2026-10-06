@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from typing import Any
 
@@ -72,6 +73,20 @@ class OpenAICompatibleProvider(LLMProvider):
             payload.pop("frequency_penalty", None)
         if response_schema is not None and deepseek:
             payload["response_format"] = {"type": "json_object"}
+            # JSON mode guarantees syntax, not our field contract. Unlike the
+            # json_schema API, it does not receive a schema in response_format.
+            payload["messages"].insert(
+                0,
+                {
+                    "role": "system",
+                    "content": (
+                        f"Return one JSON object matching the {response_schema.__name__} schema below. "
+                        "Use its exact field names and types, including nested objects. "
+                        "Do not return the schema itself.\n"
+                        + json.dumps(response_schema.model_json_schema(), ensure_ascii=False)
+                    ),
+                },
+            )
         elif response_schema is not None:
             payload["response_format"] = {
                 "type": "json_schema",

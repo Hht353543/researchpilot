@@ -8,6 +8,7 @@ import pytest
 from pydantic import BaseModel
 
 from researchpilot.llm.base import (
+    BudgetExceededError,
     ChatMessage,
     LLMError,
     LLMProvider,
@@ -138,6 +139,58 @@ def test_token_budget_accumulates_across_lifecycle_checkpoints() -> None:
     with pytest.raises(LLMError):
         runner.run(Answer, agent="Test", system="s", user="u")
     assert runner.usage.total_tokens == 30
+
+
+@pytest.mark.parametrize("text_call", [False, True])
+@pytest.mark.parametrize("budget", [10, 25])
+def test_budget_crossing_response_is_charged_and_its_trace_is_closed(text_call, budget):
+    provider = ScriptedProvider(['{"value": 1}'])
+    tracer = Tracer("budget-accounting")
+    runner = StructuredLLMRunner(provider, token_budget=budget, tracer=tracer)
+
+    def call():
+        if text_call:
+            return runner.run_text(agent="Test", system="s", user="u")
+        return runner.run(Answer, agent="Test", system="s", user="u")
+
+    if budget == 25:
+        call()
+    with pytest.raises(BudgetExceededError):
+        call()
+    assert runner.usage.total_tokens == tracer.metrics().usage.total_tokens == 15 * provider.calls
+    assert all(span.end_time for span in tracer.spans)
+    assert "BudgetExceededError" in tracer.spans[-1].error
+    calls = provider.calls
+    with pytest.raises(BudgetExceededError):
+        call()
+    assert provider.calls == calls
+    assert runner.usage.total_tokens == tracer.metrics().usage.total_tokens == 15 * calls
+
+
+@pytest.mark.parametrize("text_call", [False, True])
+def test_response_received_during_cancellation_is_still_accounted(monkeypatch, text_call):
+    from researchpilot.lifecycle import LifecycleCancelled, TaskLifecycle
+
+    lifecycle = TaskLifecycle(timeout_s=60)
+    lifecycle.transition("running")
+    provider = ScriptedProvider(['{"value": 1}'])
+    complete = provider.complete
+
+    def cancel_after_response(*args, **kwargs):
+        response = complete(*args, **kwargs)
+        lifecycle.cancel()
+        return response
+
+    monkeypatch.setattr(provider, "complete", cancel_after_response)
+    tracer = Tracer("cancel-accounting")
+    runner = StructuredLLMRunner(provider, tracer=tracer, lifecycle=lifecycle)
+    with pytest.raises(LifecycleCancelled):
+        if text_call:
+            runner.run_text(agent="Test", system="s", user="u")
+        else:
+            runner.run(Answer, agent="Test", system="s", user="u")
+    assert runner.usage.total_tokens == tracer.metrics().usage.total_tokens == 15
+    assert tracer.spans[0].end_time and "LifecycleCancelled" in tracer.spans[0].error
 
 
 def test_mock_provider_produces_schema_valid_plan() -> None:

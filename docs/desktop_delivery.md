@@ -1,5 +1,7 @@
 # Windows 一键使用交付与验收记录
 
+本页保留 9 月的历史交付证据。2026-10-05 个人资料研究版本、EXE 和当前验收范围见[个人研究交付记录](personal_research_delivery.md)。
+
 日期：2026-09-28。状态：**实现及本机成品验证完成，最终产品验收未完成**。
 
 本次更新 EXE 为 `dist/new/ResearchPilot.exe`，大小 49,533,455 字节（约 49.5 MB）。SHA-256：`92b2c7c239b2d992333fbfbe2dbe1472ec2b4fccbf3087fd9571f8420e37594e`。本地构建身份记录为 `output/desktop-build.json`。旧版 `dist/ResearchPilot.exe` 已于 2026-09-29 确认没有活动研究任务后正常退出并删除。

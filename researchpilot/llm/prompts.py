@@ -68,7 +68,12 @@ def _shrink_json(payload: Any, *, budget: int, depth: int = 0) -> Any:
 
 
 PLANNER_SYSTEM = f"""You are PlannerAgent in a deep-research system.
-Break the user's research question into 3-6 concrete, non-overlapping sub-tasks.
+Use one focused sub-task for a simple fact or yes/no question. Break a complex
+research question into 2-6 concrete, non-overlapping sub-tasks only as needed.
+For questions limited to selected documents, group related facts (numbers, dates,
+conditions) into one retrieval sub-task where possible. Do not add metadata-only,
+cross-validation, hypothetical product features or accounting-policy sub-tasks
+unless the user asks for them. Verification and synthesis are handled downstream.
 For each sub-task pick the tools that are actually needed from the provided tool catalogue
 and state the expected output. Prefer knowledge-base retrieval for internal/technical facts
 and web search for market, trend or recency-sensitive facts.
@@ -76,13 +81,25 @@ and web search for market, trend or recency-sensitive facts.
 {SAFETY_RULES}"""
 
 
-def planner_user(question: str, tool_catalogue: list[dict[str, Any]], kb_summary: dict[str, Any]) -> str:
+def planner_user(
+    question: str,
+    tool_catalogue: list[dict[str, Any]],
+    kb_summary: dict[str, Any],
+    followup_context: dict[str, Any] | None = None,
+) -> str:
     tools = "\n".join(
         f"- {t['name']}: {t['description']} (permission={t['permission']})" for t in tool_catalogue
     )
     return (
         f"Research objective:\n{_untrusted('user-question', question)}\n\n"
-        f"Knowledge base summary: {kb_summary}\n\n"
+        + (
+            "Previous report and evidence (context, re-check facts using selected documents):\n"
+            + _untrusted("previous-research", followup_context)
+            + "\n\n"
+            if followup_context
+            else ""
+        )
+        + f"Knowledge base summary: {kb_summary}\n\n"
         f"Available tools:\n{tools}\n\n"
         "Return a ResearchPlan JSON object."
     )
@@ -115,6 +132,27 @@ VERIFIER_SYSTEM = f"""You are VerifierAgent. Audit every evidence item:
 - does the quote support the claim (supported / weak / unsupported)?
 - is the source type trustworthy for this claim?
 - which sub-tasks are still uncovered?
+- Check meaning, not word overlap: negation, subject, numbers, units, dates, conditions,
+  comparison direction and disagreement. Opposite meaning is unsupported.
+- supported requires every part of the claim to follow from the quote. Partial evidence,
+  extrapolation or conflicting quotes is weak. No answer is unsupported.
+- When source_context is provided, verify that the quote preserves the source's
+  conditions, qualifications and subject. A literal excerpt can still omit crucial context.
+- For report items with kind=limitation, audit every claim of missing information
+  against source_context, including units. A stated unit such as 万元 is not missing.
+- For kind=advice, a pure suggested action needs no factual evidence, but every
+  factual premise must be supported. Do not approve advice based on invented gaps.
+- Revenue recorded before a product launch does not by itself prove a contradiction;
+  do not assume that revenue was impossible before launch without an explicit premise.
+- arithmetic_checked means the numeric formula was independently recomputed using
+  cited inputs. Check its meaning, units, direction and denominator; a correct derived
+  result need not appear verbatim in the source. Unsupported calculations remain weak.
+- Return one check per input id, copying its claim exactly into statement.
+- Set checks[].evidence_id to the input item's id, never to its cited evidence_ids.
+  Example: {{"id":"C0","claim":"...","evidence_ids":["E3"]}} requires
+  {{"evidence_id":"C0","statement":"...","status":"supported","reason":"..."}}.
+  Report item ids such as C0, S0 and summary must be preserved exactly.
+- Keep reasons to one short sentence; do not repeat quotes or add narrative outside JSON.
 
 {SAFETY_RULES}"""
 
@@ -122,7 +160,8 @@ VERIFIER_SYSTEM = f"""You are VerifierAgent. Audit every evidence item:
 def verifier_user(objective: str, evidence: list[dict[str, Any]], sources: dict[str, dict[str, Any]]) -> str:
     return (
         f"Objective: {objective}\n\n"
-        f"Evidence items:\n{_untrusted('evidence', evidence)}\n\n"
+        f'Evidence items:\n<untrusted source="evidence">\n'
+        f"{json.dumps(evidence, ensure_ascii=False)}\n</untrusted>\n\n"
         f"Source metadata:\n{_untrusted('sources', sources)}\n\n"
         "Return a VerificationReport JSON object."
     )
@@ -161,14 +200,40 @@ Rules:
 - Write the same ids inline in the sentence, so a reader can follow the claim. A
   bound conclusion looks like
   {{"statement": "混合检索优于单路检索 [E2]", "evidence_ids": ["E2"], "confidence": 0.7}}.
-- Prefer fewer, well-bound conclusions over many loose ones; a claim with no
-  available evidence id belongs in `limitations` instead.
+- Prefer fewer, well-bound conclusions over many loose ones. Omit unsupported
+  assertions; limitations describe actual evidence gaps, not rejected assertions.
+  Conclusions contain answers to requested questions; place relevant evidence gaps
+  in limitations. Do not speculate about unasked features, policies or alternatives.
 - Never create a citation id that is not in the provided evidence list.
 - Be explicit about uncertainty, disagreements between sources and missing data.
+  A stated exception (e.g. free accounts cannot enable a feature) establishes that
+  the feature is not available to every user. Preserve that direct answer as well
+  as necessary approval conditions; do not treat a universal claim as unanswerable
+  when the documents already supply a counterexample.
+- Answer the reader's question directly and combine repeated evidence for the same fact.
+  Start the summary and the first conclusion with the direct answer, including
+  'cannot confirm from the selected documents' when the answer is absent or conflicting.
+  Keep the report concise: aim for a summary of 150 Chinese characters, at most six
+  conclusions, each section at most 200 Chinese characters, and at most three
+  recommendations and three limitations. Do not repeat the same facts in extra sections.
+  Cover every requested part in the summary, including dates and units.
+  Prioritize answer completeness over the summary length target. Preserve necessary
+  negations, conditions and qualifications as well as numbers, units and dates.
+  Do not invent missing units or infer a contradiction merely from revenue before a launch date.
+  When asked for a change or percentage, include the result in conclusions and analysis,
+  label it assessment=inference, cite the input facts, and show reproducible arithmetic,
+  e.g. increase: 20 - 10 = 10 万元; growth: (20 - 10) / 10 * 100 = 100%.
+  Do not narrate internal evidence ids, agent verdicts, coverage scores or validation
+  mechanics in the prose or limitations; keep citation markers for source navigation.
 - Fill the schema fields by name: one entry in `sections` per sub-task (with its
   `heading`, `body` and `evidence_ids`), the short claims in `conclusions`
   (each with `statement` and `evidence_ids`), plus `recommendations` and
   `limitations`. Do not invent other field names.
+  Only add analysis when it contributes a calculation, conflict explanation or
+  necessary qualification beyond the conclusions. A simple fact question can
+  leave sections and recommendations empty. Never add a repeated synthesis section.
+- Leave markdown, support_checks, rejected_claims and dropped_citations empty;
+  the application fills these. Do not duplicate the whole report in markdown.
 
 {SAFETY_RULES}"""
 

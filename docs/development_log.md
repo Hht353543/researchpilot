@@ -273,3 +273,17 @@ python scripts/run_benchmark.py   -> 见 docs/evaluation.md（35/35，Recall 93.
 真实 HTTP provider 全链路          -> 见 tests/integration/test_openai_provider.py（7 项全绿）
 真实 MCP HTTP 双服务链路           -> 见 tests/integration/test_mcp.py::test_api_container_uses_http_mcp_server_process
 ```
+
+## 2026-10-05：个人资料研究真实模型实验与验收准备
+
+用户指定 DeepSeek-V4.1-Flash，并在隔离桌面应用保存连接；确认本轮先完成真实模型实验与验收准备，暂无干净 Windows 和独立测试者。复用现有 Provider、知识库与 Pipeline，新增 `scripts/personal_acceptance.py`、六类合成资料和人工验收表，不输出 Key。
+
+真实调用暴露 Planner JSON 字段不匹配、报告审查返回错误 ID，以及来源 NFKC 规范化与原文核对不一致。分别补入完整 JSON Schema、待审项 ID 示例及同一规范化规则；简单事实题减少规划拆分，写作提示要求合并重复证据。新增 schema 与条件／否定保留回归，并补入 DeepSeek 保守估算价格。
+
+基线提交为 `02b4ab227af942a266e7b4cd5ce65b3d9628c550`，归档的 84 个研究代码文件与 Git blob 哈希一致。同模型、同六题固定参数对照：旧版 67 次成功响应、99,030 tokens、平均 36.149 秒；最终新版 49 次、112,865 tokens、平均 26.153 秒。调用减少但 tokens 增加，不能声称全面降低成本。人工语义评分与账单核对仍待完成。
+
+最终六题及否定追问全部完成但质量标签均为 degraded；日期题在 30,000 token 实验预算下触发报告审查回退并漏答上线日期。最终 EXE 用 160,000 token 默认预算另跑日期题及追问，无运行错误、范围和父任务一致；初始摘要恢复三项事实，追问摘要仍漏日期，重复摘录和收入变化漏答仍列为验收问题。没有把自动保守输出计作人工通过。
+
+最终回归为 460 通过、1 跳过（Compose 环境限制），Node 32 项通过，Ruff 与 154 个文件格式检查通过，mypy 80 个源码文件通过。隔离核心依赖环境重建 EXE：51,588,442 字节，SHA-256 `b24ff926587ec977126314cd5d2b67d2647d8aae9580456a6b7f73212d910453`。一次并行成品检查托盘退出超时，独立重试 11 项通过，原因未确认；人工托盘操作仍待验收。
+
+详见 [阶段交付记录](personal_research_delivery.md)、[真实模型对照](personal_live_comparison.json) 与 [最终验收表](personal_acceptance_review.md)。本轮准备完成，产品最终验收保持未完成状态。

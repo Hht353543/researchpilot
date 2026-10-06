@@ -22,6 +22,7 @@ from researchpilot.llm.base import ChatMessage, LLMResponse
 from researchpilot.llm.mock_provider import MockLLMProvider
 from researchpilot.rag.knowledge_base import KnowledgeBase
 from researchpilot.schemas import (
+    CitationCheck,
     Evidence,
     EvidenceBundle,
     ResearchPlan,
@@ -93,10 +94,27 @@ def _run_writer(
     )
     bundle = EvidenceBundle(
         evidence=[
-            Evidence(id=eid, subtask_id="S1", claim="c", quote="q", source_id="src") for eid in evidence_ids
+            Evidence(
+                id=eid,
+                subtask_id="S1",
+                claim="增幅为 27%",
+                quote="增幅为 27%。计算得到 127，相对 100 增长 27%。",
+                source_id="src",
+            )
+            for eid in evidence_ids
         ]
     )
-    report = WriterAgent(runtime).run(plan, bundle, VerificationReport(sufficient=True))
+    report = WriterAgent(runtime).run(
+        plan,
+        bundle,
+        VerificationReport(
+            sufficient=True,
+            checks=[
+                CitationCheck(evidence_id=eid, statement="增幅为 27%", status="supported")
+                for eid in evidence_ids
+            ],
+        ),
+    )
     return runtime, report
 
 
@@ -141,5 +159,5 @@ def test_unknown_inline_ids_are_not_a_binding(settings: Settings, knowledge_base
     """Citing an id that does not exist must not invent a binding."""
     payload = _report_payload(statement="结论 [E9]", body="正文 [E9]。")
     _, report = _run_writer(settings, knowledge_base, payload, ["E1"])
-    assert report.conclusions[0].evidence_ids == []
+    assert report.conclusions == []
     assert report.sections[0].evidence_ids == []

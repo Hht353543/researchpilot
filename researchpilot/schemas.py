@@ -101,6 +101,9 @@ class ResearchRequest(BaseModel):
     settings: ResearchSettings = Field(default_factory=ResearchSettings)
     mode: Literal["sync", "async"] = "sync"
     max_sources: int = Field(default=8, ge=1, le=30)
+    document_ids: list[str] | None = Field(default=None, max_length=500)
+    use_examples: bool = False
+    parent_task_id: str | None = Field(default=None, max_length=100)
 
     @field_validator("question")
     @classmethod
@@ -250,6 +253,7 @@ class ReportClaim(BaseModel):
     statement: str
     evidence_ids: list[str] = Field(default_factory=list)
     confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+    assessment: Literal["supported", "inference", "insufficient"] = "insufficient"
 
 
 class ReportSection(BaseModel):
@@ -267,6 +271,8 @@ class FinalReport(BaseModel):
     limitations: list[str] = Field(default_factory=list)
     dropped_citations: list[str] = Field(default_factory=list)
     markdown: str = ""
+    support_checks: list[CitationCheck] = Field(default_factory=list)
+    rejected_claims: list[CitationCheck] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -399,6 +405,10 @@ class ResearchResult(BaseModel):
     quality: ResultQuality | None = "succeeded"
     question: str
     settings: ResearchSettings = Field(default_factory=ResearchSettings)
+    document_ids: list[str] = Field(default_factory=list)
+    use_examples: bool = False
+    parent_task_id: str | None = None
+    stage: str = ""
     plan: ResearchPlan | None = None
     evidence: EvidenceBundle = Field(default_factory=EvidenceBundle)
     verification: VerificationReport | None = None

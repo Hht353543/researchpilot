@@ -9,7 +9,7 @@ Windows 一键使用改造是后续产品阶段，交付及尚未完成的人工
 复现入口：
 
 ```bash
-python -m pytest -q                     # 434 个测试（unit / integration / evaluation）
+python -m pytest -q                     # 490 个测试（unit / integration / evaluation）
 node --test "tests/frontend/**/*.test.mjs"   # 27 个前端逻辑检查
 ruff check . && ruff format --check . && mypy researchpilot
 python scripts/run_benchmark.py --provider mock   # 离线回归基线 35/35
@@ -26,7 +26,7 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 | 代码 Bug 审查 | `docs/audit_report.md` 的分类与逐条修复；37 项发现中 35 项已修复，另 2 项是环境限制 | 已验证 |
 | 架构 Bug 审查 | ADR-0001..0005、`docs/architecture.md`；修复 Planner 崩溃于向量库故障等架构级缺陷 | 已验证 |
 | 功能缺失检查 | 新增 KB 删除、全量重建、工具缓存启用、LLM 重排可达、前端 max_tokens/评测面板 | 已验证 |
-| 工程质量 | ruff / format / mypy / pip check / 434 pytest + 27 node / CI / Docker 资产测试 | 已验证 |
+| 工程质量 | ruff / format / mypy / pip check / 490 pytest + 34 node / CI / Docker 资产测试 | 已验证 |
 | AI Agent 特有可靠性 | 注入隔离、工具预算、超时重试、token 预算、无证据降级、引用绑定、修复重试 | 已验证 |
 | 发现→定位→修改→补测试→运行→验证→更新文档 闭环 | `docs/development_log.md` 逐条记录（含失败与回退）；每项均有对应测试 | 已验证 |
 
@@ -219,7 +219,7 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 | ruff | `ruff check .` → All checks passed；`ruff format --check .` → 136 files formatted | 已验证 |
 | CI 工作流本身可执行 | `scripts/ci_dry_run.py` 解析真实 `.github/workflows/ci.yml` 并逐条执行：lint / typecheck / test / evaluation 共 9/9 步骤通过（docker job 需容器引擎，明确跳过并说明原因） | 已验证 |
 | mypy | `mypy researchpilot` → Success（69 source files） | 已验证 |
-| pytest | 434 collected（1 skipped）+ 27 node 前端测试 | 已验证 |
+| pytest | 490 collected（1 skipped）+ 34 node 前端测试 | 已验证 |
 | pip check | 本项目依赖对无冲突；其余为环境内无关预装包冲突（逐条说明） | 受限：环境噪声已定位 |
 | 前端 npm test/build/lint | 无 npm 工具链（vanilla JS、无 package.json）→ `node --test`（零依赖 9 项）+ OpenAPI 契约测试等价覆盖 | 受限：等价方案 |
 | 不为绿色而关闭规则 | 仅对中文全角标点关闭 RUF001-003，并在 pyproject 中注明原因 | 已验证 |
@@ -228,7 +228,7 @@ python scripts/verify_live_model.py --probe-only  # 真实模型链路（本地�
 
 | 要求 | 证据 | 状态 |
 | --- | --- | --- |
-| docker build | 本机没有容器引擎（PATH、常见安装路径、podman、buildah、nerdctl、WSL 都核实过），本机不执行。由 CI 承担：`ubuntu-latest` 上运行 `docker build --file Dockerfile --tag researchpilot:latest .`，2026-09-14 的运行已构建成功（run 34820524987、34848858649） | 已验证 |
+| docker build | 本机没有容器引擎（PATH、常见安装路径、podman、buildah、nerdctl、WSL 都核实过），本机不执行。由 CI 承担：`ubuntu-latest` 上运行 `docker build --file Dockerfile --tag researchpilot:latest .`，2026-09-14 的运行已构建成功（run 34900524987、34848858649） | 已验证 |
 | docker compose up（backend/frontend/vector store/MCP） | CI 中执行 `docker compose --file docker-compose.yml up --detach --wait --wait-timeout 300`，两个容器进入 healthy 后再做 healthcheck、主机侧与容器内 smoke。本机另有等价验证：`scripts/compose_smoke.py` 用真实 compose 文件起双服务，实测 `mcp_transport=http`、前端 200、研究任务 `mcp_calls=1` | 已验证 |
 | CI 不允许静默跳过 Docker | `tests/unit/test_ci_docker_job.py`（11 项）：每个 job 必须是 Linux runner、`docker` job 不得有 `if`/`continue-on-error`、必须含真实 build/compose up/healthcheck/API+MCP 验证/容器内 smoke、不得使用 podman/nerdctl 等替身；`scripts/ci_dry_run.py --job docker` 在本机无引擎时退出码 2而非静默通过 | 已验证 |
 | healthcheck / 环境变量 / network / ports / volume | `tests/unit/test_docker_assets.py`（env 名合法、端口/卷声明、`depends_on: service_healthy`）+ `compose_smoke.py` 实际执行 Dockerfile 的 HEALTHCHECK 命令（exit 0）+ 运行时文件完整性（COPY 覆盖且未被 `.dockerignore` 排除） | 已验证 |

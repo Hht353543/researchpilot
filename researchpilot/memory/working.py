@@ -7,7 +7,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from researchpilot.schemas import Evidence, ResearchPlan, Subtask
-from researchpilot.utils import jaccard, sha1_of
+from researchpilot.utils import sha1_of
 
 
 class WorkingMemory(BaseModel):
@@ -34,10 +34,6 @@ class WorkingMemory(BaseModel):
         for item in items:
             key = _evidence_key(item)
             if key in keys:
-                continue
-            if any(jaccard(existing.claim, item.claim) >= 0.8 for existing in self.evidence) or any(
-                jaccard(added_item.claim, item.claim) >= 0.8 for added_item in added
-            ):
                 continue
             keys.add(key)
             self.evidence.append(item)
@@ -72,4 +68,4 @@ class WorkingMemory(BaseModel):
 
 
 def _evidence_key(evidence: Evidence) -> str:
-    return sha1_of(f"{evidence.source_id}|{evidence.claim[:120]}")
+    return sha1_of(f"{evidence.source_id}|{evidence.claim}|{evidence.quote}")

@@ -24,6 +24,13 @@ runs_*/
 .env
 .env.*
 !.env.example
+settings.json
+credentials.json
+secrets.json
+*.pem
+*.key
+*.p12
+*.pfx
 
 # editor, OS and temporary files
 .idea/

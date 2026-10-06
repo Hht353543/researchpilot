@@ -72,6 +72,15 @@ Authorization: Bearer <RESEARCHPILOT_ACCESS_TOKEN>
 | `question` | 4–2000 字符，去除首尾空白 |
 | `mode` | `sync` 直接返回完整结果；`async` 立即返回 `202` + `task_id` |
 | `settings` | 每请求覆盖项；`null` 表示使用服务端默认 |
+| `document_ids` | 本次文档 ID 列表；明确选择时所有资料工具使用隔离快照，不调用外部 Web/MCP。空列表或已删除的 ID 返回 422 |
+| `use_examples` | 默认 false；只有主动进入示例体验才使用示例文档 |
+| `parent_task_id` | 已完成报告的 ID；追问继承报告、证据和文档范围。更换范围须新建研究 |
+
+桌面省略 `document_ids` 时使用当前个人文档，自动排除历史内置示例；开发 CLI 保留旧的省略范围行为以支持评测。新桌面资料库为空，`POST /kb/examples` 可主动载入示例，重复调用不会覆盖已存在的资料。
+
+`ResearchResult` 保存 `document_ids`、`use_examples`、`parent_task_id` 和 `stage`。运行阶段为 `planning`、`retrieving`、`verifying`、`reviewing`、`supplementing`、`writing`、`checking_report`，完成为 `complete`；阶段更新沿用任务所有权和生命周期保护。报告的 `support_checks` 是最终正文支撑审查，`rejected_claims` 保留被替换的生成文字的审查记录，结论有 `assessment` 分类。
+
+`POST /kb/import`：文本仍使用 `{filename, content}`；PDF/DOCX 使用 `{filename, content_base64}`，两种内容字段只能提供一种。请求体沿用配置的大小上限，解析后的正文最多 50 万字符；加密、扫描件及损坏文件有明确提示。文本解析复用 pypdf 与 python-docx，未加入 OCR 或复杂版式恢复。
 
 `mode=sync` 响应（<code>ResearchResult</code>）：
 

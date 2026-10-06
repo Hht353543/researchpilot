@@ -161,6 +161,11 @@ class KnowledgeBase:
             self._deleted_document_ids.clear()
             self._replace_all = True
             documents = self.loader.load_path(self.settings.kb_dir())
+            from researchpilot.utils import project_root
+
+            if self.settings.kb_dir().resolve() == (project_root() / "data" / "knowledge_base").resolve():
+                for document in documents:
+                    document.metadata["example"] = True
             return self._ingest_documents_unlocked(documents)
 
     def delete_document(self, doc_id: str) -> int:
@@ -227,6 +232,18 @@ class KnowledgeBase:
             return report
 
     # -- retrieval --------------------------------------------------------- #
+    def scoped(self, document_ids: list[str]) -> KnowledgeBase:
+        """Reuse stored embeddings in an isolated snapshot for one research run."""
+        with self._lock:
+            self._refresh_if_changed_unlocked()
+            wanted = set(document_ids)
+            store = VectorStore(dimension=self.embedder.dimension)
+            for document in self.store.documents():
+                if document.doc_id in wanted:
+                    store.upsert_document(document.model_copy(deep=True))
+            store.add_chunks(c.model_copy(deep=True) for c in self.store.chunks() if c.doc_id in wanted)
+            return KnowledgeBase(self.settings, store=store, embedder=self.embedder)
+
     def retriever(
         self,
         *,

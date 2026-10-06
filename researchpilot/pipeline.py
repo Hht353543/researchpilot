@@ -59,6 +59,10 @@ class PipelineClosedError(RuntimeError):
     """Raised after shutdown has stopped accepting new work."""
 
 
+class ResearchScopeError(ValueError):
+    """The selected documents or follow-up context are unavailable."""
+
+
 class TerminalPersistenceError(StorageUnavailableError):
     """The execution ended, but its terminal task record was not committed."""
 
@@ -180,7 +184,11 @@ class ResearchPipeline:
             settings=settings,
             tracer=tracer,
             provider=provider,
-            knowledge_base=self.knowledge_base,
+            knowledge_base=(
+                self.knowledge_base.scoped(request.document_ids)
+                if request.document_ids is not None
+                else self.knowledge_base
+            ),
             tools=self.tools,
             mcp_client=mcp_client,
             policy=self.tool_policy,
@@ -199,11 +207,58 @@ class ResearchPipeline:
                 if not runtime.tools.has(name):  # pragma: no cover - defensive
                     raise RuntimeError(f"tool override for unknown tool {name}")
         runtime.scratch["max_sources"] = request.max_sources
+        if request.document_ids is not None:
+            for name in ("web_search", "mcp_research_context"):
+                runtime.tools.unregister(name)
+        if request.parent_task_id:
+            parent = self.get_result(request.parent_task_id)
+            if parent and parent.report:
+                runtime.scratch["followup_context"] = {
+                    "question": parent.question,
+                    "report": parent.report.model_dump(exclude={"markdown"}),
+                    "evidence": [e.model_dump() for e in parent.evidence.evidence],
+                    "sources": [s.model_dump() for s in parent.evidence.sources],
+                }
         return runtime
+
+    def _prepare_request(self, request: ResearchRequest) -> ResearchRequest:
+        ids = request.document_ids
+        if ids is None and not request.parent_task_id and not getattr(self.settings, "desktop_mode", False):
+            return request
+        if request.parent_task_id:
+            parent = self.get_result(request.parent_task_id)
+            if parent is None or parent.status != "completed" or parent.report is None:
+                raise ResearchScopeError("上次研究尚无可用报告，无法追问。")
+            if not parent.document_ids:
+                raise ResearchScopeError("这份旧报告没有保存资料范围，请选择资料重新研究。")
+            if ids is not None and set(ids) != set(parent.document_ids):
+                raise ResearchScopeError("追问会继承上次的资料范围；更换资料请新建研究。")
+            ids = parent.document_ids
+            request = request.model_copy(update={"use_examples": parent.use_examples})
+        documents = self.knowledge_base.summaries()
+        available = {doc.doc_id for doc in documents}
+        if ids is not None and set(ids) - available:
+            raise ResearchScopeError("所选资料已不存在，请刷新资料列表后重试。")
+        example_ids = {doc.doc_id for doc in documents if doc.metadata.get("example")}
+        if getattr(self.settings, "desktop_mode", False):
+            # Old desktop releases seeded these documents without an example flag.
+            from researchpilot.utils import project_root
+
+            example_ids.update(
+                doc.doc_id
+                for doc in self.knowledge_base.loader.load_path(project_root() / "data" / "knowledge_base")
+            )
+        chosen = available if ids is None else set(ids)
+        if not request.use_examples:
+            chosen -= example_ids
+        if not chosen and (ids is not None or getattr(self.settings, "desktop_mode", False)):
+            raise ResearchScopeError("请先导入并选择自己的资料，或进入示例体验。")
+        return request.model_copy(update={"document_ids": sorted(chosen)})
 
     def run(self, request: ResearchRequest, *, task_id: str | None = None) -> ResearchResult:
         with self.configuration_lock:
             self._check_desktop_configuration()
+            request = self._prepare_request(request)
             record = self._start(request, task_id=task_id)
         wait_s = self.settings.research_task_timeout_s + 1.0
         if not record.done.wait(timeout=wait_s):
@@ -215,6 +270,7 @@ class ResearchPipeline:
     def submit(self, request: ResearchRequest) -> str:
         with self.configuration_lock:
             self._check_desktop_configuration()
+            request = self._prepare_request(request)
             return self._start(request).task_id
 
     def _check_desktop_configuration(self) -> None:
@@ -560,6 +616,9 @@ class ResearchPipeline:
             quality=None,
             question=request.question,
             settings=ResearchSettings(**request.settings.model_dump()),
+            document_ids=request.document_ids or [],
+            use_examples=request.use_examples,
+            parent_task_id=request.parent_task_id,
             created_at=created_at,
         )
         record = _ManagedTask(task_id, request, lifecycle, placeholder)
@@ -870,6 +929,9 @@ class ResearchPipeline:
             quality=None,
             question=request.question,
             settings=ResearchSettings(**request.settings.model_dump()),
+            document_ids=request.document_ids or [],
+            use_examples=request.use_examples,
+            parent_task_id=request.parent_task_id,
             created_at=utc_now_iso(),
         )
         runtime: ResearchRuntime | None = None
@@ -891,7 +953,10 @@ class ResearchPipeline:
                 for error in runtime.errors
             ]
             result.status = "completed"
+            result.stage = "complete"
             result.quality = self._quality(runtime, bundle)
+            if not verification.sufficient or (report and report.rejected_claims):
+                result.quality = "degraded"
             if report is not None:
                 lifecycle.checkpoint()
                 try:
@@ -952,12 +1017,16 @@ class ResearchPipeline:
         critic = CriticAgent(runtime)
         writer = WriterAgent(runtime)
 
+        self._publish_stage(runtime.task_id, "planning")
         runtime.checkpoint()
         plan = planner.run(request.question, max_iterations=request.settings.max_iterations)
+        self._publish_stage(runtime.task_id, "retrieving")
         runtime.checkpoint()
         bundle = researcher.run(plan, iteration=1)
+        self._publish_stage(runtime.task_id, "verifying")
         runtime.checkpoint()
         verification = verifier.run(plan, bundle)
+        self._publish_stage(runtime.task_id, "reviewing")
         runtime.checkpoint()
         critique = critic.run(plan, bundle, verification)
 
@@ -972,6 +1041,7 @@ class ResearchPipeline:
                 agent="Orchestrator",
                 input={"follow_up_queries": critique.follow_up_queries},
             ) as span:
+                self._publish_stage(runtime.task_id, "supplementing")
                 extra = researcher.run(
                     plan,
                     follow_up_queries=critique.follow_up_queries,
@@ -991,15 +1061,39 @@ class ResearchPipeline:
                 iterations=iteration,
                 tool_calls=bundle.tool_calls + extra.tool_calls,
             )
+            self._publish_stage(runtime.task_id, "verifying")
             runtime.checkpoint()
             verification = verifier.run(plan, bundle)
+            self._publish_stage(runtime.task_id, "reviewing")
             runtime.checkpoint()
             critique = critic.run(plan, bundle, verification)
 
+        self._publish_stage(runtime.task_id, "writing")
+        runtime.scratch["publish_stage"] = lambda stage: self._publish_stage(runtime.task_id, stage)
         runtime.checkpoint()
         report = writer.run(plan, bundle, verification, critique.model_dump())
         runtime.checkpoint()
         return plan, bundle, verification, critique, report
+
+    def _publish_stage(self, task_id: str, stage: str) -> None:
+        with self._tasks_lock:
+            record = self._tasks.get(task_id)
+        if record is None:
+            return
+        with record.lock:
+            if record.terminal_published or record.lifecycle.state != "running":
+                return
+            candidate = record.result.model_copy(update={"stage": stage})
+
+            def commit_stage(current: TaskRecord) -> TaskRecord:
+                self.result_store.save(candidate)
+                return current
+
+            _, committed = self.task_store.update(
+                task_id, expected={"running"}, owner_instance_id=self._instance_id, mutate=commit_stage
+            )
+            if committed:
+                record.result = candidate
 
     @staticmethod
     def _quality(runtime: ResearchRuntime, bundle: EvidenceBundle) -> ResultQuality:

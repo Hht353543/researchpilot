@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from researchpilot.rag.models import DocumentSummary
 from researchpilot.schemas import SourceRef, TaskMetrics, Trace
@@ -75,7 +75,14 @@ class DocumentIngestRequest(BaseModel):
 
 class FileImportRequest(BaseModel):
     filename: str = Field(min_length=1, max_length=200)
-    content: str = Field(min_length=1, max_length=500_000)
+    content: str | None = Field(default=None, min_length=1, max_length=500_000)
+    content_base64: str | None = Field(default=None, min_length=1, max_length=14_000_000)
+
+    @model_validator(mode="after")
+    def _one_content(self) -> FileImportRequest:
+        if (self.content is None) == (self.content_base64 is None):
+            raise ValueError("provide exactly one of content or content_base64")
+        return self
 
 
 class DocumentIngestResponse(BaseModel):

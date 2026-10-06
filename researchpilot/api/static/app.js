@@ -31,6 +31,7 @@ const ERROR_MESSAGES = {
   ],
   capacity_exceeded: ["当前研究任务较多", "请稍后再试，已有任务不会受到影响。"],
   request_too_large: ["输入内容过长", "请缩短研究问题或知识库内容后重试。"],
+  document_scope: ["资料范围需要更新", "检查本次勾选的资料；追问会继承上次的资料范围。"],
   persistence_unavailable: [
     "暂时无法保存数据",
     "请稍后重试；如果问题持续，请联系管理员检查存储。",
@@ -73,6 +74,11 @@ let citationLinks = {};
 let sourceNumbers = {};
 let toastTimer = null;
 let validationErrorField = null;
+let knowledgeDocuments = [];
+let selectedDocumentIds = null;
+let exampleMode = false;
+let parentResearch = null;
+let currentResult = null;
 
 function icon(name) {
   return `<svg aria-hidden="true"><use href="/static/icons.svg#${name}"></use></svg>`;
@@ -116,7 +122,7 @@ function showView(view) {
     research: "研究",
     task: "研究报告",
     history: "研究记录",
-    knowledge: "团队知识库",
+    knowledge: "我的资料",
     settings: "设置",
   }[view];
   window.scrollTo({ top: 0, behavior: "instant" });
@@ -184,7 +190,7 @@ function prepareCitations(result) {
     evidence.map((item) => [item.id, item.source_id]),
   );
   for (const match of markdown.matchAll(
-    /^\|\s*(E\d+)\s*\|.*\|\s*\[(\d+)\]\s+.*\|\s*\d+(?:\.\d+)?\s*\|\s*$/gm,
+    /^\|\s*(E\d+)\s*\|.*\|\s*\[(\d+)\]\s+.*\|\s*(?:\d+(?:\.\d+)?\s*\|\s*)?$/gm,
   )) {
     const sourceId = sourceByEvidence.get(match[1]);
     if (sourceId) sourceNumbers[sourceId] = Number(match[2]);
@@ -200,16 +206,33 @@ function prepareCitations(result) {
     if (matchingSources.length === 1 && !sourceNumbers[matchingSources[0].id])
       sourceNumbers[matchingSources[0].id] = Number(match[1]);
   }
-  sources.forEach((source, index) => {
+  const documentNumbers = new Map(sources.filter(source => source.doc_id && sourceNumbers[source.id])
+    .map(source => [source.doc_id, sourceNumbers[source.id]]));
+  sources.forEach(source => {
+    if (!sourceNumbers[source.id] && source.doc_id && documentNumbers.has(source.doc_id))
+      sourceNumbers[source.id] = documentNumbers.get(source.doc_id);
+  });
+  sourceGroups(sources).forEach(({ source, index, ids }) => {
     const anchor = `source-${index + 1}`;
     const number = sourceNumbers[source.id];
     if (number) citationLinks[String(number)] = anchor;
     (result.evidence?.evidence || [])
-      .filter((item) => item.source_id === source.id)
+      .filter((item) => ids.includes(item.source_id))
       .forEach((item) => {
         citationLinks[item.id] = anchor;
       });
   });
+}
+
+function sourceGroups(sources) {
+  const groups = new Map();
+  sources.forEach((source, index) => {
+    const number = sourceNumbers[source.id];
+    const key = number ? `reference:${number}` : source.doc_id ? `document:${source.doc_id}` : `source:${source.id}`;
+    if (!groups.has(key)) groups.set(key, { source, index, ids: [] });
+    groups.get(key).ids.push(source.id);
+  });
+  return Array.from(groups.values());
 }
 
 class ApiError extends Error {
@@ -281,145 +304,36 @@ function safeExternalUrl(value) {
   }
 }
 
+const markdownRenderer = markdownit({ html: false, breaks: true, linkify: false });
+markdownRenderer.disable("image");
+markdownRenderer.validateLink = (url) => Boolean(safeExternalUrl(url)) || /^#source-\d+$/.test(url);
+markdownRenderer.renderer.rules.text = (tokens, index) => escapeHtml(tokens[index].content)
+  .replace(/(?:\[(?:E\d+|\d+)\][ \t]*)+/g, (group) => {
+    const seen = new Set();
+    const links = [];
+    for (const match of group.matchAll(/\[(E\d+|\d+)\]/g)) {
+      const key = match[1];
+      const target = citationLinks[key];
+      if (!target) { links.push(match[0]); continue; }
+      if (seen.has(target)) continue;
+      seen.add(target);
+      const number = /^E/.test(key) ? Object.keys(citationLinks).find(k => /^\d+$/.test(k) && citationLinks[k] === target) : key;
+      links.push(`<a class="citation-link" href="#${target}" data-citation="${target}">[${number || key}]</a>`);
+    }
+    return links.join(" ") + (group.match(/[ \t]+$/)?.[0] || "");
+  });
+markdownRenderer.renderer.rules.link_open = (tokens, index, options, env, self) => {
+  tokens[index].attrSet("target", "_blank");
+  tokens[index].attrSet("rel", "noreferrer");
+  return self.renderToken(tokens, index, options);
+};
+
 function inline(text) {
-  // Protect code and URLs before applying emphasis or citation formatting.
-  return String(text)
-    .split(/(`[^`]+`|\[[^\]]+\]\([^\s)]+\))/g)
-    .map((part) => {
-      if (part.startsWith("`") && part.endsWith("`"))
-        return `<code>${escapeHtml(part.slice(1, -1))}</code>`;
-      const link = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-      if (link) {
-        const url = safeExternalUrl(link[2]);
-        return url
-          ? `<a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">${escapeHtml(link[1])}</a>`
-          : escapeHtml(part);
-      }
-      return escapeHtml(part)
-        .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-        .replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>")
-        .replace(/_([^_]+)_/g, "<em>$1</em>")
-        .replace(/\[(E\d+|\d+)\]/g, (match, key) =>
-          citationLinks[key]
-            ? `<a class="citation-link" href="#${citationLinks[key]}" data-citation="${citationLinks[key]}">${match}</a>`
-            : match,
-        );
-    })
-    .join("");
+  return DOMPurify.sanitize(markdownRenderer.renderInline(String(text)), { USE_PROFILES: { html: true } });
 }
 
 function renderMarkdown(markdown) {
-  const lines = String(markdown || "").split(/\r?\n/);
-  const out = [];
-  let inList = "",
-    inCode = false,
-    inTable = false;
-  const closeList = () => {
-    if (inList) {
-      out.push(`</${inList}>`);
-      inList = "";
-    }
-  };
-  const closeTable = () => {
-    if (inTable) {
-      out.push("</tbody></table></div>");
-      inTable = false;
-    }
-  };
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i];
-    if (line.trim().startsWith("```")) {
-      closeList();
-      closeTable();
-      out.push(inCode ? "</code></pre>" : "<pre><code>");
-      inCode = !inCode;
-      continue;
-    }
-    if (inCode) {
-      out.push(escapeHtml(line));
-      continue;
-    }
-    if (!line.trim()) {
-      closeList();
-      closeTable();
-      continue;
-    }
-    const heading = line.match(/^(#{1,6})\s+(.*)$/);
-    if (heading) {
-      closeList();
-      closeTable();
-      const level = heading[1].length;
-      out.push(`<h${level}>${inline(heading[2])}</h${level}>`);
-      continue;
-    }
-    if (/^\s*[-*]\s+/.test(line)) {
-      closeTable();
-      if (inList !== "ul") {
-        closeList();
-        out.push("<ul>");
-        inList = "ul";
-      }
-      out.push(`<li>${inline(line.replace(/^\s*[-*]\s+/, ""))}</li>`);
-      continue;
-    }
-    if (/^\s*\d+\.\s+/.test(line) && !line.includes("|")) {
-      closeTable();
-      if (inList !== "ol") {
-        closeList();
-        out.push(`<ol start="${Number(line.trim().match(/^\d+/)[0])}">`);
-        inList = "ol";
-      }
-      out.push(`<li>${inline(line.replace(/^\s*\d+\.\s+/, ""))}</li>`);
-      continue;
-    }
-    if (line.trim().startsWith("|")) {
-      closeList();
-      const cells = line
-        .trim()
-        .replace(/^\||\|$/g, "")
-        .split("|")
-        .map((cell) => cell.trim());
-      if (/^\|?[\s:-]+\|/.test(lines[i + 1] || "") && !inTable) {
-        inTable = true;
-        out.push(
-          '<div class="table-wrap" tabindex="0" role="region" aria-label="报告表格"><table><thead><tr>' +
-            cells.map((cell) => `<th>${inline(cell)}</th>`).join("") +
-            "</tr></thead><tbody>",
-        );
-        i += 1;
-        continue;
-      }
-      if (inTable) {
-        out.push(
-          "<tr>" +
-            cells.map((cell) => `<td>${inline(cell)}</td>`).join("") +
-            "</tr>",
-        );
-        continue;
-      }
-    }
-    if (/^\s*>\s?/.test(line)) {
-      closeList();
-      closeTable();
-      out.push(
-        `<blockquote>${inline(line.replace(/^\s*>\s?/, ""))}</blockquote>`,
-      );
-      continue;
-    }
-    if (/^\s*(---|\*\*\*)\s*$/.test(line)) {
-      closeList();
-      closeTable();
-      out.push("<hr/>");
-      continue;
-    }
-    closeList();
-    closeTable();
-    out.push(`<p>${inline(line)}</p>`);
-  }
-  closeList();
-  closeTable();
-  if (inCode) out.push("</code></pre>");
-  return out.join("\n");
+  return DOMPurify.sanitize(markdownRenderer.render(String(markdown || "")), { USE_PROFILES: { html: true } });
 }
 
 function statusMeta(status) {
@@ -505,7 +419,7 @@ function renderHealth(health) {
     `v${health.version} · ${health.provider === "mock" ? "离线演示" : health.model}`;
   if (health.auth_required) {
     el("accessTokenGroup").classList.remove("hidden");
-    el("accessStatus").textContent = "此团队平台需要访问令牌。";
+    el("accessStatus").textContent = "此服务配置需要访问令牌。";
   }
 }
 
@@ -530,7 +444,7 @@ function renderConfig(config) {
     `<span class="model-chip">凭据 <strong>${escapeHtml(credential)}</strong></span>`,
   ].join("");
   el("settingsSummary").textContent =
-    config.provider === "mock" ? "离线演示模式" : "团队平台配置";
+    config.provider === "mock" ? "离线演示模式" : "服务配置";
   el("timeoutSetting").textContent =
     `${Number(config.research_task_timeout_s)} 秒`;
   el("budgetSetting").textContent =
@@ -591,7 +505,7 @@ function renderTimeline(trace) {
 
 function renderSources(sources, evidence = []) {
   const items = sources || [];
-  el("sourceCount").textContent = String(items.length);
+  el("sourceCount").textContent = String(sourceGroups(items).length);
   if (!items.length) {
     el("sources").innerHTML = emptyState(
       "book-open",
@@ -600,14 +514,13 @@ function renderSources(sources, evidence = []) {
     );
     return;
   }
-  el("sources").innerHTML = items
-    .map((source, index) => ({ source, index }))
+  el("sources").innerHTML = sourceGroups(items)
     .sort(
       (a, b) =>
         (sourceNumbers[a.source.id] || Infinity) -
         (sourceNumbers[b.source.id] || Infinity),
     )
-    .map(({ source, index }) => {
+    .map(({ source, index, ids }) => {
       const url = safeExternalUrl(source.url);
       const bundledWeb = desktopMode && source.kind === "web";
       const title = escapeHtml(
@@ -618,14 +531,16 @@ function renderSources(sources, evidence = []) {
         : `<strong>${title}</strong>`;
       const domain = url
         ? new URL(url).hostname.replace(/^www\./, "")
-        : "团队资料";
-      const ids = evidence
-        .filter((item) => item.source_id === source.id)
-        .map((item) => `[${escapeHtml(item.id)}]`);
+        : "个人资料";
       const number = sourceNumbers[source.id];
-      const quotes = evidence.filter(item => item.source_id === source.id && item.quote);
-      const excerpt = quotes.length ? `<details class="source-excerpt"><summary>查看引用原文</summary>${quotes.map(item => `<blockquote>${escapeHtml(item.quote)}</blockquote>`).join("")}</details>` : "";
-      return `<div class="source-item" id="source-${index + 1}"><span class="source-number">${number ? `[${number}]` : icon(url ? "globe" : "file-text")}</span><div class="source-body">${heading}<div class="source-meta">${icon(url ? "globe" : "file-text")}${bundledWeb ? "内置网页样本 · " : ""}${escapeHtml(domain)}${source.retrieved_at ? ` · ${formatDate(source.retrieved_at)}` : ""}</div>${bundledWeb ? '<span class="source-location">来自内置资料，未进行联网核验</span>' : !url ? '<span class="source-location">来自团队知识库</span>' : ""}${ids.length ? `<div class="source-evidence">关联证据 ${ids.join(" ")}</div>` : ""}${excerpt}</div></div>`;
+      const uniqueQuotes = new Map();
+      evidence.filter(item => ids.includes(item.source_id) && item.quote).forEach(item => {
+        const key = item.quote.normalize("NFKC").replace(/\s+/g, " ").trim();
+        if (!uniqueQuotes.has(key)) uniqueQuotes.set(key, item.quote);
+      });
+      const quotes = Array.from(uniqueQuotes.values());
+      const excerpt = quotes.length ? `<details class="source-excerpt"><summary>查看引用原文</summary>${quotes.map(quote => `<blockquote>${escapeHtml(quote)}</blockquote>`).join("")}</details>` : "";
+      return `<div class="source-item" id="source-${index + 1}"><span class="source-number">${number ? `[${number}]` : icon(url ? "globe" : "file-text")}</span><div class="source-body">${heading}<div class="source-meta">${icon(url ? "globe" : "file-text")}${bundledWeb ? "内置网页样本 · " : ""}${escapeHtml(domain)}${source.retrieved_at ? ` · ${formatDate(source.retrieved_at)}` : ""}</div>${bundledWeb ? '<span class="source-location">来自内置资料，未进行联网核验</span>' : !url ? '<span class="source-location">来自我的资料</span>' : ""}${excerpt}</div></div>`;
     })
     .join("");
 }
@@ -638,12 +553,15 @@ function renderReport(report) {
     return;
   }
   currentReportMarkdown = report.markdown || "";
-  if (desktopMode && currentReportMarkdown) currentReportMarkdown = "> 资料范围：本报告基于内置或用户导入的资料，不包含实时联网搜索。\n\n" + currentReportMarkdown;
+  if (currentReportMarkdown) {
+    const scope = currentResult?.use_examples ? "示例资料（体验报告）" : "本次选定的个人资料";
+    currentReportMarkdown = `> 资料范围：${scope}，不包含实时联网搜索。\n\n` + currentReportMarkdown;
+  }
   const title = report.title || "最终报告";
   el("resultTitle").textContent =
     title.length > 140 ? `${title.slice(0, 140)}…` : title;
   el("report").innerHTML = renderMarkdown(
-    report.markdown || report.executive_summary || "暂无报告内容。",
+    (currentReportMarkdown || report.executive_summary || "暂无报告内容。").split(/\n## (?:证据附录|引用原文)/)[0],
   );
 }
 
@@ -682,19 +600,45 @@ function renderKbStats(stats) {
     `<strong>${Number(stats?.documents || 0)}</strong> 份资料`;
 }
 
+function renderDocumentSelection() {
+  const available = knowledgeDocuments.filter(doc => Boolean(doc.metadata?.example) === exampleMode);
+  if (selectedDocumentIds === null) selectedDocumentIds = new Set(available.map(doc => doc.doc_id));
+  else if (!parentResearch) selectedDocumentIds = new Set(Array.from(selectedDocumentIds).filter(id => available.some(doc => doc.doc_id === id)));
+  el("documentSelection").innerHTML = available.length ? available.map(doc =>
+    `<label class="document-choice"><input type="checkbox" data-document="${escapeHtml(doc.doc_id)}" ${selectedDocumentIds.has(doc.doc_id) ? "checked" : ""} ${parentResearch ? "disabled" : ""}/> ${escapeHtml(doc.title)}</label>`
+  ).join("") : '<p class="muted">先在“我的资料”导入文件，或载入示例体验。</p>';
+  el("scopeLabel").textContent = exampleMode ? "示例体验：仅使用示例资料" : "本次研究的资料";
+  el("exitExamples").classList.toggle("hidden", !exampleMode);
+  el("followupNotice").classList.toggle("hidden", !parentResearch);
+  el("followupNotice").textContent = parentResearch ? `继续追问：${parentResearch.question}（继承报告、证据和资料范围）` : "";
+}
+
+async function startExamples() {
+  await api("/kb/examples", { method: "POST" });
+  parentResearch = null;
+  exampleMode = true;
+  selectedDocumentIds = null;
+  await loadKnowledgeBase();
+  el("question").value = SAMPLES[0];
+  el("questionCount").textContent = `${el("question").value.length} / 2000`;
+  toast("示例体验已准备好；连接模型后会使用你的账户用量。");
+}
+
 function renderKbDocuments(documents) {
+  knowledgeDocuments = documents || [];
+  renderDocumentSelection();
   if (!documents || !documents.length) {
     el("kbDocuments").innerHTML = emptyState(
       "book-open",
-      "团队知识库目前为空",
-      "添加第一份资料，让研究更了解你们的团队。",
+      "我的资料目前为空",
+      "导入自己的资料，然后在研究页选择使用范围。",
     );
     return;
   }
   el("kbDocuments").innerHTML = documents
     .map(
       (doc) =>
-        `<div class="document-item"><span class="document-icon">${icon("file-text")}</span><div class="document-body"><strong>${escapeHtml(doc.title)}</strong><div class="meta">${{ web: "网页", document: "文档", knowledge_base: "团队资料", mcp: "关联资料" }[doc.kind] || "团队资料"}${doc.created_at ? ` · ${formatDate(doc.created_at)} 添加` : ""}</div><details><summary>资料详情</summary><p>${Number(doc.chunks || 0)} 个内容片段 · ${escapeHtml(doc.source || "团队资料")}</p></details></div><span class="status-pill completed">可供研究</span><button class="link-button" type="button" aria-label="删除资料：${escapeHtml(doc.title)}" data-delete-doc="${escapeHtml(doc.doc_id)}">删除资料</button></div>`,
+        `<div class="document-item"><span class="document-icon">${icon("file-text")}</span><div class="document-body"><strong>${escapeHtml(doc.title)}</strong><div class="meta">${{ web: "网页", document: "文档", knowledge_base: "个人资料", mcp: "关联资料" }[doc.kind] || "个人资料"}${doc.created_at ? ` · ${formatDate(doc.created_at)} 添加` : ""}</div><details><summary>资料详情</summary><p>${Number(doc.chunks || 0)} 个内容片段 · ${escapeHtml(doc.source || "个人资料")}</p></details></div><span class="status-pill completed">可供研究</span><button class="link-button" type="button" aria-label="删除资料：${escapeHtml(doc.title)}" data-delete-doc="${escapeHtml(doc.doc_id)}">删除资料</button></div>`,
     )
     .join("");
 }
@@ -749,7 +693,16 @@ function updateProgress(result, trace) {
     (span) => span.kind === "agent" && !span.end_time,
   );
   const writing = activeAgent && /writer/i.test(activeAgent.name);
-  el("progressMessage").textContent =
+  const stages = {
+    planning: "正在理解问题并安排研究步骤。",
+    retrieving: "正在检索你选定的资料并提取原文。",
+    verifying: "正在核对原文、结论含义和资料中的冲突。",
+    reviewing: "正在检查还缺少哪些依据。",
+    supplementing: "正在针对证据缺口补充检索。",
+    writing: "正在根据有依据的内容撰写报告。",
+    checking_report: "正在复核报告中的结论与引用。",
+  };
+  el("progressMessage").textContent = (result.status === "running" && stages[result.stage]) ||
     {
       pending: "任务已提交，正在等待开始。",
       running: writing
@@ -763,6 +716,7 @@ function updateProgress(result, trace) {
 }
 
 function renderTask(result, trace) {
+  currentResult = result;
   taskLoading = false;
   currentTaskId = result.task_id;
   taskQuestion = result.question || taskQuestion;
@@ -781,7 +735,8 @@ function renderTask(result, trace) {
     renderReport(result.report);
     renderSources(
       result.evidence?.sources || [],
-      result.evidence?.evidence || [],
+      (result.evidence?.evidence || []).filter(item =>
+        result.verification?.checks?.some(check => check.evidence_id === item.id && check.status === "supported")),
     );
     renderMetrics(result.metrics);
     renderTimeline(trace);
@@ -794,7 +749,7 @@ function renderTask(result, trace) {
     const degraded = result.quality === "degraded";
     el("qualityBadge").classList.toggle("hidden", !degraded);
     el("resultMeta").textContent =
-      `${formatDate(result.completed_at)} · ${(result.evidence?.sources || []).length} 个来源`;
+      `${formatDate(result.completed_at)} · ${sourceGroups(result.evidence?.sources || []).length} 个来源`;
     el("resultSection").classList.remove("hidden");
     if (degraded) toast("部分信息不可用，报告保留了可验证的结果。");
   } else {
@@ -856,10 +811,16 @@ function schedulePoll(taskId) {
 }
 
 function researchPayload(question) {
-  if (desktopMode) return { question, mode: "async" };
+  const scope = {
+    document_ids: Array.from(selectedDocumentIds || []),
+    use_examples: exampleMode,
+    ...(parentResearch ? { parent_task_id: parentResearch.task_id } : {}),
+  };
+  if (desktopMode) return { question, mode: "async", ...scope };
   const payload = {
     question,
     mode: "async",
+    ...scope,
     settings: {
       temperature: Number(el("temperature").value),
       presence_penalty: Number(el("presence").value),
@@ -910,6 +871,12 @@ async function runResearch() {
   if (question.length > 2000) {
     showError("request_too_large");
     validationErrorField = "question";
+    return;
+  }
+  if (!selectedDocumentIds?.size) {
+    showError(new ApiError("请先导入并勾选至少一份资料。"));
+    el("errorTitle").textContent = "选择本次研究的资料";
+    el("errorMessage").textContent = "在问题下方勾选资料，或载入示例体验。";
     return;
   }
   stopObservation();
@@ -987,8 +954,8 @@ async function loadPrivateData() {
       api("/config"),
       api("/kb/documents"),
       api("/research?limit=100"),
-      api("/mcp/tools").catch(() => ({ tools: [] })),
-      api("/evaluation/latest").catch(() => ({ available: false })),
+      desktopMode ? Promise.resolve({ tools: [] }) : api("/mcp/tools").catch(() => ({ tools: [] })),
+      desktopMode ? Promise.resolve({ available: false }) : api("/evaluation/latest").catch(() => ({ available: false })),
     ]);
     privateApiReady = true;
     renderConfig(config);
@@ -1003,7 +970,7 @@ async function loadPrivateData() {
       !desktopMode && providerReady && config.provider !== "mock",
     );
     el("providerNotice").textContent = desktopMode
-      ? "研究基于内置或你导入的资料，不包含实时联网搜索。"
+      ? "研究仅使用本次选定的资料，不包含实时联网搜索。"
       : !providerReady
       ? "开始第一次研究前，请联系管理员完成模型配置。"
       : "当前为离线演示模式：使用内置资料与确定性模型，适合体验研究流程。";
@@ -1023,7 +990,13 @@ async function loadPrivateData() {
   }
 }
 
-function resetResearch(prefill = "") {
+function resetResearch(prefill = "", parent = null) {
+  parentResearch = parent;
+  if (parent) {
+    exampleMode = Boolean(parent.use_examples);
+    selectedDocumentIds = new Set(parent.document_ids || []);
+  }
+  renderDocumentSelection();
   stopObservation();
   currentTaskId = null;
   renderHistory(historyRuns);
@@ -1063,11 +1036,19 @@ function bindEvents() {
   el("retryResearch").addEventListener("click", () =>
     resetResearch(taskQuestion),
   );
-  el("followupResearch").addEventListener("click", () =>
-    resetResearch(
-      `基于之前的问题「${taskQuestion.slice(0, 1500)}」，进一步研究：`,
-    ),
-  );
+  el("followupResearch").addEventListener("click", () => resetResearch("", currentResult));
+  el("documentSelection").addEventListener("change", event => {
+    const id = event.target.dataset.document;
+    if (!id) return;
+    if (event.target.checked) selectedDocumentIds.add(id);
+    else selectedDocumentIds.delete(id);
+  });
+  el("loadExamples").addEventListener("click", () => startExamples().catch(showError));
+  el("exitExamples").addEventListener("click", () => {
+    exampleMode = false;
+    selectedDocumentIds = null;
+    resetResearch();
+  });
   el("historySearch").addEventListener("input", () =>
     renderHistory(historyRuns),
   );
@@ -1192,7 +1173,7 @@ function bindEvents() {
       el("kbContent").value = "";
       el("kbDialogFeedback").textContent = "";
       el("knowledgeDialog").close();
-      toast("资料已加入团队知识库。");
+      toast("资料已加入我的资料。");
       await loadKnowledgeBase();
     } catch (error) {
       el("kbDialogFeedback").textContent = friendlyError(error).message;
@@ -1206,7 +1187,7 @@ function bindEvents() {
     if (!docId) return;
     if (
       typeof window.confirm === "function" &&
-      !window.confirm("确定删除这份团队资料吗？")
+      !window.confirm("确定删除这份个人资料吗？")
     )
       return;
     button.disabled = true;

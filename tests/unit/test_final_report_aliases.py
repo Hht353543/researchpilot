@@ -16,6 +16,7 @@ from researchpilot.agents.base import build_runtime
 from researchpilot.agents.writer import WriterAgent
 from researchpilot.llm.prompts import WRITER_SYSTEM
 from researchpilot.schemas import (
+    CitationCheck,
     Evidence,
     EvidenceBundle,
     FinalReport,
@@ -129,11 +130,33 @@ def test_writer_keeps_a_findings_shaped_report(settings: Any, knowledge_base: An
     )
     bundle = EvidenceBundle(
         evidence=[
-            Evidence(id="E1", subtask_id="S1", claim="c", quote="q", source_id="s"),
-            Evidence(id="E2", subtask_id="S1", claim="c", quote="q", source_id="s"),
+            Evidence(
+                id="E1",
+                subtask_id="S1",
+                claim="固定长度分块简单但会切断语义",
+                quote="固定长度分块简单但会切断语义",
+                source_id="s",
+            ),
+            Evidence(
+                id="E2",
+                subtask_id="S1",
+                claim="标题感知分块保留章节路径，检索时命中更准",
+                quote="标题感知分块保留章节路径，检索时命中更准",
+                source_id="s",
+            ),
         ]
     )
-    report = WriterAgent(runtime).run(plan, bundle, VerificationReport(sufficient=True))
+    report = WriterAgent(runtime).run(
+        plan,
+        bundle,
+        VerificationReport(
+            sufficient=True,
+            checks=[
+                CitationCheck(evidence_id=e.id, statement=e.claim, status="supported")
+                for e in bundle.evidence
+            ],
+        ),
+    )
 
     assert not [error for error in runtime.errors if FALLBACK_MARKER in error]
     assert "切断语义" in report.markdown

@@ -1,16 +1,17 @@
-"""Load raw documents from disk (markdown / text / json / jsonl)."""
+"""Load text, structured data, text PDFs and Word documents."""
 
 from __future__ import annotations
 
 import json
 from datetime import date, datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
 from researchpilot.rag.models import Document
 from researchpilot.utils import sha1_of, utc_now_iso
 
-SUPPORTED_SUFFIXES = {".md", ".markdown", ".txt", ".json", ".jsonl", ".csv"}
+SUPPORTED_SUFFIXES = {".md", ".markdown", ".txt", ".json", ".jsonl", ".csv", ".pdf", ".docx"}
 
 
 class DocumentLoader:
@@ -34,8 +35,56 @@ class DocumentLoader:
     def load_file(self, file: str | Path, *, base: Path | None = None) -> list[Document]:
         path = Path(file)
         rel = str(path.relative_to(base)) if base else path.name
-        text = path.read_text(encoding="utf-8", errors="replace")
-        return self.load_text(text, filename=rel)
+        return self.load_bytes(path.read_bytes(), filename=rel)
+
+    def load_bytes(self, data: bytes, *, filename: str) -> list[Document]:
+        suffix = Path(filename).suffix.lower()
+        if suffix == ".pdf":
+            from pypdf import PdfReader
+
+            try:
+                reader = PdfReader(BytesIO(data))
+                if reader.is_encrypted and not reader.decrypt(""):
+                    raise ValueError("PDF 已加密，请先解密后导入。")
+                parts = []
+                for number, page in enumerate(reader.pages, 1):
+                    text = page.extract_text() or ""
+                    if text.strip():
+                        parts.append(f"## 第 {number} 页\n\n{text}")
+                text = "\n\n".join(parts)
+            except ValueError:
+                raise
+            except Exception as exc:
+                raise ValueError("PDF 无法读取，请检查文件是否完整。") from exc
+            if not text.strip():
+                raise ValueError("PDF 没有可提取的文字；扫描件请先进行 OCR 后再导入。")
+        elif suffix == ".docx":
+            from docx import Document as WordDocument
+            from docx.table import Table
+
+            try:
+                document = WordDocument(BytesIO(data))
+                text = "\n\n".join(
+                    "\n".join(" | ".join(cell.text for cell in row.cells) for row in block.rows)
+                    if isinstance(block, Table)
+                    else block.text
+                    for block in document.iter_inner_content()
+                )
+            except Exception as exc:
+                raise ValueError("DOCX 无法读取，请检查文件是否完整。") from exc
+        else:
+            encoding = "utf-16" if data.startswith((b"\xff\xfe", b"\xfe\xff")) else "utf-8-sig"
+            try:
+                text = data.decode(encoding)
+            except UnicodeDecodeError:
+                text = data.decode("gb18030")
+        if len(text) > 500_000:
+            raise ValueError("正文超过 50 万字符，请拆分后导入。")
+        documents = self.load_text(text, filename=filename)
+        if suffix == ".pdf":
+            for loaded in documents:
+                loaded.title = Path(filename).stem
+        return documents
 
     def load_text(self, text: str, *, filename: str) -> list[Document]:
         """Parse browser-uploaded text without reading a user-supplied filesystem path."""

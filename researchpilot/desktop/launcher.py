@@ -164,12 +164,14 @@ def launch(root: Path, *, open_browser: bool = True, tray_enabled: bool = True) 
     instance_path = root / "instance.json"
     identifier = uuid.uuid4().hex
     stopped = threading.Event()
+    shutdown_requested = threading.Event()
     try:
         store.prepare()
         configure_logging(store)
         identifier = uuid.uuid4().hex
 
         def shutdown() -> None:
+            shutdown_requested.set()
             stopped.set()
             if server:
                 app.state.container.pipeline.request_shutdown()
@@ -240,7 +242,11 @@ def launch(root: Path, *, open_browser: bool = True, tray_enabled: bool = True) 
                 break
             stopped.wait(0.2)
         else:
+            if shutdown_requested.is_set():
+                return 0
             raise OSError("本机服务未能启动。请重试或查看诊断日志。")
+        if shutdown_requested.is_set():
+            return 0
         logging.getLogger(__name__).info("Desktop ready on port %s", port)
         if open_browser and not webbrowser.open(url):
             raise OSError("默认浏览器未能打开，请设置默认浏览器后重试。")

@@ -6,7 +6,6 @@ import base64
 import ctypes
 import json
 import os
-import shutil
 from pathlib import Path
 from typing import Any, Literal, Protocol, cast
 from urllib.parse import urlparse
@@ -156,8 +155,7 @@ class DesktopStore:
         for name in ("logs", "runs", "data"):
             (self.root / name).mkdir(parents=True, exist_ok=True)
         seed_dir = self.root / "data" / "knowledge_base"
-        if not seed_dir.exists():
-            shutil.copytree(project_root() / "data" / "knowledge_base", seed_dir)
+        seed_dir.mkdir(parents=True, exist_ok=True)
         self.load()
 
     def load(self) -> None:
@@ -204,6 +202,7 @@ class DesktopStore:
             mcp_transport="inprocess",
             embedding_provider="hash",
             bind_host="127.0.0.1",
+            max_request_body_bytes=8_388_608,
         )
 
     def public_settings(self) -> dict[str, Any]:

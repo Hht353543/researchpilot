@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -349,14 +349,8 @@ class MockLLMProvider(LLMProvider):
 
     @staticmethod
     def _claimify(sentence: str) -> str:
-        text = sentence.strip().strip("-•* ")
-        if len(text) <= 80:
-            return text
-        for sep in ("；", ";", "，", ",", "——"):
-            head = text.split(sep)[0]
-            if 12 <= len(head) <= 80:
-                return head
-        return truncate(text, 78)
+        # An extractive mock must preserve conditions rather than shortening at commas.
+        return sentence.strip().strip("-•* ")
 
     def _verification(self, hints: dict[str, Any]) -> VerificationReport:
         evidence: list[dict[str, Any]] = hints.get("evidence") or []
@@ -370,9 +364,15 @@ class MockLLMProvider(LLMProvider):
         covered: set[str] = set()
         for item in evidence:
             overlap = overlap_ratio(str(item.get("claim", "")), str(item.get("quote", "")))
-            status: Literal["supported", "weak", "unsupported"] = (
-                "supported" if overlap >= 0.6 else "weak" if overlap >= 0.3 else "unsupported"
+            from researchpilot.agents.support import support_check
+
+            checked = support_check(
+                str(item.get("id", "")),
+                str(item.get("claim", "")),
+                str(item.get("quote", "")),
+                source_context=item.get("source_context"),
             )
+            status = checked.status
             if status == "unsupported":
                 unsupported.append(str(item.get("claim", "")))
             elif status == "supported":
@@ -389,7 +389,7 @@ class MockLLMProvider(LLMProvider):
                     evidence_id=str(item.get("id", "")),
                     statement=str(item.get("claim", "")),
                     status=status,
-                    reason=f"claim/quote token overlap = {overlap:.2f}; source={kind}",
+                    reason=f"{checked.reason}; source={kind}",
                     overlap=round(overlap, 3),
                 )
             )

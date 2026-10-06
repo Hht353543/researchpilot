@@ -8,7 +8,7 @@ from researchpilot.agents.base import BaseAgent
 from researchpilot.llm.prompts import RESEARCHER_SYSTEM, researcher_user
 from researchpilot.schemas import Evidence, EvidenceBundle, ResearchPlan, Subtask
 from researchpilot.tools.base import ToolContext, ToolRequestContext, ToolResult
-from researchpilot.utils import jaccard, overlap_ratio, truncate
+from researchpilot.utils import overlap_ratio, truncate
 
 
 class ResearchAgent(BaseAgent):
@@ -24,13 +24,16 @@ class ResearchAgent(BaseAgent):
     ) -> EvidenceBundle:
         runtime = self.runtime
         subtasks = [s for s in plan.subtasks if s.intent != "synthesis"]
-        if subtask_ids:
+        if subtask_ids is not None:
             wanted = set(subtask_ids)
             subtasks = [s for s in subtasks if s.id in wanted]
         if follow_up_queries:
-            subtasks = subtasks + [
+            subtasks = [
                 Subtask(
-                    id=f"F{idx}",
+                    id=next(
+                        (s.id for s in subtasks if s.question == query or s.question.startswith(query)),
+                        f"F{iteration}_{idx}",
+                    ),
                     question=query,
                     intent="knowledge_search",
                     tools=[t for t in ("knowledge_search", "web_search") if runtime.tools.has(t)],
@@ -43,7 +46,7 @@ class ResearchAgent(BaseAgent):
         bundle = EvidenceBundle(iterations=iteration)
         existing_ids = [e.id for e in runtime.memory.working.evidence]
         next_index = len(existing_ids)
-        seen_claims = [e.claim for e in runtime.memory.working.evidence]
+        seen = {(e.claim, e.quote, e.source_id) for e in runtime.memory.working.evidence}
 
         with self.span(input={"iteration": iteration, "subtasks": [s.id for s in subtasks]}) as span:
             for subtask in subtasks:
@@ -66,9 +69,10 @@ class ResearchAgent(BaseAgent):
                     iteration=iteration,
                 )
                 for evidence in extra:
-                    if any(jaccard(claim, evidence.claim) >= 0.8 for claim in seen_claims):
-                        continue  # the same fact was already captured (possibly via another tool)
-                    seen_claims.append(evidence.claim)
+                    key = (evidence.claim, evidence.quote, evidence.source_id)
+                    if key in seen:
+                        continue
+                    seen.add(key)
                     next_index += 1
                     bundle.evidence.append(
                         evidence.model_copy(update={"id": f"E{next_index}", "subtask_id": subtask.id})

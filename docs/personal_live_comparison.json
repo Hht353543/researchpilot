@@ -1,0 +1,1320 @@
+{
+  "date": "2026-10-05",
+  "provider": "DeepSeek official API",
+  "model": "deepseek-flash",
+  "model_version": "DeepSeek-V4.1-Flash (official API alias checked 2026-10-05)",
+  "baseline_commit": "02b4ab227af942a266e7b4cd5ce65b3d9628c550",
+  "baseline_source_verification": "84 researchpilot tracked files match Git blob hashes",
+  "human_review": "pending",
+  "clean_windows_independent_user": "pending",
+  "limitations": [
+    "Synthetic documents; no real personal-document human review.",
+    "One sequential run per version; caching, sampling and upstream load are uncontrolled.",
+    "Comparable metrics use six initial questions; balance deltas cover the entire run, including an extra followup in new-version runs.",
+    "Per-task budget is 30000; the final dates case hit this limit during report review. EXE default-budget verification is recorded separately.",
+    "Pipeline quality labels and support verdicts are not human correctness scores.",
+    "Account balance deltas may include concurrent activity and still require billing-detail reconciliation."
+  ],
+  "runs": {
+    "before": {
+      "source_sha256": "83ef64d902b0ccc534d9ee94fd60903a4b10301a03779179d34b97e62acdd0cb",
+      "dataset_sha256": "86010b8b798f5040985be28cd45e4619fc8df1300baa1ed64270f0713d83e46c",
+      "parameters": {
+        "temperature": 0.1,
+        "max_tokens": 1200,
+        "max_iterations": 1,
+        "top_k": 4,
+        "token_budget_live": 30000
+      },
+      "initial_cases": 6,
+      "all_cases_including_followup": 6,
+      "initial_http_responses": 67,
+      "initial_tokens": 99030,
+      "initial_prompt_tokens": 62445,
+      "initial_completion_tokens": 36585,
+      "initial_latency_s": 216.897,
+      "initial_avg_latency_s": 36.149,
+      "all_http_responses": 67,
+      "all_tokens": 99030,
+      "cases": [
+        {
+          "id": "negation",
+          "kind": "initial",
+          "task_id": "task_a95bf8198e1b",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 38.501,
+          "metrics": {
+            "latency_ms": 42058.571,
+            "llm_calls": 11,
+            "tool_calls": 5,
+            "tool_failures": 2,
+            "retrieval_calls": 2,
+            "retries": 2,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 9986,
+              "completion_tokens": 6352,
+              "total_tokens": 16338,
+              "cost_usd": 0.0
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 8835.742,
+              "ResearchAgent": 8763.773,
+              "VerifierAgent": 4737.371,
+              "CriticAgent": 6644.935,
+              "WriterAgent": 13076.75
+            }
+          },
+          "expected": "不支持离线部署；必须连接云端；每月 10 元。",
+          "human_review": "pending",
+          "response_start": 0,
+          "response_end": 11,
+          "errors": [
+            "planner: StructuredOutputError: ResearchPlan validation failed after 2 attempts: attempt 2: ValidationError: 12 validation errors for ResearchPlan\nsubtasks.0.question\n  Field required [type=missing, input_value={'id': 'st1', 'title': '...识库未覆盖”。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.0.intent\n  Field required [type=missing, input_value={'id': 'st1', 'title': '...识库未覆盖”。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.1.question\n  Field required [type=missing, input_value={'id': 'st2', 'title': '...料中未提及”。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.1.intent\n  Field required [type=missing, input_value={'id': 'st2', 'title': '...料中未提及”。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.2.question\n  Field required [type=missing, input_value={'id': 'st3', 'title': '...覆盖不足”）。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.2.intent\n  Field required [type=missing, input_value={'id': 'st3', 'title': '...覆盖不足”）。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.3.question\n  Field required [type=missing, input_value={'id': 'st4', 'title': '...来自外部参考。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.3.intent\n  Field required [type=missing, input_value={'id': 'st4', 'title': '...来自外部参考。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.4.question\n  Field required [type=missing, input_value={'id': 'st5', 'title': '...则说明未找到。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.4.intent\n  Field required [type=missing, input_value={'id': 'st5', 'title': '...则说明未找到。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.5.question\n  Field required [type=missing, input_value={'id': 'st6', 'title': '... 42 字符分块）。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.5.intent\n  Field required [type=missing, input_value={'id': 'st6', 'title': '... 42 字符分块）。'}, input_type=dict]\n    For further information visit https:/[path]",
+            "tool web_search failed after 1 attempt(s): tool 'web_search' is not in the allow-list",
+            "tool mcp_research_context failed after 1 attempt(s): tool 'mcp_research_context' is not in the allow-list"
+          ],
+          "raw_result": "output/personal-live/before/negation/initial.json",
+          "successful_http_responses": 11,
+          "actual_tokens": 16338
+        },
+        {
+          "id": "numbers",
+          "kind": "initial",
+          "task_id": "task_2251d8e43e3d",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 32.985,
+          "metrics": {
+            "latency_ms": 35020.604,
+            "llm_calls": 11,
+            "tool_calls": 5,
+            "tool_failures": 2,
+            "retrieval_calls": 2,
+            "retries": 2,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 10337,
+              "completion_tokens": 5947,
+              "total_tokens": 16284,
+              "cost_usd": 0.0
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 5441.823,
+              "ResearchAgent": 7163.065,
+              "VerifierAgent": 2918.123,
+              "CriticAgent": 7442.764,
+              "WriterAgent": 12054.829
+            }
+          },
+          "expected": "10 GB；6 MB；平均 250 毫秒；没有最大时长保证。",
+          "human_review": "pending",
+          "response_start": 11,
+          "response_end": 22,
+          "errors": [
+            "planner: StructuredOutputError: ResearchPlan validation failed after 2 attempts: attempt 2: ValidationError: 8 validation errors for ResearchPlan\nsubtasks.0.question\n  Field required [type=missing, input_value={'id': 'st1', 'descriptio...段数、主题）。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.0.intent\n  Field required [type=missing, input_value={'id': 'st1', 'descriptio...段数、主题）。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.1.question\n  Field required [type=missing, input_value={'id': 'st2', 'descriptio...库中未找到”。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.1.intent\n  Field required [type=missing, input_value={'id': 'st2', 'descriptio...库中未找到”。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.2.question\n  Field required [type=missing, input_value={'id': 'st3', 'descriptio...供该三项指标。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.2.intent\n  Field required [type=missing, input_value={'id': 'st3', 'descriptio...供该三项指标。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.3.question\n  Field required [type=missing, input_value={'id': 'st4', 'descriptio...缺失/冲突说明。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.3.intent\n  Field required [type=missing, input_value={'id': 'st4', 'descriptio...缺失/冲突说明。'}, input_type=dict]\n    For further information visit https:/[path]",
+            "tool web_search failed after 1 attempt(s): tool 'web_search' is not in the allow-list",
+            "tool mcp_research_context failed after 1 attempt(s): tool 'mcp_research_context' is not in the allow-list"
+          ],
+          "raw_result": "output/personal-live/before/numbers/initial.json",
+          "successful_http_responses": 11,
+          "actual_tokens": 16284
+        },
+        {
+          "id": "dates",
+          "kind": "initial",
+          "task_id": "task_6704ac81c78d",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 33.172,
+          "metrics": {
+            "latency_ms": 34936.645,
+            "llm_calls": 11,
+            "tool_calls": 5,
+            "tool_failures": 2,
+            "retrieval_calls": 2,
+            "retries": 2,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 9943,
+              "completion_tokens": 6261,
+              "total_tokens": 16204,
+              "cost_usd": 0.0
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 5662.854,
+              "ResearchAgent": 8078.887,
+              "VerifierAgent": 3765.021,
+              "CriticAgent": 6199.656,
+              "WriterAgent": 11230.227
+            }
+          },
+          "expected": "2025 年 10 万元；2026 年 20 万元；2026 年 9 月 10 日上线；不得互换年份。",
+          "human_review": "pending",
+          "response_start": 22,
+          "response_end": 33,
+          "errors": [
+            "planner: StructuredOutputError: ResearchPlan validation failed after 2 attempts: attempt 2: ValidationError: 5 validation errors for ResearchPlan\nsubtasks.0.intent\n  Field required [type=missing, input_value={'id': 'T1', 'question': ...说明覆盖不足。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.1.intent\n  Field required [type=missing, input_value={'id': 'T2', 'question': ...到可靠来源”。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.2.intent\n  Field required [type=missing, input_value={'id': 'T3', 'question': ...明确说明缺失。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.3.intent\n  Field required [type=missing, input_value={'id': 'T4', 'question': ...值并标注来源。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.4.intent\n  Field required [type=missing, input_value={'id': 'T5', 'question': ...说明无法计算。'}, input_type=dict]\n    For further information visit https:/[path]",
+            "tool web_search failed after 1 attempt(s): tool 'web_search' is not in the allow-list",
+            "tool mcp_research_context failed after 1 attempt(s): tool 'mcp_research_context' is not in the allow-list"
+          ],
+          "raw_result": "output/personal-live/before/dates/initial.json",
+          "successful_http_responses": 11,
+          "actual_tokens": 16204
+        },
+        {
+          "id": "conditions",
+          "kind": "initial",
+          "task_id": "task_62575e384cb8",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 36.675,
+          "metrics": {
+            "latency_ms": 39173.198,
+            "llm_calls": 11,
+            "tool_calls": 5,
+            "tool_failures": 2,
+            "retrieval_calls": 2,
+            "retries": 2,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 9543,
+              "completion_tokens": 5823,
+              "total_tokens": 15366,
+              "cost_usd": 0.0
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 6596.045,
+              "ResearchAgent": 8470.044,
+              "VerifierAgent": 3706.988,
+              "CriticAgent": 7475.181,
+              "WriterAgent": 12924.94
+            }
+          },
+          "expected": "管理员批准是必要条件；个人免费账户不能启用；不能无条件肯定。",
+          "human_review": "pending",
+          "response_start": 33,
+          "response_end": 44,
+          "errors": [
+            "planner: StructuredOutputError: ResearchPlan validation failed after 2 attempts: attempt 2: ValidationError: 5 validation errors for ResearchPlan\nsubtasks.0.intent\n  Field required [type=missing, input_value={'id': 'st1', 'question':...足时编造结论。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.1.intent\n  Field required [type=missing, input_value={'id': 'st2', 'question':...两种不同含义。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.2.intent\n  Field required [type=missing, input_value={'id': 'st3', 'question':...围与不确定性。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.3.intent\n  Field required [type=missing, input_value={'id': 'st4', 'question':...作为唯一依据。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.4.intent\n  Field required [type=missing, input_value={'id': 'st5', 'question':...未找到证据’。'}, input_type=dict]\n    For further information visit https:/[path]",
+            "tool web_search failed after 1 attempt(s): tool 'web_search' is not in the allow-list",
+            "tool mcp_research_context failed after 1 attempt(s): tool 'mcp_research_context' is not in the allow-list"
+          ],
+          "raw_result": "output/personal-live/before/conditions/initial.json",
+          "successful_http_responses": 11,
+          "actual_tokens": 15366
+        },
+        {
+          "id": "conflicts",
+          "kind": "initial",
+          "task_id": "task_863918562c66",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 35.836,
+          "metrics": {
+            "latency_ms": 37802.717,
+            "llm_calls": 11,
+            "tool_calls": 5,
+            "tool_failures": 2,
+            "retrieval_calls": 2,
+            "retries": 2,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 11895,
+              "completion_tokens": 5947,
+              "total_tokens": 17842,
+              "cost_usd": 0.0
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 6884.346,
+              "ResearchAgent": 8767.489,
+              "VerifierAgent": 4352.511,
+              "CriticAgent": 7065.815,
+              "WriterAgent": 10732.556
+            }
+          },
+          "expected": "两份资料冲突；缺少生效日期与适用版本；不能确定当前能力或擅自选择一份。",
+          "human_review": "pending",
+          "response_start": 44,
+          "response_end": 55,
+          "errors": [
+            "planner: StructuredOutputError: ResearchPlan validation failed after 2 attempts: attempt 2: ValidationError: 10 validation errors for ResearchPlan\nsubtasks.0.question\n  Field required [type=missing, input_value={'id': 'st1', 'descriptio...、共 71 字符）。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.0.intent\n  Field required [type=missing, input_value={'id': 'st1', 'descriptio...、共 71 字符）。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.1.question\n  Field required [type=missing, input_value={'id': 'st2', 'descriptio...确标注缺失）。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.1.intent\n  Field required [type=missing, input_value={'id': 'st2', 'descriptio...确标注缺失）。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.2.question\n  Field required [type=missing, input_value={'id': 'st3', 'descriptio...定具体证据 id。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.2.intent\n  Field required [type=missing, input_value={'id': 'st3', 'descriptio...定具体证据 id。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.3.question\n  Field required [type=missing, input_value={'id': 'st4', 'descriptio...确说明未找到。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.3.intent\n  Field required [type=missing, input_value={'id': 'st4', 'descriptio...确说明未找到。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.4.question\n  Field required [type=missing, input_value={'id': 'st5', 'descriptio...需补充的信息。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.4.intent\n  Field required [type=missing, input_value={'id': 'st5', 'descriptio...需补充的信息。'}, input_type=dict]\n    For further information visit https:/[path]",
+            "tool web_search failed after 1 attempt(s): tool 'web_search' is not in the allow-list",
+            "tool mcp_research_context failed after 1 attempt(s): tool 'mcp_research_context' is not in the allow-list"
+          ],
+          "raw_result": "output/personal-live/before/conflicts/initial.json",
+          "successful_http_responses": 11,
+          "actual_tokens": 17842
+        },
+        {
+          "id": "no_answer",
+          "kind": "initial",
+          "task_id": "task_5d9ab62a47f4",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 39.728,
+          "metrics": {
+            "latency_ms": 42662.365,
+            "llm_calls": 12,
+            "tool_calls": 5,
+            "tool_failures": 2,
+            "retrieval_calls": 2,
+            "retries": 3,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 10741,
+              "completion_tokens": 6255,
+              "total_tokens": 16996,
+              "cost_usd": 0.0
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 7734.132,
+              "ResearchAgent": 9428.879,
+              "VerifierAgent": 5989.335,
+              "CriticAgent": 9013.113,
+              "WriterAgent": 10496.906
+            }
+          },
+          "expected": "资料未提供认证信息；无法确认是否认证；没有提到不等于未认证。",
+          "human_review": "pending",
+          "response_start": 55,
+          "response_end": 67,
+          "errors": [
+            "planner: StructuredOutputError: ResearchPlan validation failed after 2 attempts: attempt 2: ValidationError: 12 validation errors for ResearchPlan\nsubtasks.0.question\n  Field required [type=missing, input_value={'id': 'st1', 'descriptio...idence' if none found.\"}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.0.intent\n  Field required [type=missing, input_value={'id': 'st1', 'descriptio...idence' if none found.\"}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.1.question\n  Field required [type=missing, input_value={'id': 'st2', 'descriptio...he ISO 27001 question.'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.1.intent\n  Field required [type=missing, input_value={'id': 'st2', 'descriptio...he ISO 27001 question.'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.2.question\n  Field required [type=missing, input_value={'id': 'st3', 'descriptio...or each query variant.'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.2.intent\n  Field required [type=missing, input_value={'id': 'st3', 'descriptio...or each query variant.'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.3.question\n  Field required [type=missing, input_value={'id': 'st4', 'descriptio...笔记 and ISO 27001.'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.3.intent\n  Field required [type=missing, input_value={'id': 'st4', 'descriptio...笔记 and ISO 27001.'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.4.question\n  Field required [type=missing, input_value={'id': 'st5', 'descriptio...eliable source found'.\"}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.4.intent\n  Field required [type=missing, input_value={'id': 'st5', 'descriptio...eliable source found'.\"}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.5.question\n  Field required [type=missing, input_value={'id': 'st6', 'descriptio... the selected sources.'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.5.intent\n  Field required [type=missing, input_value={'id': 'st6', 'descriptio... the selected sources.'}, input_type=dict]\n    For further information visit https:/[path]",
+            "tool web_search failed after 1 attempt(s): tool 'web_search' is not in the allow-list",
+            "tool mcp_research_context failed after 1 attempt(s): tool 'mcp_research_context' is not in the allow-list"
+          ],
+          "raw_result": "output/personal-live/before/no_answer/initial.json",
+          "successful_http_responses": 12,
+          "actual_tokens": 16996
+        }
+      ],
+      "raw_record": "output/personal-live/before/experiment.json",
+      "started_at": "2026-10-05T13:58:07.913088+00:00",
+      "finished_at": "2026-10-05T14:01:47.031359+00:00"
+    },
+    "after": {
+      "source_sha256": null,
+      "dataset_sha256": "86010b8b798f5040985be28cd45e4619fc8df1300baa1ed64270f0713d83e46c",
+      "parameters": {
+        "temperature": 0.1,
+        "max_tokens": 1200,
+        "max_iterations": 1,
+        "top_k": 4,
+        "token_budget_live": 30000
+      },
+      "initial_cases": 6,
+      "all_cases_including_followup": 7,
+      "initial_http_responses": 95,
+      "initial_tokens": 171026,
+      "initial_prompt_tokens": 115742,
+      "initial_completion_tokens": 55284,
+      "initial_latency_s": 310.215,
+      "initial_avg_latency_s": 51.703,
+      "all_http_responses": 110,
+      "all_tokens": 200361,
+      "cases": [
+        {
+          "id": "negation",
+          "kind": "initial",
+          "task_id": "task_fc4acd249651",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 53.09,
+          "metrics": {
+            "latency_ms": 54482.886,
+            "llm_calls": 15,
+            "tool_calls": 4,
+            "tool_failures": 0,
+            "retrieval_calls": 3,
+            "retries": 4,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 16409,
+              "completion_tokens": 9164,
+              "total_tokens": 25573,
+              "cost_usd": 0.0
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 6494.156,
+              "ResearchAgent": 10101.086,
+              "VerifierAgent": 4308.694,
+              "CriticAgent": 7098.584,
+              "WriterAgent": 26480.366
+            }
+          },
+          "expected": "不支持离线部署；必须连接云端；每月 10 元。",
+          "human_review": "pending",
+          "response_start": 0,
+          "response_end": 15,
+          "errors": [
+            "planner: StructuredOutputError: ResearchPlan validation failed after 2 attempts: attempt 2: ValidationError: 10 validation errors for ResearchPlan\nsubtasks.0.question\n  Field required [type=missing, input_value={'id': 'st1', 'goal': '...库无相关内容。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.0.intent\n  Field required [type=missing, input_value={'id': 'st1', 'goal': '...库无相关内容。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.1.question\n  Field required [type=missing, input_value={'id': 'st2', 'goal': '...足的明确说明。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.1.intent\n  Field required [type=missing, input_value={'id': 'st2', 'goal': '...足的明确说明。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.2.question\n  Field required [type=missing, input_value={'id': 'st3', 'goal': '...条件两类信息。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.2.intent\n  Field required [type=missing, input_value={'id': 'st3', 'goal': '...条件两类信息。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.3.question\n  Field required [type=missing, input_value={'id': 'st4', 'goal': '...源或价格数字。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.3.intent\n  Field required [type=missing, input_value={'id': 'st4', 'goal': '...源或价格数字。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.4.question\n  Field required [type=missing, input_value={'id': 'st5', 'goal': '...识库未提供”。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.4.intent\n  Field required [type=missing, input_value={'id': 'st5', 'goal': '...识库未提供”。'}, input_type=dict]\n    For further information visit https:/[path]"
+          ],
+          "raw_result": "output/personal-live/after/negation/initial.json",
+          "successful_http_responses": 15,
+          "actual_tokens": 25573
+        },
+        {
+          "id": "negation",
+          "kind": "followup",
+          "task_id": "task_7514739b002e",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 50.913,
+          "metrics": {
+            "latency_ms": 53549.425,
+            "llm_calls": 15,
+            "tool_calls": 4,
+            "tool_failures": 0,
+            "retrieval_calls": 3,
+            "retries": 4,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 20573,
+              "completion_tokens": 8762,
+              "total_tokens": 29335,
+              "cost_usd": 0.0
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 7645.66,
+              "ResearchAgent": 9811.534,
+              "VerifierAgent": 5405.41,
+              "CriticAgent": 6298.803,
+              "WriterAgent": 24388.018
+            }
+          },
+          "expected": "不支持离线部署；必须连接云端；每月 10 元。",
+          "human_review": "pending",
+          "response_start": 15,
+          "response_end": 30,
+          "errors": [
+            "planner: StructuredOutputError: ResearchPlan validation failed after 2 attempts: attempt 2: ValidationError: 4 validation errors for ResearchPlan\nsubtasks.0.intent\n  Field required [type=missing, input_value={'id': 'S1', 'question': ...未写明的周期。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.1.intent\n  Field required [type=missing, input_value={'id': 'S2', 'question': ...为无条件表述。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.2.intent\n  Field required [type=missing, input_value={'id': 'S3', 'question': ...“资料不足”。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.3.intent\n  Field required [type=missing, input_value={'id': 'S4', 'question': ...确时才做换算。'}, input_type=dict]\n    For further information visit https:/[path]"
+          ],
+          "raw_result": "output/personal-live/after/negation/followup.json",
+          "successful_http_responses": 15,
+          "actual_tokens": 29335
+        },
+        {
+          "id": "numbers",
+          "kind": "initial",
+          "task_id": "task_dc4b07d6eca2",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 47.996,
+          "metrics": {
+            "latency_ms": 50285.395,
+            "llm_calls": 15,
+            "tool_calls": 4,
+            "tool_failures": 0,
+            "retrieval_calls": 3,
+            "retries": 4,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 20673,
+              "completion_tokens": 9014,
+              "total_tokens": 29687,
+              "cost_usd": 0.0
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 6112.242,
+              "ResearchAgent": 8769.997,
+              "VerifierAgent": 5794.564,
+              "CriticAgent": 8172.399,
+              "WriterAgent": 21436.193
+            }
+          },
+          "expected": "10 GB；6 MB；平均 250 毫秒；没有最大时长保证。",
+          "human_review": "pending",
+          "response_start": 30,
+          "response_end": 45,
+          "errors": [
+            "planner: StructuredOutputError: ResearchPlan validation failed after 2 attempts: attempt 2: ValidationError: 5 validation errors for ResearchPlan\nsubtasks.0.intent\n  Field required [type=missing, input_value={'id': 'st1', 'question':...足需明确说明。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.1.intent\n  Field required [type=missing, input_value={'id': 'st2', 'question':...明确标注缺失。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.2.intent\n  Field required [type=missing, input_value={'id': 'st3', 'question':...明确标注缺失。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.3.intent\n  Field required [type=missing, input_value={'id': 'st4', 'question':...明确标注缺失。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.4.intent\n  Field required [type=missing, input_value={'id': 'st5', 'question':...或标注冲突点。'}, input_type=dict]\n    For further information visit https:/[path]"
+          ],
+          "raw_result": "output/personal-live/after/numbers/initial.json",
+          "successful_http_responses": 15,
+          "actual_tokens": 29687
+        },
+        {
+          "id": "dates",
+          "kind": "initial",
+          "task_id": "task_b2a216e26ff4",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 55.283,
+          "metrics": {
+            "latency_ms": 58134.515,
+            "llm_calls": 15,
+            "tool_calls": 4,
+            "tool_failures": 0,
+            "retrieval_calls": 3,
+            "retries": 4,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 18327,
+              "completion_tokens": 9535,
+              "total_tokens": 27862,
+              "cost_usd": 0.0
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 5795.136,
+              "ResearchAgent": 10916.343,
+              "VerifierAgent": 7093.918,
+              "CriticAgent": 6725.721,
+              "WriterAgent": 27603.397
+            }
+          },
+          "expected": "2025 年 10 万元；2026 年 20 万元；2026 年 9 月 10 日上线；不得互换年份。",
+          "human_review": "pending",
+          "response_start": 45,
+          "response_end": 60,
+          "errors": [
+            "planner: StructuredOutputError: ResearchPlan validation failed after 2 attempts: attempt 2: ValidationError: 5 validation errors for ResearchPlan\nsubtasks.0.intent\n  Field required [type=missing, input_value={'id': 'st1', 'question':...说明信息缺失。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.1.intent\n  Field required [type=missing, input_value={'id': 'st2', 'question':...确说明未找到。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.2.intent\n  Field required [type=missing, input_value={'id': 'st3', 'question':...确说明未找到。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.3.intent\n  Field required [type=missing, input_value={'id': 'st4', 'question':...确说明未找到。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.4.intent\n  Field required [type=missing, input_value={'id': 'st5', 'question':...说明无法计算。'}, input_type=dict]\n    For further information visit https:/[path]",
+            "report_verifier: BudgetExceededError"
+          ],
+          "raw_result": "output/personal-live/after/dates/initial.json",
+          "successful_http_responses": 15,
+          "actual_tokens": 33938
+        },
+        {
+          "id": "conditions",
+          "kind": "initial",
+          "task_id": "task_f9b8774ca091",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 48.289,
+          "metrics": {
+            "latency_ms": 50264.492,
+            "llm_calls": 15,
+            "tool_calls": 4,
+            "tool_failures": 0,
+            "retrieval_calls": 3,
+            "retries": 4,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 15395,
+              "completion_tokens": 8049,
+              "total_tokens": 23444,
+              "cost_usd": 0.0
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 6318.733,
+              "ResearchAgent": 9169.494,
+              "VerifierAgent": 4700.838,
+              "CriticAgent": 7097.718,
+              "WriterAgent": 22977.709
+            }
+          },
+          "expected": "管理员批准是必要条件；个人免费账户不能启用；不能无条件肯定。",
+          "human_review": "pending",
+          "response_start": 60,
+          "response_end": 75,
+          "errors": [
+            "planner: StructuredOutputError: ResearchPlan validation failed after 2 attempts: attempt 2: ValidationError: 4 validation errors for ResearchPlan\nsubtasks.0.intent\n  Field required [type=missing, input_value={'id': 'st1', 'question':...标注信息缺失。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.1.intent\n  Field required [type=missing, input_value={'id': 'st2', 'question':...内部资料确认。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.2.intent\n  Field required [type=missing, input_value={'id': 'st3', 'question':...为知识库空白。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.3.intent\n  Field required [type=missing, input_value={'id': 'st4', 'question':...清的信息缺口。'}, input_type=dict]\n    For further information visit https:/[path]"
+          ],
+          "raw_result": "output/personal-live/after/conditions/initial.json",
+          "successful_http_responses": 15,
+          "actual_tokens": 23444
+        },
+        {
+          "id": "conflicts",
+          "kind": "initial",
+          "task_id": "task_216ffff1312e",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 49.761,
+          "metrics": {
+            "latency_ms": 49916.839,
+            "llm_calls": 17,
+            "tool_calls": 4,
+            "tool_failures": 0,
+            "retrieval_calls": 3,
+            "retries": 6,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 20782,
+              "completion_tokens": 8405,
+              "total_tokens": 29187,
+              "cost_usd": 0.0
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 6073.373,
+              "ResearchAgent": 14102.099,
+              "VerifierAgent": 5069.669,
+              "CriticAgent": 5001.873,
+              "WriterAgent": 19669.825
+            }
+          },
+          "expected": "两份资料冲突；缺少生效日期与适用版本；不能确定当前能力或擅自选择一份。",
+          "human_review": "pending",
+          "response_start": 75,
+          "response_end": 92,
+          "errors": [
+            "planner: StructuredOutputError: ResearchPlan validation failed after 2 attempts: attempt 2: ValidationError: 5 validation errors for ResearchPlan\nsubtasks.0.intent\n  Field required [type=missing, input_value={'id': 'st1', 'question':...与时效性比较。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.1.intent\n  Field required [type=missing, input_value={'id': 'st2', 'question':...持还是未提及。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.2.intent\n  Field required [type=missing, input_value={'id': 'st3', 'question':...本或时间范围。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.3.intent\n  Field required [type=missing, input_value={'id': 'st4', 'question':...缺失哪些信息。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.4.intent\n  Field required [type=missing, input_value={'id': 'st5', 'question':...足，不做推测。'}, input_type=dict]\n    For further information visit https:/[path]"
+          ],
+          "raw_result": "output/personal-live/after/conflicts/initial.json",
+          "successful_http_responses": 17,
+          "actual_tokens": 29187
+        },
+        {
+          "id": "no_answer",
+          "kind": "initial",
+          "task_id": "task_a7dd372c59c1",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 55.796,
+          "metrics": {
+            "latency_ms": 57868.462,
+            "llm_calls": 18,
+            "tool_calls": 4,
+            "tool_failures": 0,
+            "retrieval_calls": 3,
+            "retries": 7,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 19870,
+              "completion_tokens": 9327,
+              "total_tokens": 29197,
+              "cost_usd": 0.0
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 5558.107,
+              "ResearchAgent": 15175.888,
+              "VerifierAgent": 5379.554,
+              "CriticAgent": 6218.955,
+              "WriterAgent": 25535.958
+            }
+          },
+          "expected": "资料未提供认证信息；无法确认是否认证；没有提到不等于未认证。",
+          "human_review": "pending",
+          "response_start": 92,
+          "response_end": 110,
+          "errors": [
+            "planner: StructuredOutputError: ResearchPlan validation failed after 2 attempts: attempt 2: ValidationError: 8 validation errors for ResearchPlan\nsubtasks.0.question\n  Field required [type=missing, input_value={'id': 'st1', 'descriptio...证相关的文档。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.0.intent\n  Field required [type=missing, input_value={'id': 'st1', 'descriptio...证相关的文档。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.1.question\n  Field required [type=missing, input_value={'id': 'st2', 'descriptio...中则记录为空。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.1.intent\n  Field required [type=missing, input_value={'id': 'st2', 'descriptio...中则记录为空。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.2.question\n  Field required [type=missing, input_value={'id': 'st3', 'descriptio...提及认证信息。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.2.intent\n  Field required [type=missing, input_value={'id': 'st3', 'descriptio...提及认证信息。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.3.question\n  Field required [type=missing, input_value={'id': 'st4', 'descriptio...不确定性说明。'}, input_type=dict]\n    For further information visit https:/[path]\nsubtasks.3.intent\n  Field required [type=missing, input_value={'id': 'st4', 'descriptio...不确定性说明。'}, input_type=dict]\n    For further information visit https:/[path]"
+          ],
+          "raw_result": "output/personal-live/after/no_answer/initial.json",
+          "successful_http_responses": 18,
+          "actual_tokens": 29197
+        }
+      ],
+      "raw_record": "output/personal-live/after/experiment.json",
+      "started_at": "2026-10-05T13:50:50.908318+00:00",
+      "finished_at": "2026-10-05T13:56:55.323214+00:00"
+    },
+    "after-schema": {
+      "source_sha256": "e4f01c0b3c1abf5ad14827037476f3bcfeb4986f683f1006e6ba44208efc948c",
+      "dataset_sha256": "86010b8b798f5040985be28cd45e4619fc8df1300baa1ed64270f0713d83e46c",
+      "parameters": {
+        "temperature": 0.1,
+        "max_tokens": 1200,
+        "max_iterations": 1,
+        "top_k": 4,
+        "token_budget_live": 30000
+      },
+      "initial_cases": 6,
+      "all_cases_including_followup": 7,
+      "initial_http_responses": 45,
+      "initial_tokens": 96490,
+      "initial_prompt_tokens": 66973,
+      "initial_completion_tokens": 29517,
+      "initial_latency_s": 146.744,
+      "initial_avg_latency_s": 24.457,
+      "all_http_responses": 56,
+      "all_tokens": 122875,
+      "cases": [
+        {
+          "id": "negation",
+          "kind": "initial",
+          "task_id": "task_7bd67551d40a",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 22.133,
+          "metrics": {
+            "latency_ms": 23772.485,
+            "llm_calls": 7,
+            "tool_calls": 2,
+            "tool_failures": 0,
+            "retrieval_calls": 1,
+            "retries": 0,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 10192,
+              "completion_tokens": 4417,
+              "total_tokens": 14609,
+              "cost_usd": 0.008358
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 2377.404,
+              "ResearchAgent": 4477.438,
+              "VerifierAgent": 2580.496,
+              "CriticAgent": 3988.254,
+              "WriterAgent": 10348.893
+            }
+          },
+          "expected": "不支持离线部署；必须连接云端；每月 10 元。",
+          "human_review": "pending",
+          "response_start": 0,
+          "response_end": 7,
+          "errors": [],
+          "raw_result": "output/personal-live/after-schema/negation/initial.json",
+          "successful_http_responses": 7,
+          "actual_tokens": 14609
+        },
+        {
+          "id": "negation",
+          "kind": "followup",
+          "task_id": "task_f09adde74359",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 41.453,
+          "metrics": {
+            "latency_ms": 42981.103,
+            "llm_calls": 11,
+            "tool_calls": 6,
+            "tool_failures": 0,
+            "retrieval_calls": 3,
+            "retries": 0,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 17558,
+              "completion_tokens": 8827,
+              "total_tokens": 26385,
+              "cost_usd": 0.0158598
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 4247.04,
+              "ResearchAgent": 12098.919,
+              "VerifierAgent": 2833.042,
+              "CriticAgent": 8001.762,
+              "WriterAgent": 15800.34
+            }
+          },
+          "expected": "不支持离线部署；必须连接云端；每月 10 元。",
+          "human_review": "pending",
+          "response_start": 7,
+          "response_end": 18,
+          "errors": [
+            "researcher: dropped evidence with unknown source 'metadata'"
+          ],
+          "raw_result": "output/personal-live/after-schema/negation/followup.json",
+          "successful_http_responses": 11,
+          "actual_tokens": 26385
+        },
+        {
+          "id": "numbers",
+          "kind": "initial",
+          "task_id": "task_582f21ae8aea",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 23.942,
+          "metrics": {
+            "latency_ms": 26329.464,
+            "llm_calls": 7,
+            "tool_calls": 2,
+            "tool_failures": 0,
+            "retrieval_calls": 1,
+            "retries": 0,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 11408,
+              "completion_tokens": 5278,
+              "total_tokens": 16686,
+              "cost_usd": 0.009756
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 2468.251,
+              "ResearchAgent": 4493.495,
+              "VerifierAgent": 2026.823,
+              "CriticAgent": 4600.946,
+              "WriterAgent": 12739.949
+            }
+          },
+          "expected": "10 GB；6 MB；平均 250 毫秒；没有最大时长保证。",
+          "human_review": "pending",
+          "response_start": 18,
+          "response_end": 25,
+          "errors": [],
+          "raw_result": "output/personal-live/after-schema/numbers/initial.json",
+          "successful_http_responses": 7,
+          "actual_tokens": 16686
+        },
+        {
+          "id": "dates",
+          "kind": "initial",
+          "task_id": "task_3f73325f919b",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 27.105,
+          "metrics": {
+            "latency_ms": 29808.712,
+            "llm_calls": 9,
+            "tool_calls": 4,
+            "tool_failures": 0,
+            "retrieval_calls": 2,
+            "retries": 0,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 13766,
+              "completion_tokens": 5652,
+              "total_tokens": 19418,
+              "cost_usd": 0.0109122
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 3071.745,
+              "ResearchAgent": 6873.502,
+              "VerifierAgent": 3273.459,
+              "CriticAgent": 4735.863,
+              "WriterAgent": 11854.143
+            }
+          },
+          "expected": "2025 年 10 万元；2026 年 20 万元；2026 年 9 月 10 日上线；不得互换年份。",
+          "human_review": "pending",
+          "response_start": 25,
+          "response_end": 34,
+          "errors": [],
+          "raw_result": "output/personal-live/after-schema/dates/initial.json",
+          "successful_http_responses": 9,
+          "actual_tokens": 19418
+        },
+        {
+          "id": "conditions",
+          "kind": "initial",
+          "task_id": "task_ec38f3160099",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 30.559,
+          "metrics": {
+            "latency_ms": 33205.286,
+            "llm_calls": 9,
+            "tool_calls": 4,
+            "tool_failures": 0,
+            "retrieval_calls": 2,
+            "retries": 0,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 13404,
+              "completion_tokens": 6567,
+              "total_tokens": 19971,
+              "cost_usd": 0.0119016
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 3383.893,
+              "ResearchAgent": 8241.206,
+              "VerifierAgent": 2920.959,
+              "CriticAgent": 4234.762,
+              "WriterAgent": 14424.466
+            }
+          },
+          "expected": "管理员批准是必要条件；个人免费账户不能启用；不能无条件肯定。",
+          "human_review": "pending",
+          "response_start": 34,
+          "response_end": 43,
+          "errors": [],
+          "raw_result": "output/personal-live/after-schema/conditions/initial.json",
+          "successful_http_responses": 9,
+          "actual_tokens": 19971
+        },
+        {
+          "id": "conflicts",
+          "kind": "initial",
+          "task_id": "task_ea7ac35f54fe",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 31.615,
+          "metrics": {
+            "latency_ms": 34039.361,
+            "llm_calls": 8,
+            "tool_calls": 3,
+            "tool_failures": 0,
+            "retrieval_calls": 1,
+            "retries": 0,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 12959,
+              "completion_tokens": 5883,
+              "total_tokens": 18842,
+              "cost_usd": 0.0109473
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 3733.6,
+              "ResearchAgent": 6560.717,
+              "VerifierAgent": 4250.831,
+              "CriticAgent": 7478.272,
+              "WriterAgent": 12015.941
+            }
+          },
+          "expected": "两份资料冲突；缺少生效日期与适用版本；不能确定当前能力或擅自选择一份。",
+          "human_review": "pending",
+          "response_start": 43,
+          "response_end": 51,
+          "errors": [],
+          "raw_result": "output/personal-live/after-schema/conflicts/initial.json",
+          "successful_http_responses": 8,
+          "actual_tokens": 18842
+        },
+        {
+          "id": "no_answer",
+          "kind": "initial",
+          "task_id": "task_83f3c636dfca",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 11.39,
+          "metrics": {
+            "latency_ms": 12808.705,
+            "llm_calls": 5,
+            "tool_calls": 2,
+            "tool_failures": 0,
+            "retrieval_calls": 1,
+            "retries": 0,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 5244,
+              "completion_tokens": 1720,
+              "total_tokens": 6964,
+              "cost_usd": 0.0036372
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 2206.681,
+              "ResearchAgent": 3416.8,
+              "VerifierAgent": 2261.077,
+              "CriticAgent": 4453.424,
+              "WriterAgent": 470.723
+            }
+          },
+          "expected": "资料未提供认证信息；无法确认是否认证；没有提到不等于未认证。",
+          "human_review": "pending",
+          "response_start": 51,
+          "response_end": 56,
+          "errors": [],
+          "raw_result": "output/personal-live/after-schema/no_answer/initial.json",
+          "successful_http_responses": 5,
+          "actual_tokens": 6964
+        }
+      ],
+      "raw_record": "output/personal-live/after-schema/experiment.json",
+      "started_at": "2026-10-05T14:02:48.656958+00:00",
+      "finished_at": "2026-10-05T14:05:58.948520+00:00"
+    },
+    "final": {
+      "source_sha256": "6b32a8b86c79cead9cc90b4db64e16ad01da9a119b9d12219005a71f7ef7a31d",
+      "dataset_sha256": "86010b8b798f5040985be28cd45e4619fc8df1300baa1ed64270f0713d83e46c",
+      "parameters": {
+        "temperature": 0.1,
+        "max_tokens": 1200,
+        "max_iterations": 1,
+        "top_k": 4,
+        "token_budget_live": 30000
+      },
+      "initial_cases": 6,
+      "all_cases_including_followup": 7,
+      "initial_http_responses": 49,
+      "initial_tokens": 112865,
+      "initial_prompt_tokens": 80094,
+      "initial_completion_tokens": 32771,
+      "initial_latency_s": 156.917,
+      "initial_avg_latency_s": 26.153,
+      "all_http_responses": 58,
+      "all_tokens": 132093,
+      "cases": [
+        {
+          "id": "negation",
+          "kind": "initial",
+          "task_id": "task_68306350f45b",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 22.196,
+          "metrics": {
+            "latency_ms": 24095.167,
+            "llm_calls": 7,
+            "tool_calls": 2,
+            "tool_failures": 0,
+            "retrieval_calls": 1,
+            "retries": 0,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 10667,
+              "completion_tokens": 4191,
+              "total_tokens": 14858,
+              "cost_usd": 0.0082293
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 3051.374,
+              "ResearchAgent": 4293.573,
+              "VerifierAgent": 2277.396,
+              "CriticAgent": 3823.683,
+              "WriterAgent": 10649.141
+            }
+          },
+          "expected": "不支持离线部署；必须连接云端；每月 10 元。",
+          "human_review": "pending",
+          "response_start": 0,
+          "response_end": 7,
+          "errors": [],
+          "raw_result": "output/personal-live/final/negation/initial.json",
+          "successful_http_responses": 7,
+          "actual_tokens": 14858
+        },
+        {
+          "id": "negation",
+          "kind": "followup",
+          "task_id": "task_6a0c7befed40",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 27.547,
+          "metrics": {
+            "latency_ms": 30772.108,
+            "llm_calls": 9,
+            "tool_calls": 3,
+            "tool_failures": 0,
+            "retrieval_calls": 2,
+            "retries": 0,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 14009,
+              "completion_tokens": 5219,
+              "total_tokens": 19228,
+              "cost_usd": 0.0104655
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 4757.768,
+              "ResearchAgent": 7685.262,
+              "VerifierAgent": 2608.994,
+              "CriticAgent": 5513.31,
+              "WriterAgent": 10206.774
+            }
+          },
+          "expected": "不支持离线部署；必须连接云端；每月 10 元。",
+          "human_review": "pending",
+          "response_start": 7,
+          "response_end": 16,
+          "errors": [
+            "researcher: dropped evidence with unknown source 'metadata'"
+          ],
+          "raw_result": "output/personal-live/final/negation/followup.json",
+          "successful_http_responses": 9,
+          "actual_tokens": 19228
+        },
+        {
+          "id": "numbers",
+          "kind": "initial",
+          "task_id": "task_9ca8b0578fd4",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 21.174,
+          "metrics": {
+            "latency_ms": 22794.957,
+            "llm_calls": 7,
+            "tool_calls": 2,
+            "tool_failures": 0,
+            "retrieval_calls": 1,
+            "retries": 0,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 11933,
+              "completion_tokens": 4501,
+              "total_tokens": 16434,
+              "cost_usd": 0.0089811
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 2166.956,
+              "ResearchAgent": 4062.172,
+              "VerifierAgent": 2638.988,
+              "CriticAgent": 4555.684,
+              "WriterAgent": 9371.157
+            }
+          },
+          "expected": "10 GB；6 MB；平均 250 毫秒；没有最大时长保证。",
+          "human_review": "pending",
+          "response_start": 16,
+          "response_end": 23,
+          "errors": [],
+          "raw_result": "output/personal-live/final/numbers/initial.json",
+          "successful_http_responses": 7,
+          "actual_tokens": 16434
+        },
+        {
+          "id": "dates",
+          "kind": "initial",
+          "task_id": "task_b54011c73380",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 46.26,
+          "metrics": {
+            "latency_ms": 49118.786,
+            "llm_calls": 12,
+            "tool_calls": 6,
+            "tool_failures": 0,
+            "retrieval_calls": 3,
+            "retries": 1,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 19947,
+              "completion_tokens": 9372,
+              "total_tokens": 29319,
+              "cost_usd": 0.0172305
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 2883.414,
+              "ResearchAgent": 11127.823,
+              "VerifierAgent": 2661.253,
+              "CriticAgent": 5919.757,
+              "WriterAgent": 26526.539
+            }
+          },
+          "expected": "2025 年 10 万元；2026 年 20 万元；2026 年 9 月 10 日上线；不得互换年份。",
+          "human_review": "pending",
+          "response_start": 23,
+          "response_end": 35,
+          "errors": [
+            "report_verifier: BudgetExceededError"
+          ],
+          "raw_result": "output/personal-live/final/dates/initial.json",
+          "successful_http_responses": 12,
+          "actual_tokens": 33743
+        },
+        {
+          "id": "conditions",
+          "kind": "initial",
+          "task_id": "task_3a32891960dd",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 27.059,
+          "metrics": {
+            "latency_ms": 29399.195,
+            "llm_calls": 9,
+            "tool_calls": 4,
+            "tool_failures": 0,
+            "retrieval_calls": 2,
+            "retries": 0,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 13743,
+              "completion_tokens": 5501,
+              "total_tokens": 19244,
+              "cost_usd": 0.0107241
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 3187.677,
+              "ResearchAgent": 7823.82,
+              "VerifierAgent": 3212.082,
+              "CriticAgent": 4482.347,
+              "WriterAgent": 10693.269
+            }
+          },
+          "expected": "管理员批准是必要条件；个人免费账户不能启用；不能无条件肯定。",
+          "human_review": "pending",
+          "response_start": 35,
+          "response_end": 44,
+          "errors": [],
+          "raw_result": "output/personal-live/final/conditions/initial.json",
+          "successful_http_responses": 9,
+          "actual_tokens": 19244
+        },
+        {
+          "id": "conflicts",
+          "kind": "initial",
+          "task_id": "task_db55d5d1594f",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 21.382,
+          "metrics": {
+            "latency_ms": 23776.83,
+            "llm_calls": 7,
+            "tool_calls": 2,
+            "tool_failures": 0,
+            "retrieval_calls": 1,
+            "retries": 0,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 10676,
+              "completion_tokens": 3937,
+              "total_tokens": 14613,
+              "cost_usd": 0.0079272
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 3489.442,
+              "ResearchAgent": 4341.735,
+              "VerifierAgent": 2487.234,
+              "CriticAgent": 5386.369,
+              "WriterAgent": 8072.05
+            }
+          },
+          "expected": "两份资料冲突；缺少生效日期与适用版本；不能确定当前能力或擅自选择一份。",
+          "human_review": "pending",
+          "response_start": 44,
+          "response_end": 51,
+          "errors": [],
+          "raw_result": "output/personal-live/final/conflicts/initial.json",
+          "successful_http_responses": 7,
+          "actual_tokens": 14613
+        },
+        {
+          "id": "no_answer",
+          "kind": "initial",
+          "task_id": "task_af098593102d",
+          "status": "completed",
+          "quality": "degraded",
+          "latency_s": 18.846,
+          "metrics": {
+            "latency_ms": 20398.464,
+            "llm_calls": 7,
+            "tool_calls": 2,
+            "tool_failures": 0,
+            "retrieval_calls": 1,
+            "retries": 0,
+            "mcp_calls": 0,
+            "iterations": 1,
+            "usage": {
+              "prompt_tokens": 10288,
+              "completion_tokens": 3685,
+              "total_tokens": 13973,
+              "cost_usd": 0.0075084
+            },
+            "agent_latency_ms": {
+              "PlannerAgent": 1916.734,
+              "ResearchAgent": 4256.897,
+              "VerifierAgent": 2114.405,
+              "CriticAgent": 4202.61,
+              "WriterAgent": 7907.818
+            }
+          },
+          "expected": "资料未提供认证信息；无法确认是否认证；没有提到不等于未认证。",
+          "human_review": "pending",
+          "response_start": 51,
+          "response_end": 58,
+          "errors": [],
+          "raw_result": "output/personal-live/final/no_answer/initial.json",
+          "successful_http_responses": 7,
+          "actual_tokens": 13973
+        }
+      ],
+      "raw_record": "output/personal-live/final/experiment.json",
+      "started_at": "2026-10-05T14:07:47.019890+00:00",
+      "finished_at": "2026-10-05T14:10:54.487494+00:00"
+    }
+  },
+  "exe_default_budget": {
+    "sha256": "b24ff926587ec977126314cd5d2b67d2647d8aae9580456a6b7f73212d910453",
+    "parameters": {
+      "model": "deepseek-flash",
+      "temperature": 0.2,
+      "max_tokens": 1200,
+      "top_k": 6,
+      "max_iterations": 2,
+      "token_budget_live": 160000
+    },
+    "checks": [
+      {
+        "task_id": "task_34bd47cc06b8",
+        "status": "completed",
+        "quality": "degraded",
+        "errors": [],
+        "document_ids": [
+          "import_ea7d203b076d64c2"
+        ],
+        "parent_task_id": null,
+        "created_at": "2026-10-05T14:13:41Z",
+        "completed_at": "2026-10-05T14:14:31Z",
+        "metrics": {
+          "latency_ms": 54425.985,
+          "llm_calls": 19,
+          "tool_calls": 8,
+          "tool_failures": 0,
+          "retrieval_calls": 6,
+          "retries": 0,
+          "mcp_calls": 0,
+          "iterations": 2,
+          "usage": {
+            "prompt_tokens": 28501,
+            "completion_tokens": 9800,
+            "total_tokens": 38301,
+            "cost_usd": 0.0203103
+          },
+          "agent_latency_ms": {
+            "PlannerAgent": 3799.582,
+            "ResearchAgent": 21298.371,
+            "VerifierAgent": 7386.301,
+            "CriticAgent": 7674.519,
+            "pipeline.iteration[2]": 13486.779,
+            "WriterAgent": 14267.212
+          }
+        },
+        "kind": "initial",
+        "raw_result": "output/personal-live/exe-initial.json",
+        "human_review": "pending"
+      },
+      {
+        "task_id": "task_1ddb8b6bb871",
+        "status": "completed",
+        "quality": "degraded",
+        "errors": [],
+        "document_ids": [
+          "import_ea7d203b076d64c2"
+        ],
+        "parent_task_id": "task_34bd47cc06b8",
+        "created_at": "2026-10-05T14:14:32Z",
+        "completed_at": "2026-10-05T14:15:21Z",
+        "metrics": {
+          "latency_ms": 52635.474,
+          "llm_calls": 18,
+          "tool_calls": 8,
+          "tool_failures": 0,
+          "retrieval_calls": 5,
+          "retries": 0,
+          "mcp_calls": 0,
+          "iterations": 2,
+          "usage": {
+            "prompt_tokens": 29843,
+            "completion_tokens": 9643,
+            "total_tokens": 39486,
+            "cost_usd": 0.0205245
+          },
+          "agent_latency_ms": {
+            "PlannerAgent": 2495.689,
+            "ResearchAgent": 17525.883,
+            "VerifierAgent": 6212.834,
+            "CriticAgent": 12396.906,
+            "pipeline.iteration[2]": 8422.604,
+            "WriterAgent": 14004.162
+          }
+        },
+        "kind": "followup",
+        "raw_result": "output/personal-live/exe-followup.json",
+        "human_review": "pending"
+      }
+    ],
+    "note": "Separate desktop default-parameter run; excluded from fixed six-case comparison. Metrics are Pipeline values, not a billing reconciliation.",
+    "observed_issues": [
+      "Repeated quotes and citations.",
+      "Followup summary omits launch date present in the body.",
+      "Followup income-change section falls back to raw numbers.",
+      "Limitations contain inferences requiring human review."
+    ]
+  }
+}

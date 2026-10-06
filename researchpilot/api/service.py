@@ -32,6 +32,18 @@ class ServiceContainer:
         self.settings = settings or get_settings()
         self._lock = threading.Lock()
         self.knowledge_base = KnowledgeBase.load_or_create(self.settings)
+        if getattr(self.settings, "desktop_mode", False):
+            from researchpilot.utils import project_root
+
+            changed = []
+            for original in self.knowledge_base.loader.load_path(project_root() / "data" / "knowledge_base"):
+                existing = self.knowledge_base.get_document(original.doc_id)
+                if existing and existing.content == original.content and not existing.metadata.get("example"):
+                    existing = existing.model_copy(deep=True)
+                    existing.metadata["example"] = True
+                    changed.append(existing)
+            if changed:
+                self.knowledge_base.ingest_documents_and_save(changed)
         self.trace_store = TraceStore(self.settings.runs_dir())
         self.result_store = ResultStore(self.settings.runs_dir())
         self.task_store = TaskStore(self.settings.runs_dir())
@@ -152,10 +164,14 @@ class ServiceContainer:
         with self._lock:
             return self.knowledge_base.delete_document(doc_id)
 
-    def import_file(self, filename: str, content: str) -> Any:
+    def import_file(self, filename: str, content: str | bytes) -> Any:
         from researchpilot.utils import sha1_of
 
-        documents = self.knowledge_base.loader.load_text(content, filename=filename)
+        documents = (
+            self.knowledge_base.loader.load_bytes(content, filename=filename)
+            if isinstance(content, bytes)
+            else self.knowledge_base.loader.load_text(content, filename=filename)
+        )
         if not documents or not any(doc.content.strip() for doc in documents):
             raise ValueError("文件没有可导入的正文内容。")
         for document in documents:
@@ -163,6 +179,18 @@ class ServiceContainer:
             document.metadata["filename"] = filename
         with self._lock:
             return self.knowledge_base.ingest_documents_and_save(documents)
+
+    def load_examples(self) -> Any:
+        from researchpilot.utils import project_root
+
+        documents = self.knowledge_base.loader.load_path(project_root() / "data" / "knowledge_base")
+        for document in documents:
+            document.metadata["example"] = True
+        with self._lock:
+            existing = {doc.doc_id for doc in self.knowledge_base.summaries()}
+            return self.knowledge_base.ingest_documents_and_save(
+                [doc for doc in documents if doc.doc_id not in existing]
+            )
 
     def runtime(self, task_id: str, question: str) -> ResearchRuntime:
         return build_runtime(

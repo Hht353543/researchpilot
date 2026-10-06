@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#f7f8f7" />
-    <title>ResearchPilot · 团队研究空间</title>
+    <title>ResearchPilot · 个人资料研究助手</title>
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/static/styles.css?v=4" />
   </head>
@@ -17,7 +17,7 @@
       >
       <div class="workspace-label">
         <span class="workspace-avatar">RP</span
-        ><span>团队研究空间<small>Team workspace</small></span>
+        ><span>个人资料研究助手<small>Personal research</small></span>
       </div>
       <button id="sidebarNew" class="new-research" type="button">
         <span data-icon="plus"></span>新建研究
@@ -33,12 +33,12 @@
           ></span
         ></a>
         <a href="#knowledge" data-view="knowledge"
-          ><span data-icon="book-open"></span>团队知识库</a
+          ><span data-icon="book-open"></span>我的资料</a
         >
       </nav>
       <div class="sidebar-note">
         <span data-icon="layers"></span>
-        <p>把复杂问题变成<br />有据可查的团队知识。</p>
+        <p>把复杂问题变成<br />有据可查的个人资料。</p>
       </div>
       <div class="sidebar-bottom">
         <a class="settings-link" href="#settings" data-view="settings"
@@ -85,8 +85,8 @@
           <div class="home-heading">
             <span class="home-symbol" data-icon="compass"></span>
             <p class="eyebrow">一个问题，一份更清晰的答案</p>
-            <h1 id="homeTitle">今天，想深入了解什么？</h1>
-            <p>搜索、分析、连接线索。让好奇心成为下一步的依据。</p>
+            <h1 id="homeTitle">想从自己的资料中了解什么？</h1>
+            <p>选定自己的资料，生成有出处、可核对的中文报告。</p>
           </div>
           <div class="composer">
             <label class="sr-only" for="question">研究问题</label
@@ -99,7 +99,7 @@
             ></textarea>
             <div class="composer-footer">
               <span class="composer-mode"
-                ><span data-icon="scan-line"></span>深度研究</span
+                ><span data-icon="scan-line"></span>资料研究</span
               ><span id="questionCount" class="character-count">0 / 2000</span
               ><button id="run" class="primary" type="button">
                 开始研究<span data-icon="arrow-up-right"></span>
@@ -107,14 +107,22 @@
             </div>
           </div>
           <p id="composerHint" class="composer-hint">
-            <span>结合团队知识与可用来源，生成带引用的报告</span
+            <span>结合个人资料与可用来源，生成带引用的报告</span
             ><span><kbd>Ctrl</kbd> + <kbd>Enter</kbd> 开始</span>
           </p>
+          <section class="research-scope" aria-labelledby="scopeLabel">
+            <h2 id="scopeLabel">本次研究的资料</h2>
+            <p id="followupNotice" class="notice hidden"></p>
+            <div id="documentSelection" class="document-selection"></div>
+            <a class="text-link" href="#knowledge">导入或管理资料</a>
+            <button id="exitExamples" class="text-button hidden" type="button">返回个人资料研究</button>
+          </section>
           <div class="examples">
             <div class="section-heading compact">
-              <h2>从这里获得灵感</h2>
-              <span class="muted">选一个方向，继续完善问题</span>
+              <h2>独立示例体验</h2>
+              <span class="muted">载入示例后，可选择以下问题；示例不会混入个人资料研究</span>
             </div>
+            <button id="loadExamples" class="secondary" type="button">载入示例资料体验</button>
             <div id="samples" class="sample-list"></div>
           </div>
           <section class="recent-section" aria-labelledby="recentTitle">
@@ -190,10 +198,12 @@
               </details>
               <div class="result-actions">
                 <button id="copyReport" class="secondary" type="button">
-                  <span data-icon="copy"></span>复制报告</button
-                ><button id="downloadReport" class="secondary" type="button">下载报告</button
+                  <span data-icon="copy" aria-hidden="true"></span>复制报告</button
+                ><button id="downloadReport" class="secondary" type="button">下载 HTML 报告</button
+                ><button id="downloadMarkdown" class="secondary" type="button">下载 Markdown</button
+                ><button id="printReport" class="secondary" type="button">打印 / 保存 PDF</button
                 ><button id="followupResearch" class="secondary" type="button">
-                  <span data-icon="messages-square"></span>追问</button
+                  <span data-icon="messages-square" aria-hidden="true"></span>追问</button
                 ><button id="newResearch" class="text-button" type="button">
                   新建研究<span data-icon="plus"></span>
                 </button>
@@ -270,8 +280,8 @@
           <div class="page-heading">
             <div>
               <p class="eyebrow">为研究提供更多上下文</p>
-              <h1 id="knowledgeTitle">团队知识库</h1>
-              <p>把文档、经验与团队共识，带进每一次研究。</p>
+              <h1 id="knowledgeTitle">我的资料</h1>
+              <p>导入文档、笔记或会议记录，在研究前选择使用范围。</p>
             </div>
             <button id="openKnowledgeDialog" class="primary" type="button">
               <span data-icon="plus"></span>添加资料
@@ -279,13 +289,13 @@
           </div>
           <div class="file-import-row">
             <label class="secondary file-picker">导入文件
-              <input id="kbFiles" type="file" accept=".txt,.md,.markdown,.csv,.json,.jsonl" multiple />
+              <input id="kbFiles" type="file" accept=".txt,.md,.markdown,.csv,.json,.jsonl,.pdf,.docx" multiple />
             </label>
-            <span class="muted">TXT、Markdown、CSV、JSON、JSONL；也可直接粘贴资料。</span>
+            <span class="muted">PDF（文字版）、DOCX、TXT、Markdown、CSV、JSON、JSONL；扫描件需先做 OCR。</span>
           </div>
           <div class="knowledge-banner">
             <span data-icon="book-open"></span
-            ><span>团队资料会自动参与研究，帮助答案贴近你们的实际情况。</span
+            ><span>研究只使用你勾选的资料。示例资料单独用于体验。</span
             ><span id="kbStats" class="summary-stat"></span>
           </div>
           <div class="list-toolbar">
@@ -295,7 +305,7 @@
                 id="kbQuery"
                 type="search"
                 placeholder="搜索资料中的内容"
-                aria-label="搜索团队知识库" /></label
+                aria-label="搜索我的资料" /></label
             ><button id="kbSearch" class="secondary" type="button">搜索</button>
             <details class="search-options">
               <summary>搜索选项</summary>
@@ -314,10 +324,10 @@
           ></div>
           <div class="section-heading compact document-heading">
             <h2>所有资料</h2>
-            <span class="muted">供团队研究使用</span>
+            <span class="muted">在研究页勾选后使用</span>
           </div>
           <div id="kbDocuments" class="document-list">
-            <div class="skeleton-row" aria-label="正在加载团队资料"></div>
+            <div class="skeleton-row" aria-label="正在加载个人资料"></div>
             <div class="skeleton-row" aria-hidden="true"></div>
           </div>
           <p id="kbFeedback" class="feedback" role="status"></p>
@@ -347,6 +357,11 @@
           <section id="desktopConnection" class="desktop-connection hidden">
             <h2 id="setupHeading">连接你的 AI 服务</h2>
             <p id="setupCopy">只需输入自己的 API Key，其余设置已准备好。</p>
+            <div id="connectionGuide" class="connection-guide">
+              <p>API Key 在服务商控制台创建。连接测试和研究按该账户的实际用量计费，每次研究可能调用模型多次。</p>
+              <p><a id="createKeyLink" href="https://platform.deepseek.com/api_keys" target="_blank" rel="noreferrer">获取 DeepSeek API Key</a> · <a id="pricingLink" href="https://api-docs.deepseek.com/quick_start/pricing" target="_blank" rel="noreferrer">查看当前计费</a></p>
+              <p>所选资料片段会发送至你连接的模型服务。请先用少量资料体验，并在服务商控制台设置用量限制。</p>
+            </div>
             <label for="connectionKey">API Key
               <input id="connectionKey" type="password" autocomplete="off" spellcheck="false" placeholder="粘贴你的 DeepSeek API Key" />
             </label>
@@ -356,6 +371,7 @@
               <div class="settings-grid">
                 <label for="connectionService">AI 服务商<select id="connectionService"><option value="deepseek">DeepSeek</option><option value="openai">OpenAI</option><option value="custom">其他兼容服务</option></select></label>
                 <label for="connectionUrl">服务地址<input id="connectionUrl" type="url" /></label>
+                <label for="connectionModel">模型名称<input id="connectionModel" type="text" required /></label>
               </div>
               <button id="testConnection" type="button" class="secondary">测试连接</button>
             </details>
@@ -408,7 +424,7 @@
           <section id="platformAccess" class="setting-section">
             <div class="setting-description">
               <h2>平台访问</h2>
-              <p>连接到团队的 ResearchPilot。</p>
+              <p>连接 ResearchPilot 服务。</p>
             </div>
             <div class="setting-body">
               <p id="accessStatus" class="muted">此平台仅供本地访问。</p>
@@ -432,7 +448,7 @@
               </div>
             </div>
           </section>
-          <details class="advanced-settings">
+          <details id="developerSettings" class="advanced-settings">
             <summary>
               高级设置<span class="muted">生成参数与开发者信息</span>
             </summary>
@@ -489,7 +505,7 @@
       <form id="knowledgeForm">
         <div class="dialog-heading">
           <div>
-            <p class="eyebrow">团队知识</p>
+            <p class="eyebrow">个人资料</p>
             <h2 id="knowledgeDialogTitle">添加一份资料</h2>
           </div>
           <button
@@ -502,7 +518,7 @@
           </button>
         </div>
         <p class="muted">
-          粘贴会议记录、技术文档或团队经验。研究时会自动引用相关内容。
+          粘贴会议记录、技术文档或个人笔记。研究前可选择使用哪些资料。
         </p>
         <label for="kbTitle"
           >资料标题<input
@@ -512,7 +528,7 @@
             minlength="2"
             maxlength="200"
             required
-            placeholder="例如：团队技术选型原则" /></label
+            placeholder="例如：项目技术选型笔记" /></label
         ><label for="kbContent"
           >资料内容<textarea
             id="kbContent"
@@ -534,7 +550,9 @@
       </form>
     </dialog>
     <div id="toast" class="toast hidden" role="status"></div>
-    <script src="/static/app.js?v=7"></script>
-    <script src="/static/desktop.js?v=1"></script>
+    <script src="/static/markdown-it.min.js?v=14.1.0"></script>
+    <script src="/static/purify.min.js?v=3.3.1"></script>
+    <script src="/static/app.js?v=8"></script>
+    <script src="/static/desktop.js?v=2"></script>
   </body>
 </html>

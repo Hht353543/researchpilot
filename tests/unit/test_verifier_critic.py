@@ -64,8 +64,8 @@ def test_verifier_downgrades_claim_when_quote_is_not_in_source(
             Evidence(
                 id="E1",
                 subtask_id="S1",
-                claim="MCP 基于 JSON-RPC 2.0",
-                quote="MCP 基于 JSON-RPC 2.0",  # grounded
+                claim="MCP 基于 JSON-RPC 2.0，核心方法包括 initialize、tools/list 与 tools/call。",
+                quote="MCP 基于 JSON-RPC 2.0，核心方法包括 initialize、tools/list 与 tools/call。",  # grounded
                 source_id="kb-fixture-tools#c0",
             ),
             Evidence(

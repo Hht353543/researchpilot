@@ -1031,7 +1031,7 @@ kbd {
   line-height: 1.9;
   overflow-wrap: anywhere;
 }
-.markdown > h1:first-child {
+.markdown > h1 {
   display: none;
 }
 .markdown h1 {
@@ -1899,4 +1899,20 @@ dialog label {
   padding-left: 12px;
   border-left: 2px solid var(--border);
   color: var(--secondary);
+}
+/* Document scope stays next to the question; references are revealed on demand. */
+.research-scope { margin: 24px 0; padding: 18px; border: 1px solid #dde6e1; border-radius: 12px; }
+.research-scope h2 { font-size: 15px; margin: 0 0 12px; }
+.document-selection { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 12px 0; }
+.document-choice { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.document-choice input { width: auto; }
+.connection-guide { background: #f4f7f5; border-radius: 10px; padding: 12px 18px; margin: 16px 0; }
+@media print {
+  .sidebar, .content-header, .result-actions, .report-nav, #executionDetails, .toast { display: none !important; }
+  .app-shell { margin-left: 0 !important; }
+  .workspace { max-width: none; padding: 0; }
+  .source-excerpt { display: block; }
+  .source-excerpt > summary { display: none; }
+  .source-excerpt > blockquote { display: block; }
+  .source-item { break-inside: avoid; page-break-inside: avoid; }
 }

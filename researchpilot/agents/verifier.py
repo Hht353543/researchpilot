@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from researchpilot.agents.base import BaseAgent
+from researchpilot.agents.support import direct_support, quote_grounded, support_check
 from researchpilot.llm.prompts import VERIFIER_SYSTEM, verifier_user
 from researchpilot.schemas import (
     CitationCheck,
@@ -45,22 +46,32 @@ class VerifierAgent(BaseAgent):
 
         with self.span(input={"evidence": len(bundle.evidence), "subtasks": len(subtask_map)}) as span:
             report: VerificationReport | None = None
-            try:
-                result = runtime.llm.run(
-                    VerificationReport,
-                    agent=self.name,
-                    system=VERIFIER_SYSTEM,
-                    user=verifier_user(plan.objective, evidence_dump, sources_dump),
-                    hints={
-                        "objective": plan.objective,
-                        "evidence": evidence_dump,
-                        "sources": sources_dump,
-                        "subtask_map": subtask_map,
-                    },
-                    purpose="verifier",
-                    max_tokens=2000,
+            review_items = [
+                {**e, "source_context": source_contents.get(e["source_id"], "")}
+                for e in evidence_dump
+                if quote_grounded(e["quote"], source_contents.get(e["source_id"], ""))
+                and (
+                    not direct_support(e["claim"], e["quote"])
+                    or not direct_support(e["claim"], source_contents.get(e["source_id"], ""))
                 )
-                report = result.value
+            ]
+            try:
+                if review_items:
+                    result = runtime.llm.run(
+                        VerificationReport,
+                        agent=self.name,
+                        system=VERIFIER_SYSTEM,
+                        user=verifier_user(plan.objective, review_items, sources_dump),
+                        hints={
+                            "objective": plan.objective,
+                            "evidence": review_items,
+                            "sources": sources_dump,
+                            "subtask_map": subtask_map,
+                        },
+                        purpose="verifier",
+                        max_tokens=2000,
+                    )
+                    report = result.value
             except Exception as exc:
                 runtime.errors.append(f"verifier: {type(exc).__name__}: {exc}")
             report = self._audit(report, bundle, subtask_map, source_contents, plan.objective)
@@ -88,7 +99,7 @@ class VerifierAgent(BaseAgent):
         source_contents: dict[str, str],
         objective: str,
     ) -> VerificationReport:
-        """Re-derive every check in code; LLM judgement alone is never trusted."""
+        """Enforce source grounding, then consume semantic judgement for paraphrases."""
         runtime = self.runtime
         checks: list[CitationCheck] = []
         unsupported: list[str] = []
@@ -110,6 +121,7 @@ class VerifierAgent(BaseAgent):
             )
             source_relevance[source_id] = content_overlap(objective, haystack)
         objective_relevance: dict[str, float] = {}
+        semantic_checks = {check.evidence_id: check for check in report.checks} if report else {}
         for evidence in bundle.evidence:
             question = subtask_map.get(evidence.subtask_id, "")
             relevance = source_relevance.get(evidence.source_id, content_overlap(objective, evidence.quote))
@@ -135,29 +147,25 @@ class VerifierAgent(BaseAgent):
                 relevant_subtask = subtask_map.get(evidence.subtask_id, "")
                 relevance = objective_relevance.get(evidence.id, 0.0)
                 subtask_best = subtask_relevance.get(evidence.subtask_id, relevance)
-                recovery = min(grounding / 0.7, 1.0)
-                combined = round(0.4 * support + 0.4 * recovery + 0.2 * min(relevance * 2, 1.0), 3)
                 if relevant_subtask and subtask_best < 0.15:
                     status = "unsupported"
                     reason_prefix = "no retrieved source is topically related to the sub-task"
-                elif grounding < 0.35:
+                elif not quote_grounded(evidence.quote, content):
                     # The quote must exist in the retrieved source. Claim/quote
                     # agreement alone can be faked by an ungrounded sentence, so
                     # grounding is the primary invariant, not the combined score.
                     status = "unsupported"
                     reason_prefix = "quote is not present in the cited source"
-                elif grounding < 0.65:
-                    status = "weak"
-                    reason_prefix = "quote only partially matches the cited source"
-                elif combined >= 0.6:
-                    status = "supported"
-                    reason_prefix = ""
-                elif combined >= 0.35:
-                    status = "weak"
-                    reason_prefix = ""
                 else:
-                    status = "unsupported"
-                    reason_prefix = ""
+                    semantic = support_check(
+                        evidence.id,
+                        evidence.claim,
+                        evidence.quote,
+                        semantic_checks.get(evidence.id),
+                        source_context=content,
+                    )
+                    status = semantic.status
+                    reason_prefix = semantic.reason
                 reason = (
                     f"{reason_prefix}; quote grounding={grounding:.2f}, "
                     f"claim support={support:.2f}, relevance={relevance:.2f}"
@@ -178,7 +186,7 @@ class VerifierAgent(BaseAgent):
                     overlap=round(overlap_ratio(evidence.claim, evidence.quote), 3),
                 )
             )
-        supported_ids = {c.evidence_id for c in checks if c.status != "unsupported"}
+        supported_ids = {c.evidence_id for c in checks if c.status == "supported"}
         covered = {e.subtask_id for e in bundle.evidence if e.id in supported_ids}
         coverage = len([s for s in covered if s in subtask_map]) / max(len(subtask_map), 1)
         mean_status = sum(_STATUS_VALUE[c.status] for c in checks) / len(checks) if checks else 0.0

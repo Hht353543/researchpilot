@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "researchpilot"
 version = "0.1.0"
-description = "ResearchPilot - Multi-Agent Deep Research & Knowledge Base Platform"
+description = "ResearchPilot - Personal document research with verifiable sources"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -27,6 +27,8 @@ dependencies = [
     # environment-dependent (clean env without jieba: 30/35 tasks; with jieba:
     # 35/35 on identical code - verified A/B), so it is a hard dependency now.
     "jieba>=0.42,<0.43",
+    "pypdf>=6.1,<7",
+    "python-docx>=1.2,<2",
 ]
 
 [project.optional-dependencies]

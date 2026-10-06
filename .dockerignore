@@ -1,5 +1,17 @@
 .git
 .github
+# Local credentials and private runtime data
+.env
+.env.*
+settings.json
+credentials.json
+secrets.json
+*.pem
+*.key
+*.p12
+*.pfx
+output
+.playwright-cli
 .venv
 .venv-clean
 .venv-wheel

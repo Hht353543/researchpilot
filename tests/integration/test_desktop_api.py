@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import base64
+from io import BytesIO
+
 import httpx
 import pytest
 
@@ -150,6 +153,60 @@ async def test_invalid_files_are_rejected(desktop_app, filename, content):
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("suffix", ["pdf", "docx"])
+async def test_binary_import_survives_restart(desktop_app, suffix):
+    from docx import Document
+
+    from tests.unit.test_personal_research import text_pdf
+
+    if suffix == "pdf":
+        from pypdf import PdfWriter
+
+        writer, buffer = PdfWriter(clone_from=BytesIO(text_pdf())), BytesIO()
+        writer.add_attachment("附件.bin", b"x" * 1_100_000)
+        writer.write(buffer)
+        data = buffer.getvalue()
+        expected = "not supported"
+    else:
+        document, buffer = Document(), BytesIO()
+        document.add_paragraph("个人产品不支持离线部署，收费 10 元。")
+        document.save(buffer)
+        data, expected = buffer.getvalue(), "不支持离线部署"
+    app, store = desktop_app
+    async with desktop_client(app) as client:
+        response = await client.post(
+            "/kb/import",
+            json={"filename": f"产品说明.{suffix}", "content_base64": base64.b64encode(data).decode()},
+        )
+        assert response.status_code == 200, response.text
+        imported = (await client.get("/kb/documents")).json()["documents"][0]
+        restored = create_app(store.runtime_settings(), desktop=DesktopController(store))
+        try:
+            loaded = restored.state.container.knowledge_base.get_document(imported["doc_id"])
+            assert loaded and expected in loaded.content and not loaded.metadata.get("example")
+        finally:
+            restored.state.container.close()
+
+
+@pytest.mark.anyio
+async def test_examples_are_opt_in_and_cannot_be_selected_as_personal_documents(desktop_app, monkeypatch):
+    app, _ = desktop_app
+    monkeypatch.setattr("researchpilot.desktop.api.probe_connection", lambda config, key: None)
+    async with desktop_client(app) as client:
+        assert (await client.get("/kb/documents")).json()["documents"] == []
+        assert (await client.put("/desktop/settings", json={"api_key": "test-key"})).status_code == 200
+        assert (await client.post("/kb/examples")).status_code == 200
+        samples = (await client.get("/kb/documents")).json()["documents"]
+        assert samples and all(doc["metadata"].get("example") for doc in samples)
+        response = await client.post("/research", json={"question": "资料有哪些？", "mode": "async"})
+        assert response.status_code == 422 and response.json()["kind"] == "document_scope"
+        response = await client.post(
+            "/research", json={"question": "资料有哪些？", "document_ids": [samples[0]["doc_id"]]}
+        )
+        assert response.status_code == 422
+
+
+@pytest.mark.anyio
 async def test_settings_cannot_forward_old_key_to_another_service(desktop_app):
     app, store = desktop_app
     store.api_key = "do-not-forward"
@@ -173,8 +230,11 @@ async def test_real_http_setup_and_first_research(desktop_app):
                 "max_iterations": 1,
             }
             assert (await client.put("/desktop/settings", json=update)).status_code == 200
+            assert (await client.post("/kb/examples")).status_code == 200
             result = (
-                await client.post("/research", json={"question": "RAG 知识库如何帮助企业研究？"})
+                await client.post(
+                    "/research", json={"question": "RAG 知识库如何帮助企业研究？", "use_examples": True}
+                )
             ).json()
             assert result["status"] == "completed" and result["report"]["markdown"]
             assert result["evidence"]["sources"] and state.chat_requests > 1
@@ -192,7 +252,10 @@ async def test_active_research_blocks_configuration_change(desktop_app):
                 "api_key": "test-key",
             }
             assert (await client.put("/desktop/settings", json=update)).status_code == 200
-            submission = await client.post("/research", json={"question": "分析 RAG 知识库", "mode": "async"})
+            assert (await client.post("/kb/examples")).status_code == 200
+            submission = await client.post(
+                "/research", json={"question": "分析 RAG 知识库", "mode": "async", "use_examples": True}
+            )
             assert submission.status_code == 202
             assert (await client.put("/desktop/settings", json=update)).status_code == 409
             assert (await client.delete("/desktop/settings/api-key")).status_code == 409

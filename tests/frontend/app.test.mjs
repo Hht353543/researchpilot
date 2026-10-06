@@ -71,6 +71,8 @@ function loadApp(fetchImpl) {
     navigator: { clipboard: { writeText: async () => {} } },
     TextDecoder,
     TextEncoder,
+    btoa: value => Buffer.from(value, "binary").toString("base64"),
+    DOMPurify: { sanitize: html => html }, // DOM sanitization is verified in the real browser smoke.
     fetch: async (requestPath, options) => {
       requests.push({ path: requestPath, options });
       if (fetchImpl) return fetchImpl(requestPath, options);
@@ -84,6 +86,7 @@ function loadApp(fetchImpl) {
   };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(path.dirname(appPath), "markdown-it.min.js"), "utf8"), sandbox);
   const code = fs.readFileSync(appPath, "utf8") + "\n" + fs.readFileSync(path.join(path.dirname(appPath), "desktop.js"), "utf8");
   vm.runInContext(
     `${code}
@@ -92,6 +95,7 @@ function loadApp(fetchImpl) {
                            friendlyError, statusMeta, escapeHtml, inline, prepareCitations,
                            updateProgress, showView, loadTask, stopObservation,
                            decodeDocument, connectionPayload, renderDesktopSettings, renderHealth, researchPayload,
+                           renderDocumentSelection, startExamples, resetResearch, encodeBinary, reportHtml,
                            reportMarkdown: () => currentReportMarkdown };`,
     sandbox,
   );
@@ -104,6 +108,41 @@ test("file import decodes UTF-8 and legacy Chinese text", () => {
   assert.equal(app.decodeDocument(Uint8Array.from([0xd6, 0xd0, 0xce, 0xc4]).buffer), "中文");
 });
 
+test("personal document selection excludes examples and sends explicit ids", () => {
+  const { app, nodes } = loadApp();
+  app.renderKbDocuments([
+    { doc_id: "own", title: "自己的笔记", metadata: {} },
+    { doc_id: "sample", title: "示例资料", metadata: { example: true } },
+  ]);
+  assert.match(nodes.get("documentSelection").innerHTML, /自己的笔记/);
+  assert.doesNotMatch(nodes.get("documentSelection").innerHTML, /示例资料/);
+  assert.equal(JSON.stringify(app.researchPayload("研究自己的笔记").document_ids), '["own"]');
+});
+
+test("followup submits the parent id and inherited scope without old-question prefill", () => {
+  const { app, nodes } = loadApp();
+  app.renderKbDocuments([{ doc_id: "own", title: "笔记", metadata: {} }]);
+  app.resetResearch("", { task_id: "parent", question: "上次研究问题", document_ids: ["own"], use_examples: false });
+  assert.equal(nodes.get("question").value, "");
+  assert.match(nodes.get("followupNotice").textContent, /继承报告、证据/);
+  const payload = app.researchPayload("还有哪些风险？");
+  assert.equal(payload.parent_task_id, "parent");
+  assert.equal(JSON.stringify(payload.document_ids), '["own"]');
+});
+
+test("binary uploads preserve bytes as base64", () => {
+  const { app } = loadApp();
+  assert.equal(app.encodeBinary(Uint8Array.from([0, 255, 128, 42]).buffer), "AP+AKg==");
+});
+
+test("progress uses the phase published by the backend", () => {
+  const { app, nodes } = loadApp();
+  app.updateProgress({ status: "running", stage: "verifying", question: "问题" }, null);
+  assert.match(nodes.get("progressMessage").textContent, /核对原文/);
+  app.updateProgress({ status: "running", stage: "checking_report" }, null);
+  assert.match(nodes.get("progressMessage").textContent, /复核报告/);
+});
+
 test("desktop requests carry the same-origin action header", async () => {
   const { app, requests } = loadApp();
   app.renderHealth({ desktop_mode: true, provider_ready: false, status: "ok", provider: "openai", model: "deepseek-flash" });
@@ -114,7 +153,7 @@ test("desktop requests carry the same-origin action header", async () => {
 test("desktop research uses saved defaults rather than unsaved form fields", () => {
   const { app } = loadApp();
   app.renderHealth({ desktop_mode: true, provider_ready: true, status: "ok", provider: "openai", model: "deepseek-flash" });
-  assert.equal(JSON.stringify(app.researchPayload("研究问题")), '{"question":"研究问题","mode":"async"}');
+  assert.equal(JSON.stringify(app.researchPayload("研究问题")), '{"question":"研究问题","mode":"async","document_ids":[],"use_examples":false}');
 });
 
 test("desktop bundled web samples identify their scope and show citation quotes", () => {
@@ -139,7 +178,7 @@ test("desktop copied and downloaded reports include their source scope", () => {
 test("saved desktop settings clear the password input", () => {
   const { app, nodes } = loadApp();
   nodes.set("connectionKey", { value: "secret-value" });
-  app.renderDesktopSettings({ service: "deepseek", base_url: "https://api.deepseek.com", api_key_configured: true,
+  app.renderDesktopSettings({ service: "deepseek", model: "deepseek-chat", base_url: "https://api.deepseek.com", api_key_configured: true,
     presets: { deepseek: { label: "DeepSeek" } }, research_task_timeout_s: 300, token_budget_live: 160000 });
   assert.equal(nodes.get("connectionKey").value, "");
   assert.equal(JSON.stringify(app.connectionPayload()).includes("secret-value"), false);
@@ -208,7 +247,7 @@ test("renderMarkdown renders headings, lists, tables and inline code", () => {
   assert.match(html, /<li>第一项<\/li>/);
   assert.match(html, /<table>/);
   assert.match(html, /<th>a<\/th>/);
-  assert.match(html, /<blockquote>引用<\/blockquote>/);
+  assert.match(html, /<blockquote>\s*<p>引用<\/p>\s*<\/blockquote>/);
 });
 
 test("renderMarkdown escapes hostile report content", () => {
@@ -426,7 +465,7 @@ test("inline formatting preserves URLs and code and rejects executable links", (
 
 test("citations use report reference numbers and actual evidence source bindings", () => {
   const { app, nodes } = loadApp();
-  const evidence = [{ id: "E1", source_id: "b" }];
+  const evidence = [{ id: "E1", source_id: "b" }, { id: "E2", source_id: "b" }, { id: "E3", source_id: "a" }];
   const sources = [
     { id: "a", title: "甲", url: "https://example.com/a" },
     { id: "b", title: "乙", url: "https://example.com/b" },
@@ -441,6 +480,11 @@ test("citations use report reference numbers and actual evidence source bindings
   assert.match(app.inline("依据 [E1] 和 [1]"), /data-citation="source-2"/);
   assert.match(app.inline("[2]"), /data-citation="source-1"/);
   assert.equal(app.inline("`[E1]`"), "<code>[E1]</code>");
+  const grouped = app.inline("依据 [E1][E2] [E3]。");
+  assert.equal((grouped.match(/class="citation-link"/g) || []).length, 2);
+  assert.equal((grouped.match(/>\[1\]<\/a>/g) || []).length, 1);
+  assert.match(grouped, /data-citation="source-1"/);
+  assert.equal(app.inline("未知 [E999]"), "未知 [E999]");
   app.renderSources(sources, evidence);
   assert.match(nodes.get("sources").innerHTML, /source-1[\s\S]*?\[2\]/);
   assert.match(nodes.get("sources").innerHTML, /source-2[\s\S]*?\[1\]/);
@@ -462,10 +506,10 @@ test("numbered citations distinguish chunks sharing a document locator", () => {
       markdown: [
         "1. **团队文档** — knowledge_base — `doc`",
         "2. **团队文档** — knowledge_base — `doc`",
-        "| id | claim | quote | source | confidence |",
-        "| --- | --- | --- | --- | --- |",
-        "| E1 | 第一条 | 引文 | [2] 团队文档 | 0.8 |",
-        "| E2 | 第二条 | 引文 | [1] 团队文档 | 0.9 |",
+        "| 引用 | 原文 | 来源 |",
+        "| --- | --- | --- |",
+        "| E1 | 第一条引文 | [2] 团队文档 |",
+        "| E2 | 第二条引文 | [1] 团队文档 |",
       ].join("\n"),
     },
   });
@@ -475,6 +519,40 @@ test("numbered citations distinguish chunks sharing a document locator", () => {
   app.renderSources(sources, evidence);
   assert.match(nodes.get("sources").innerHTML, /source-2[\s\S]*?\[1\]/);
   assert.match(nodes.get("sources").innerHTML, /source-1[\s\S]*?\[2\]/);
+});
+
+test("document chunks share one reference card and retain every distinct quote", () => {
+  const { app, nodes } = loadApp();
+  const sources = [
+    { id: "chunk", doc_id: "doc", title: "年度记录" },
+    { id: "full", doc_id: "doc", title: "年度记录" },
+  ];
+  const evidence = [
+    { id: "E1", source_id: "chunk", quote: "2025 年收入 10 万元。" },
+    { id: "E2", source_id: "full", quote: "2026 年 9 月 10 日上线。" },
+    { id: "E3", source_id: "full", quote: "2025 年收入 10 万元。" },
+  ];
+  app.prepareCitations({ evidence: { sources, evidence }, report: { markdown:
+    "| E1 | 收入 | [1] 年度记录 |\n| E2 | 上线 | [1] 年度记录 |" } });
+  app.renderSources(sources, evidence);
+  const html = nodes.get("sources").innerHTML;
+  assert.equal((html.match(/class="source-item"/g) || []).length, 1);
+  assert.equal(nodes.get("sourceCount").textContent, "1");
+  assert.equal((html.match(/2025 年收入 10 万元/g) || []).length, 1);
+  assert.match(html, /2026 年 9 月 10 日上线/);
+  assert.match(app.inline("[E1] [E2] [1]"), /data-citation="source-1"/);
+  assert.ok(!app.inline("[E2]").includes("source-2"));
+});
+
+test("standalone HTML contains quotes and no external icon sprite references", () => {
+  const { app, nodes } = loadApp();
+  app.renderReport({ title: "报告", markdown: "# 收入记录" });
+  nodes.set("sources", { innerHTML: '<div class="source-item"><svg><use href="/static/icons.svg#file-text"></use></svg><details><summary>原文</summary><blockquote>收入 10 万元</blockquote></details></div>' });
+  const html = app.reportHtml();
+  assert.ok(!html.includes("icons.svg"));
+  assert.match(html, /收入 10 万元/);
+  assert.match(html, /<details open/);
+  assert.match(html, /break-inside:avoid/);
 });
 
 test("history search filters the full list without filtering home recents", () => {

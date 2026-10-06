@@ -353,6 +353,10 @@ def build_default_registry(
         McpResearchContextTool,
     ):
         tool = tool_cls()
+        if getattr(settings, "desktop_mode", False) and isinstance(
+            tool, WebSearchTool | McpResearchContextTool
+        ):
+            continue
         if isinstance(tool, McpResearchContextTool) and not services.get("mcp_client"):
             continue
         registry.register(tool)

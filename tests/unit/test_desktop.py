@@ -19,7 +19,7 @@ from researchpilot.desktop.settings import (
 )
 from researchpilot.llm.base import ChatMessage, LLMError
 from researchpilot.llm.openai_provider import OpenAICompatibleProvider
-from researchpilot.schemas import CritiqueReport
+from researchpilot.schemas import CritiqueReport, ResearchPlan
 
 
 class TestProtector:
@@ -106,7 +106,43 @@ def test_occupied_port_is_selected_automatically():
             listener.close()
 
 
-def test_deepseek_uses_documented_json_and_nonthinking_payload():
+@pytest.mark.skipif(os.name != "nt", reason="Windows desktop launcher")
+@pytest.mark.parametrize("ready", [False, True])
+def test_explicit_exit_during_startup_is_successful(tmp_path, monkeypatch, ready):
+    from researchpilot.desktop import launcher
+
+    controllers = []
+    original_controller = launcher.DesktopController
+
+    def capture(*args, **kwargs):
+        controller = original_controller(*args, **kwargs)
+        controllers.append(controller)
+        return controller
+
+    def exit_during_probe(port, identifier):
+        assert controllers[0].on_exit is not None
+        controllers[0].on_exit()
+        return ready
+
+    monkeypatch.setattr(launcher, "DesktopController", capture)
+    monkeypatch.setattr(launcher, "instance_is_ready", exit_during_probe)
+    assert launcher.launch(tmp_path, open_browser=False, tray_enabled=False) == 0
+    assert not (tmp_path / "instance.json").exists()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows desktop launcher")
+def test_unexpected_server_stop_during_startup_remains_an_error(tmp_path, monkeypatch):
+    from researchpilot.desktop import launcher
+
+    monkeypatch.setattr(launcher.uvicorn.Server, "run", lambda *args, **kwargs: None)
+    with pytest.raises(OSError, match="本机服务未能启动"):
+        launcher.launch(tmp_path, open_browser=False, tray_enabled=False)
+
+
+@pytest.mark.parametrize("schema", [CritiqueReport, ResearchPlan])
+def test_deepseek_uses_documented_json_and_nonthinking_payload(schema):
+    import json
+
     payloads = []
 
     def respond(request):
@@ -121,10 +157,16 @@ def test_deepseek_uses_documented_json_and_nonthinking_payload():
         base_url="https://api.deepseek.com", transport=httpx.MockTransport(respond)
     )
     try:
-        provider.complete([ChatMessage(role="user", content="Return JSON")], response_schema=CritiqueReport)
+        original = ChatMessage(role="user", content="Return JSON")
+        provider.complete([original], response_schema=schema)
         assert payloads[0]["response_format"] == {"type": "json_object"}
         assert payloads[0]["thinking"] == {"type": "disabled"}
         assert "frequency_penalty" not in payloads[0]
+        instruction = payloads[0]["messages"][0]
+        assert instruction["role"] == "system"
+        assert json.loads(instruction["content"].split("\n", 1)[1]) == schema.model_json_schema()
+        assert payloads[0]["messages"][-1] == original.as_dict()
+        assert original.content == "Return JSON"
     finally:
         provider.close()
 

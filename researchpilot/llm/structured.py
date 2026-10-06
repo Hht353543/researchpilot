@@ -17,7 +17,7 @@ from researchpilot.llm.base import (
     StructuredOutputError,
 )
 from researchpilot.observability.trace import Tracer
-from researchpilot.schemas import TokenUsage
+from researchpilot.schemas import Span, TokenUsage
 from researchpilot.utils import estimate_tokens, extract_json_block
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
@@ -30,8 +30,8 @@ _REPAIR_HINTS: dict[str, str] = {
     "writer": (
         "Every conclusion and every section needs its supporting ids in `evidence_ids`, "
         'for example {"statement": "混合检索优于单路检索 [E2]", "evidence_ids": ["E2"]}. '
-        "Use only ids from the provided evidence list, and move a claim that has no "
-        "available id into `limitations` instead of leaving it unbound."
+        "Use only ids from the provided evidence list and omit unsupported assertions. "
+        "Keep the complete JSON concise enough to fit the output limit."
     ),
 }
 
@@ -84,9 +84,13 @@ class StructuredLLMRunner:
         self.lifecycle = lifecycle
         self.usage = TokenUsage()
 
-    def _checkpoint(self) -> None:
+    def _checkpoint(self, *, before_call: bool = False) -> None:
         if self.lifecycle is not None:
             self.lifecycle.checkpoint()
+        if before_call and self.token_budget > 0 and self.usage.total_tokens >= self.token_budget:
+            raise BudgetExceededError(
+                f"token budget exhausted: {self.usage.total_tokens} >= {self.token_budget}"
+            )
 
     # -- budgets ----------------------------------------------------------- #
     def _charge(self, usage: TokenUsage) -> None:
@@ -100,6 +104,25 @@ class StructuredLLMRunner:
         if self.token_budget <= 0:
             return 10**9
         return max(self.token_budget - self.usage.total_tokens, 0)
+
+    def _record_response(self, response: LLMResponse, span: Span | None, *, attempts: int = 1) -> None:
+        """Account for a received response even when budget or cancellation stops work."""
+        error = None
+        try:
+            self._charge(response.usage)
+            self._checkpoint()
+        except BaseException as exc:
+            error = f"{type(exc).__name__}: {exc}"
+            raise
+        finally:
+            if span is not None and self.tracer is not None:
+                self.tracer.end_span(
+                    span,
+                    output={"text": response.text[:4000], "finish_reason": response.finish_reason},
+                    usage=response.usage,
+                    error=error,
+                    metadata={"attempt": attempts},
+                )
 
     # -- calls ------------------------------------------------------------- #
     def run(
@@ -121,7 +144,7 @@ class StructuredLLMRunner:
         total = TokenUsage()
 
         for attempt in range(self.max_repair_retries + 1):
-            self._checkpoint()
+            self._checkpoint(before_call=True)
             attempts += 1
             span = None
             if self.tracer is not None:
@@ -149,7 +172,6 @@ class StructuredLLMRunner:
                     presence_penalty=self.presence_penalty,
                     frequency_penalty=self.frequency_penalty,
                 )
-                self._checkpoint()
             except LLMError:
                 if span is not None and self.tracer is not None:
                     self.tracer.end_span(span, error="provider failure")
@@ -160,16 +182,7 @@ class StructuredLLMRunner:
                 raise LLMError(f"provider {self.provider.name} failed: {exc}") from exc
 
             total = total.add(response.usage)
-            self._charge(response.usage)
-
-            if span is not None and self.tracer is not None:
-                self.tracer.end_span(
-                    span,
-                    output={"text": response.text[:4000], "finish_reason": response.finish_reason},
-                    usage=response.usage,
-                    error=None,
-                    metadata={"attempt": attempts},
-                )
+            self._record_response(response, span, attempts=attempts)
 
             try:
                 payload = extract_json_block(response.text)
@@ -222,7 +235,7 @@ class StructuredLLMRunner:
         max_tokens: int | None = None,
     ) -> TextCallResult:
         messages = [ChatMessage(role="system", content=system), ChatMessage(role="user", content=user)]
-        self._checkpoint()
+        self._checkpoint(before_call=True)
         span = None
         if self.tracer is not None:
             span = self.tracer.start_span(
@@ -249,14 +262,11 @@ class StructuredLLMRunner:
                 presence_penalty=self.presence_penalty,
                 frequency_penalty=self.frequency_penalty,
             )
-            self._checkpoint()
         except Exception as exc:
             if span is not None and self.tracer is not None:
                 self.tracer.end_span(span, error=f"{type(exc).__name__}: {exc}")
             raise LLMError(f"provider {self.provider.name} failed: {exc}") from exc
-        self._charge(response.usage)
-        if span is not None and self.tracer is not None:
-            self.tracer.end_span(span, output={"text": response.text[:2000]}, usage=response.usage)
+        self._record_response(response, span)
         return TextCallResult(text=response.text.strip(), response=response, usage=response.usage, attempts=1)
 
 

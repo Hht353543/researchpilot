@@ -25,7 +25,6 @@ class PlannerAgent(BaseAgent):
         runtime = self.runtime
         iterations = max_iterations or runtime.settings.max_iterations
         with self.span(input={"question": question}) as span:
-            memory_context = self._safe(lambda: runtime.memory.recall_context(question, limit=3), "")
             kb_summary = self._safe(lambda: runtime.knowledge_base.stats(), {"error": "unavailable"})
             runtime.memory.note("user", question)
             attempts = 0
@@ -34,12 +33,16 @@ class PlannerAgent(BaseAgent):
                     ResearchPlan,
                     agent=self.name,
                     system=PLANNER_SYSTEM,
-                    user=planner_user(question, runtime.tools.catalogue(), kb_summary),
+                    user=planner_user(
+                        question,
+                        runtime.tools.catalogue(),
+                        kb_summary,
+                        runtime.scratch.get("followup_context"),
+                    ),
                     hints={
                         "question": question,
                         "tools": runtime.tools.names(),
                         "max_iterations": iterations,
-                        "memory_context": memory_context,
                     },
                     purpose="planner",
                     max_tokens=1500,

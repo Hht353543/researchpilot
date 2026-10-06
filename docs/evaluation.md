@@ -1,6 +1,6 @@
 # Evaluation Report
 
-本文件由 `scripts/run_benchmark.py` 在真实运行后自动生成，里面的数字来自本次运行。
+本文件是 2026-09-16 的历史 mock 自动运行记录，不是当前版本或真实模型验收。该版本的 CitationCorrectness 主要衡量引用 ID 与来源是否存在，不能证明结论含义得到支持。2026-10-05 已将引用结构完整性与语义支撑分开，最终报告也接受支撑审查；新口径与本轮对照见[个人研究交付记录](personal_research_delivery.md)。
 
 ## 运行信息 (Run Metadata)
 

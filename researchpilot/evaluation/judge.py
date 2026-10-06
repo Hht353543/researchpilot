@@ -44,6 +44,8 @@ class TaskJudgement(BaseModel):
     retrieval_recall: float = 0.0
     context_relevance: float = 0.0
     citation_correctness: float = 0.0
+    citation_integrity: float = 0.0
+    claim_support: float = 0.0
     # Applicability flags: a task without expectations must not contribute a
     # vacuous 1.0 to the aggregate metrics (see docs/evaluation.md methodology).
     retrieval_applicable: bool = False
@@ -85,7 +87,6 @@ def judge_task(
     live_model: bool = False,
 ) -> TaskJudgement:
     markdown = result.report.markdown if result.report else ""
-    {e.id for e in result.evidence.evidence}
     source_ids = {s.id for s in result.evidence.sources}
     retrieved_docs = _retrieved_docs(trace)
     used_tools = _used_tools(trace)
@@ -93,13 +94,28 @@ def judge_task(
 
     citation_total = 0
     citation_valid = 0
+    citation_supported = 0
+    verdicts = (
+        {check.evidence_id: check.status for check in result.verification.checks}
+        if result.verification
+        else {}
+    )
     for match in CITATION_RE.finditer(markdown):
         citation_total += 1
         cid = match.group(1)
         evidence = result.evidence.by_id(cid)
         if evidence is not None and evidence.source_id in source_ids:
             citation_valid += 1
-    citation_correctness = citation_valid / citation_total if citation_total else 0.0
+            if verdicts.get(cid) == "supported":
+                citation_supported += 1
+    citation_integrity = citation_valid / citation_total if citation_total else 0.0
+    claim_checks = result.report.support_checks if result.report else []
+    claim_support = (
+        sum(check.status == "supported" for check in claim_checks) / len(claim_checks)
+        if claim_checks
+        else 0.0
+    )
+    citation_correctness = (citation_supported / citation_total * claim_support) if citation_total else 0.0
 
     checks: list[CheckResult] = []
     exp = task.expectations
@@ -147,9 +163,18 @@ def judge_task(
         checks.append(
             CheckResult(
                 name="citation_integrity",
-                passed=citation_correctness >= exp.min_citation_integrity,
-                detail=f"{citation_correctness:.2f} >= {exp.min_citation_integrity:.2f} "
+                passed=citation_integrity >= exp.min_citation_integrity,
+                detail=f"{citation_integrity:.2f} >= {exp.min_citation_integrity:.2f} "
                 f"({citation_valid}/{citation_total})",
+            )
+        )
+    if citation_total:
+        checks.append(
+            CheckResult(
+                name="claim_support",
+                passed=citation_correctness == 1.0,
+                detail=f"verified citations={citation_supported}/{citation_total}; "
+                f"report support={claim_support:.2f}",
             )
         )
     if exp.min_retrieval_recall:
@@ -216,6 +241,8 @@ def judge_task(
         retrieval_recall=round(retrieval_recall, 4),
         context_relevance=round(context_relevance, 4),
         citation_correctness=round(citation_correctness, 4),
+        citation_integrity=round(citation_integrity, 4),
+        claim_support=round(claim_support, 4),
         retrieval_applicable=retrieval_applicable,
         citation_applicable=citation_applicable,
         tool_selection_applicable=tool_selection_applicable,

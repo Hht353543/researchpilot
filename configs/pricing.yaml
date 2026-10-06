@@ -9,3 +9,9 @@ gpt-4o:
 deepseek-chat:
   input: 0.27
   output: 1.1
+# V4.1 Flash, checked 2026-10-05 against the official Models & Pricing page.
+# Conservative peak/cache-miss estimate; excludes cache and off-peak discounts.
+# Actual charges must be checked against the provider's billing records.
+deepseek-flash:
+  input: 0.3
+  output: 1.2

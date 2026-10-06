@@ -145,7 +145,7 @@ class VectorStore:
                     metadata={
                         k: v
                         for k, v in doc.metadata.items()
-                        if k in {"topic", "tags", "author", "date", "url", "type"}
+                        if k in {"topic", "tags", "author", "date", "url", "type", "example", "filename"}
                     },
                 )
             )
